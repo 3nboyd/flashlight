@@ -1,0 +1,49 @@
+{
+  "name": "dj-companion",
+  "version": "0.1.0",
+  "description": "All-in-one open-source DJ library companion — cross-platform cue/crate sync for Serato, VirtualDJ and CDJ/rekordbox, plus file management and track renaming.",
+  "main": "./out/main/index.js",
+  "author": "DJ Companion Contributors",
+  "license": "MIT",
+  "private": true,
+  "scripts": {
+    "dev": "electron-vite dev",
+    "build": "npm run typecheck && electron-vite build",
+    "typecheck": "tsc --noEmit -p tsconfig.node.json --composite false && tsc --noEmit -p tsconfig.web.json --composite false",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "lint": "eslint . --ext .ts,.tsx",
+    "format": "prettier --write .",
+    "build:mac": "npm run build && electron-builder --mac",
+    "build:win": "npm run build && electron-builder --win",
+    "postinstall": "electron-builder install-app-deps"
+  },
+  "dependencies": {
+    "fast-xml-parser": "^4.5.0",
+    "music-metadata": "^10.6.4",
+    "node-id3": "^0.2.6",
+    "uuid": "^11.0.3",
+    "zustand": "^5.0.2"
+  },
+  "devDependencies": {
+    "@types/node": "^22.10.1",
+    "@types/react": "^18.3.12",
+    "@types/react-dom": "^18.3.1",
+    "@types/uuid": "^10.0.0",
+    "@typescript-eslint/eslint-plugin": "^8.17.0",
+    "@typescript-eslint/parser": "^8.17.0",
+    "@vitejs/plugin-react": "^4.3.4",
+    "electron": "^33.2.1",
+    "electron-builder": "^25.1.8",
+    "electron-vite": "^2.3.0",
+    "eslint": "^8.57.1",
+    "eslint-plugin-react": "^7.37.2",
+    "eslint-plugin-react-hooks": "^5.0.0",
+    "prettier": "^3.4.1",
+    "react": "^18.3.1",
+    "react-dom": "^18.3.1",
+    "typescript": "^5.7.2",
+    "vite": "^5.4.11",
+    "vitest": "^2.1.8"
+  }
+}

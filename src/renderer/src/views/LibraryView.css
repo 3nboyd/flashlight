@@ -1,0 +1,96 @@
+.library-toolbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  margin-bottom: 16px;
+}
+
+.library-folder-chips {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.folder-chip {
+  background: var(--bg-2);
+  border: 1px solid var(--border-subtle);
+  border-radius: 999px;
+  padding: 4px 12px;
+  font-size: 12px;
+  color: var(--text-secondary);
+}
+
+.library-summary {
+  display: flex;
+  gap: 18px;
+  margin-bottom: 14px;
+  font-size: 12px;
+  color: var(--text-tertiary);
+}
+
+.library-summary span {
+  padding: 4px 0;
+}
+
+.library-table-wrap {
+  overflow: auto;
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-md);
+}
+
+.library-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 12px;
+}
+
+.library-table th {
+  text-align: left;
+  padding: 8px 12px;
+  background: var(--bg-1);
+  color: var(--text-tertiary);
+  font-weight: 500;
+  border-bottom: 1px solid var(--border-subtle);
+  position: sticky;
+  top: 0;
+}
+
+.library-table td {
+  padding: 7px 12px;
+  border-bottom: 1px solid var(--border-subtle);
+  color: var(--text-secondary);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  max-width: 240px;
+}
+
+.library-table tr:hover td {
+  background: var(--bg-hover);
+}
+
+.track-title-cell {
+  color: var(--text-primary);
+  font-weight: 500;
+}
+
+.source-badge {
+  display: inline-block;
+  font-size: 10px;
+  font-weight: 600;
+  padding: 2px 6px;
+  border-radius: 4px;
+  margin-right: 4px;
+}
+
+.source-badge.serato {
+  background: #2a2438;
+  color: #b794f6;
+}
+
+.source-badge.vdj {
+  background: #1e2f3d;
+  color: #63b3ed;
+}

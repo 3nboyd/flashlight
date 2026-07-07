@@ -1,0 +1,6 @@
+.backups-total {
+  margin-left: auto;
+  align-self: center;
+  color: var(--text-tertiary);
+  font-size: 12px;
+}

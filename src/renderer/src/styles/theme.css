@@ -1,0 +1,40 @@
+/*
+  Base dark palette. Accent tokens (--accent, --accent-hover, --accent-active,
+  --accent-muted, --accent-text) are set at runtime on :root by ThemeProvider
+  from the user's chosen accent color — see utils/color.ts.
+*/
+:root {
+  color-scheme: dark;
+
+  --bg-0: #0b0b0d;
+  --bg-1: #131316;
+  --bg-2: #1a1a1f;
+  --bg-3: #232329;
+  --bg-hover: #26262d;
+
+  --border-subtle: #2a2a31;
+  --border-strong: #38383f;
+
+  --text-primary: #f2f2f5;
+  --text-secondary: #a6a6b0;
+  --text-tertiary: #6f6f7a;
+  --text-disabled: #4a4a52;
+
+  --success: #22c55e;
+  --warning: #f59e0b;
+  --danger: #ef4444;
+  --danger-muted: #3a1e1e;
+
+  --radius-sm: 4px;
+  --radius-md: 8px;
+  --radius-lg: 12px;
+
+  --shadow-panel: 0 4px 24px rgba(0, 0, 0, 0.4);
+
+  /* Accent defaults; overwritten at runtime */
+  --accent: #8b5cf6;
+  --accent-hover: #9d75f8;
+  --accent-active: #7947e0;
+  --accent-muted: #2a2438;
+  --accent-text: #ffffff;
+}
