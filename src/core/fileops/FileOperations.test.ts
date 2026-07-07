@@ -1,4 +1,5 @@
-import { describe, it, expect, beforeEach, afterEach } from 'vitest'
+import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest'
+import { promises as fsPromises } from 'fs'
 import { mkdtemp, writeFile, mkdir, readdir, readFile, rm } from 'fs/promises'
 import { tmpdir } from 'os'
 import { join } from 'path'
@@ -56,6 +57,41 @@ describe('FileOperations', () => {
 
     await expect(moveEntry(src, destDir)).rejects.toThrow(/already exists/)
     expect(await readFile(join(destDir, 'track.mp3'), 'utf-8')).toBe('B')
+  })
+
+  it('falls back to copy+delete when the OS reports EXDEV (moving across volumes, e.g. USB <-> internal disk)', async () => {
+    const src = join(dir, 'track.mp3')
+    await writeFile(src, 'audio-bytes')
+    const destDir = join(dir, 'OtherVolume')
+    await mkdir(destDir)
+
+    const exdevError = Object.assign(new Error('cross-device link not permitted'), { code: 'EXDEV' })
+    const renameSpy = vi.spyOn(fsPromises, 'rename').mockRejectedValueOnce(exdevError)
+
+    const result = await moveEntry(src, destDir)
+
+    expect(renameSpy).toHaveBeenCalledOnce()
+    expect(await readFile(result.to, 'utf-8')).toBe('audio-bytes')
+    expect(await readdir(dir)).not.toContain('track.mp3')
+
+    renameSpy.mockRestore()
+  })
+
+  it('does not delete the source if the EXDEV copy fallback fails partway', async () => {
+    const src = join(dir, 'track.mp3')
+    await writeFile(src, 'audio-bytes')
+    const destDir = join(dir, 'OtherVolume')
+    await mkdir(destDir)
+
+    const exdevError = Object.assign(new Error('cross-device link not permitted'), { code: 'EXDEV' })
+    vi.spyOn(fsPromises, 'rename').mockRejectedValueOnce(exdevError)
+    const copyError = new Error('disk full')
+    vi.spyOn(fsPromises, 'copyFile').mockRejectedValueOnce(copyError)
+
+    await expect(moveEntry(src, destDir)).rejects.toThrow('disk full')
+    expect(await readFile(src, 'utf-8')).toBe('audio-bytes')
+
+    vi.restoreAllMocks()
   })
 
   it('renames a file in place', async () => {
