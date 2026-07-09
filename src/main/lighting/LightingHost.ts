@@ -16,7 +16,7 @@ import type { AudioFeatures } from '@core/lighting/audio/features'
 import { SILENT_FEATURES } from '@core/lighting/audio/features'
 import { BpmEstimator } from '@core/lighting/audio/BeatDetector'
 import { DmxSender } from './DmxSender'
-import { Os2lServer } from './Os2lServer'
+import { Os2lServer, type DiscoveryMode } from './Os2lServer'
 
 export type BeatSource = 'os2l' | 'audio' | 'manual'
 
@@ -36,6 +36,8 @@ export interface LightingStatus {
   /** ip:port for pointing VirtualDJ manually if discovery fails. */
   os2lAddress: string | null
   os2lError: string | null
+  /** How the OS2L service is being advertised for auto-detection. */
+  os2lDiscovery: DiscoveryMode
 }
 
 /**
@@ -275,7 +277,8 @@ export class LightingHost {
       beatSource: this.currentBeatSource(nowMs),
       os2lConnected: this.os2lConnected,
       os2lAddress: this.os2l?.getAdvertisedAddress() ?? null,
-      os2lError: this.os2l?.getLastError() ?? null
+      os2lError: this.os2l?.getLastError() ?? null,
+      os2lDiscovery: this.os2l?.getDiscoveryMode() ?? 'off'
     }
   }
 

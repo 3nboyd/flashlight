@@ -214,13 +214,33 @@ export function SetupPanel(): JSX.Element {
           ) : null}
         </div>
         {status?.os2lError && <div className="banner error">OS2L: {status.os2lError}</div>}
+        {project.os2l.enabled && !status?.os2lConnected && (
+          <div className="os2l-help">
+            <strong>Connecting VirtualDJ:</strong>
+            <ol>
+              <li>
+                In VirtualDJ: Settings → Options, search <code>os2l</code>, set it to{' '}
+                <code>yes</code>
+                {status?.os2lDiscovery === 'bonjour'
+                  ? ' — this app is being advertised via Bonjour, so auto-detection should find it.'
+                  : '.'}
+              </li>
+              <li>
+                If it doesn&rsquo;t connect, set <code>os2lDirectIp</code> to{' '}
+                <code>127.0.0.1:{project.os2l.port}</code> if VirtualDJ runs on this computer,
+                or <code>{status?.os2lAddress ?? '…'}</code> from another machine.
+              </li>
+              <li>
+                <strong>Restart VirtualDJ</strong> — it only (re)connects on startup or when the
+                os2l settings change. Then play a track.
+              </li>
+            </ol>
+          </div>
+        )}
         <p className="settings-hint">
           OS2L streams the exact beat grid and BPM from your DJ software — the most accurate sync
-          possible. In VirtualDJ, set <code>os2l</code> to <code>auto</code> in Options and it will
-          find this app automatically. If auto-detection fails, set VirtualDJ&rsquo;s{' '}
-          <code>os2lNetworkAddress</code> to <code>{status?.os2lAddress ?? '…'}</code>. While
-          connected, the beat source badge in Perform shows <strong>OS2L</strong> and effects lock
-          to the deck&rsquo;s bars and phrases.
+          possible. While connected, the beat source badge in Perform shows <strong>OS2L</strong>{' '}
+          and effects lock to the deck&rsquo;s bars and phrases.
         </p>
       </section>
 

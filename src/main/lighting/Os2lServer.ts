@@ -1,7 +1,10 @@
 import { createServer, type Server, type Socket } from 'net'
 import { createSocket, type Socket as DgramSocket } from 'dgram'
-import { networkInterfaces, hostname } from 'os'
+import { networkInterfaces, hostname, platform } from 'os'
+import { spawn, type ChildProcess } from 'child_process'
 import { Os2lStreamParser, type Os2lEvent } from '@core/lighting/os2l/protocol'
+
+export type DiscoveryMode = 'bonjour' | 'udp' | 'off'
 
 export interface Os2lServerEvents {
   onEvent: (event: Os2lEvent) => void
@@ -53,6 +56,9 @@ function localIpv4(): string | null {
 export class Os2lServer {
   private server: Server | null = null
   private mdns: DgramSocket | null = null
+  private mdnsAnnounceTimer: NodeJS.Timeout | null = null
+  private bonjourProcess: ChildProcess | null = null
+  private discoveryMode: DiscoveryMode = 'off'
   private client: Socket | null = null
   private events: Os2lServerEvents
   private port: number
@@ -61,6 +67,10 @@ export class Os2lServer {
   constructor(port: number, events: Os2lServerEvents) {
     this.port = port
     this.events = events
+  }
+
+  getDiscoveryMode(): DiscoveryMode {
+    return this.discoveryMode
   }
 
   getPort(): number {
@@ -110,16 +120,53 @@ export class Os2lServer {
     server.listen(this.port)
     this.server = server
 
+    this.startDiscovery()
+  }
+
+  /**
+   * DNS-SD advertisement so VDJ's "auto" mode finds us. On macOS the system
+   * Bonjour daemon owns UDP 5353 in a way plain sockets can't share, so the
+   * reliable path is registering through it via the stock `dns-sd` CLI.
+   * Elsewhere (or if dns-sd is missing) fall back to a minimal built-in
+   * multicast responder. Manual pointing (VDJ's os2lDirectIp) always works
+   * regardless of what discovery ends up doing.
+   */
+  private startDiscovery(): void {
+    if (platform() === 'darwin') {
+      try {
+        const child = spawn('dns-sd', ['-R', 'DJ Companion', '_os2l._tcp', '.', String(this.port)], {
+          stdio: 'ignore'
+        })
+        child.on('error', () => {
+          this.bonjourProcess = null
+          this.discoveryMode = 'off'
+          this.startMdnsResponder()
+        })
+        child.on('exit', () => {
+          if (this.bonjourProcess === child) {
+            this.bonjourProcess = null
+            this.discoveryMode = 'off'
+          }
+        })
+        this.bonjourProcess = child
+        this.discoveryMode = 'bonjour'
+        return
+      } catch {
+        // Fall through to the UDP responder.
+      }
+    }
     this.startMdnsResponder()
   }
 
   private startMdnsResponder(): void {
     try {
       const socket = createSocket({ type: 'udp4', reuseAddr: true })
-      socket.on('error', () => {
+      socket.on('error', (err) => {
         // Discovery is best-effort; manual pointing still works.
+        this.lastError = `discovery: ${err.message}`
         socket.close()
         this.mdns = null
+        this.discoveryMode = 'off'
       })
       socket.on('message', (msg, rinfo) => {
         // Respond to any mDNS query mentioning our service name.
@@ -134,16 +181,25 @@ export class Os2lServer {
       socket.bind(MDNS_PORT, () => {
         try {
           socket.addMembership(MDNS_ADDRESS)
-          // Unsolicited announce so already-running VDJ instances notice us.
-          const announce = this.buildMdnsResponse()
-          if (announce) socket.send(announce, MDNS_PORT, MDNS_ADDRESS)
-        } catch {
-          // Multicast unavailable — manual pointing still works.
+          this.discoveryMode = 'udp'
+          // Announce now and re-announce periodically so a DJ app launched
+          // later (or one that missed the first packet) still finds us.
+          const announce = (): void => {
+            const response = this.buildMdnsResponse()
+            if (response) socket.send(response, MDNS_PORT, MDNS_ADDRESS)
+          }
+          announce()
+          this.mdnsAnnounceTimer = setInterval(announce, 30000)
+        } catch (err) {
+          this.lastError = `discovery: ${err instanceof Error ? err.message : String(err)}`
+          this.discoveryMode = 'off'
         }
       })
       this.mdns = socket
-    } catch {
+    } catch (err) {
+      this.lastError = `discovery: ${err instanceof Error ? err.message : String(err)}`
       this.mdns = null
+      this.discoveryMode = 'off'
     }
   }
 
@@ -179,7 +235,15 @@ export class Os2lServer {
     this.client = null
     this.server?.close()
     this.server = null
+    if (this.mdnsAnnounceTimer) {
+      clearInterval(this.mdnsAnnounceTimer)
+      this.mdnsAnnounceTimer = null
+    }
     this.mdns?.close()
     this.mdns = null
+    const bonjour = this.bonjourProcess
+    this.bonjourProcess = null
+    bonjour?.kill()
+    this.discoveryMode = 'off'
   }
 }
