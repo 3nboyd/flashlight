@@ -83,6 +83,8 @@ const api = {
     setBpmFollowsAudio: (follow: boolean): Promise<void> =>
       ipcRenderer.invoke('lighting:setBpmFollowsAudio', follow),
     getStatus: (): Promise<LightingStatus> => ipcRenderer.invoke('lighting:getStatus'),
+    listSerialPorts: (): Promise<{ path: string; label: string }[]> =>
+      ipcRenderer.invoke('lighting:listSerialPorts'),
     sendAudioFeatures: (features: AudioFeatures & { flux?: number }): void =>
       ipcRenderer.send('lighting:audioFeatures', features)
   }

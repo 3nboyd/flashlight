@@ -78,19 +78,34 @@ export interface AutopilotSettings {
   sceneIds: string[]
 }
 
+export type OutputProtocol = 'artnet' | 'sacn' | 'enttec'
+
+export interface OutputSettings {
+  protocol: OutputProtocol
+  /** Art-Net target: broadcast or a node IP. sACN uses multicast. */
+  artnetHost: string
+  /** Frames per second for DMX output (typ. 30-44). */
+  fps: number
+  /** Serial device path for Enttec Pro-compatible USB interfaces. */
+  serialPath: string | null
+  /** A USB interface carries one DMX line: which patched universe it outputs. */
+  usbUniverse: number
+}
+
+export interface Os2lSettings {
+  enabled: boolean
+  /** TCP port we listen on for the DJ software's OS2L connection. */
+  port: number
+}
+
 export interface LightingProject {
   patches: import('../fixtures/types').FixturePatch[]
   scenes: Scene[]
   /** Scene ids assigned to the 4x4 performance pad grid (null = empty pad). */
   padSceneIds: (string | null)[]
   autopilot: AutopilotSettings
-  output: {
-    protocol: 'artnet' | 'sacn'
-    /** Art-Net target: broadcast or a node IP. sACN uses multicast. */
-    artnetHost: string
-    /** Frames per second for DMX output (typ. 30-44). */
-    fps: number
-  }
+  output: OutputSettings
+  os2l: Os2lSettings
 }
 
 export function defaultLightingProject(): LightingProject {
@@ -99,6 +114,13 @@ export function defaultLightingProject(): LightingProject {
     scenes: [],
     padSceneIds: new Array(16).fill(null),
     autopilot: { enabled: false, barsPerScene: 8, sceneIds: [] },
-    output: { protocol: 'artnet', artnetHost: '255.255.255.255', fps: 40 }
+    output: {
+      protocol: 'artnet',
+      artnetHost: '255.255.255.255',
+      fps: 40,
+      serialPath: null,
+      usbUniverse: 1
+    },
+    os2l: { enabled: true, port: 4444 }
   }
 }

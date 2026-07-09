@@ -83,6 +83,61 @@
   margin-top: 8px;
 }
 
+.beat-source-badge {
+  margin-top: 4px;
+  font-size: 10px;
+  font-weight: 600;
+  letter-spacing: 0.5px;
+  padding: 2px 8px;
+  border-radius: 999px;
+  background: var(--bg-2);
+  color: var(--text-tertiary);
+}
+
+.beat-source-badge.os2l {
+  background: #16321f;
+  color: var(--success);
+}
+
+.beat-source-badge.audio {
+  background: var(--accent-muted);
+  color: var(--accent);
+}
+
+.bpm-manual-row {
+  display: flex;
+  gap: 4px;
+  margin-top: 6px;
+  align-items: center;
+}
+
+.bpm-manual-row .secondary-button {
+  padding: 4px 10px;
+}
+
+.bpm-manual-input {
+  width: 64px;
+  background: var(--bg-2);
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-sm);
+  padding: 5px 6px;
+  color: var(--text-primary);
+  text-align: center;
+}
+
+.os2l-status {
+  font-size: 12px;
+  font-weight: 600;
+}
+
+.os2l-status.connected {
+  color: var(--success);
+}
+
+.os2l-status.waiting {
+  color: var(--text-tertiary);
+}
+
 .audio-block {
   flex: 1;
   display: flex;

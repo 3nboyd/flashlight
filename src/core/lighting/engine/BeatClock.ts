@@ -47,6 +47,18 @@ export class BeatClock {
   }
 
   /**
+   * Hard-sync to an external beat grid (OS2L): the DJ software says "beat
+   * number `beatIndex` is happening right now at `bpm`". Anchoring so our
+   * continuous beat counter equals beatIndex at nowMs makes bars (pos % 4)
+   * and 8-bar phrases (pos % 32) line up exactly with the deck's grid.
+   */
+  syncToExternalBeat(bpm: number, beatIndex: number, nowMs: number): void {
+    if (bpm < 20 || bpm > 300) return
+    this.bpm = bpm
+    this.anchorMs = nowMs - (beatIndex * 60000) / bpm
+  }
+
+  /**
    * Gently pull the phase toward a detected onset instead of hard-snapping,
    * so occasional false onsets don't wreck an otherwise locked groove.
    */

@@ -109,6 +109,20 @@ describe('BeatClock', () => {
     expect(phase).toBeLessThan(1)
   })
 
+  it('syncToExternalBeat aligns bars and phrases with the external pos counter (OS2L)', () => {
+    const clock = new BeatClock()
+    // VDJ says: beat 32 is happening right now at 128 BPM → phrase boundary (32 % 32 === 0).
+    clock.syncToExternalBeat(128, 32, 10000)
+    const pos = clock.positionAt(10000)
+    expect(clock.getBpm()).toBe(128)
+    expect(pos.beat).toBeCloseTo(32, 3)
+    expect(pos.barIndex).toBe(8)
+    expect(pos.barPhase).toBeCloseTo(0, 3)
+    expect(pos.phrasePhase).toBeCloseTo(0, 3)
+    // One beat later (468.75ms at 128bpm) we're on beat 33.
+    expect(clock.positionAt(10000 + 60000 / 128).beat).toBeCloseTo(33, 3)
+  })
+
   it('rejects absurd tap-derived tempos', () => {
     const clock = new BeatClock()
     clock.setBpm(128, 0)

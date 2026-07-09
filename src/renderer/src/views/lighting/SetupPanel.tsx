@@ -1,7 +1,8 @@
-import { useEffect, useMemo, useState, type JSX } from 'react'
+import { useCallback, useEffect, useMemo, useState, type JSX } from 'react'
 import { useLightingStore } from '../../state/lightingStore'
 import { BUILTIN_FIXTURES, builtinFixturesById } from '@core/lighting/fixtures/library'
 import { findAddressOverlaps, fixtureFootprint } from '@core/lighting/fixtures/types'
+import type { OutputProtocol } from '@core/lighting/engine/types'
 import { SceneEditor } from './SceneEditor'
 import { midiPads } from './runtime'
 import type { PadAction } from '../../midi/MidiPads'
@@ -13,7 +14,9 @@ const LEARNABLE_ACTIONS: { label: string; action: PadAction }[] = [
   })),
   { label: 'Blackout', action: { kind: 'blackout' } },
   { label: 'Strobe (hold)', action: { kind: 'strobe' } },
-  { label: 'Tap tempo', action: { kind: 'tap' } }
+  { label: 'Tap tempo', action: { kind: 'tap' } },
+  { label: 'Resync beat 1', action: { kind: 'resync' } },
+  { label: 'Autopilot on/off', action: { kind: 'autopilot' } }
 ]
 
 function describeAction(action: PadAction): string {
@@ -26,13 +29,17 @@ function describeAction(action: PadAction): string {
       return 'Strobe (hold)'
     case 'tap':
       return 'Tap tempo'
+    case 'resync':
+      return 'Resync beat 1'
+    case 'autopilot':
+      return 'Autopilot on/off'
   }
 }
 
 let patchCounter = 0
 
 export function SetupPanel(): JSX.Element {
-  const { project, updateProject } = useLightingStore()
+  const { project, updateProject, status, refreshStatus } = useLightingStore()
   const [addForm, setAddForm] = useState({
     definitionId: BUILTIN_FIXTURES[0].id,
     universe: 1,
@@ -43,6 +50,11 @@ export function SetupPanel(): JSX.Element {
   const [editingSceneId, setEditingSceneId] = useState<string | null>(null)
   const [learningAction, setLearningAction] = useState<PadAction | null>(null)
   const [midiMapVersion, setMidiMapVersion] = useState(0)
+  const [serialPorts, setSerialPorts] = useState<{ path: string; label: string }[]>([])
+
+  const refreshSerialPorts = useCallback(async () => {
+    setSerialPorts(await window.djCompanion.lighting.listSerialPorts())
+  }, [])
 
   useEffect(() => {
     // MIDI may not have been initialized yet if the user opened Setup first;
@@ -51,8 +63,13 @@ export function SetupPanel(): JSX.Element {
     if (!midiPads.isStarted()) {
       midiPads.start({ onAction: () => undefined })
     }
-    return () => midiPads.cancelLearn()
-  }, [])
+    refreshSerialPorts()
+    const interval = setInterval(refreshStatus, 1000) // live OS2L connection status
+    return () => {
+      midiPads.cancelLearn()
+      clearInterval(interval)
+    }
+  }, [refreshSerialPorts, refreshStatus])
 
   const defs = useMemo(() => builtinFixturesById(), [])
   const overlaps = useMemo(
@@ -100,12 +117,13 @@ export function SetupPanel(): JSX.Element {
             onChange={(e) =>
               updateProject((p) => ({
                 ...p,
-                output: { ...p.output, protocol: e.target.value as 'artnet' | 'sacn' }
+                output: { ...p.output, protocol: e.target.value as OutputProtocol }
               }))
             }
           >
-            <option value="artnet">Art-Net (broadcast/unicast)</option>
-            <option value="sacn">sACN E1.31 (multicast)</option>
+            <option value="artnet">Art-Net (network, broadcast/unicast)</option>
+            <option value="sacn">sACN E1.31 (network, multicast)</option>
+            <option value="enttec">USB — Enttec DMX USB Pro / compatible</option>
           </select>
           {project.output.protocol === 'artnet' && (
             <>
@@ -120,10 +138,89 @@ export function SetupPanel(): JSX.Element {
               />
             </>
           )}
+          {project.output.protocol === 'enttec' && (
+            <>
+              <label>Serial port</label>
+              <select
+                value={project.output.serialPath ?? ''}
+                onChange={(e) =>
+                  updateProject((p) => ({
+                    ...p,
+                    output: { ...p.output, serialPath: e.target.value || null }
+                  }))
+                }
+              >
+                <option value="">Select interface…</option>
+                {serialPorts.map((port) => (
+                  <option key={port.path} value={port.path}>
+                    {port.label}
+                  </option>
+                ))}
+              </select>
+              <button className="text-button" onClick={refreshSerialPorts}>
+                Refresh
+              </button>
+              <label>Universe</label>
+              <input
+                type="number"
+                min={0}
+                max={63999}
+                value={project.output.usbUniverse}
+                title="A USB interface drives one DMX line — fixtures patched to this universe are output"
+                onChange={(e) =>
+                  updateProject((p) => ({
+                    ...p,
+                    output: { ...p.output, usbUniverse: Number(e.target.value) }
+                  }))
+                }
+              />
+            </>
+          )}
         </div>
         <p className="settings-hint">
-          Works with any Art-Net/sACN node or interface. USB-serial dongles (Enttec) are on the
-          roadmap. Note: sACN universes start at 1.
+          {project.output.protocol === 'enttec'
+            ? 'Works with the Enttec DMX USB Pro and Pro-compatible clones (framed serial protocol). The original "Open DMX USB" (raw FTDI) is not supported — it can\'t be timed reliably from software.'
+            : 'Works with any Art-Net/sACN node or interface. Note: sACN universes start at 1.'}
+        </p>
+      </section>
+
+      <section className="setup-section">
+        <h2>OS2L — DJ software beat link</h2>
+        <div className="setup-row">
+          <label className="settings-checkbox-row">
+            <input
+              type="checkbox"
+              checked={project.os2l.enabled}
+              onChange={(e) =>
+                updateProject((p) => ({ ...p, os2l: { ...p.os2l, enabled: e.target.checked } }))
+              }
+            />
+            Enable OS2L server
+          </label>
+          <label>Port</label>
+          <input
+            type="number"
+            min={1024}
+            max={65535}
+            value={project.os2l.port}
+            onChange={(e) =>
+              updateProject((p) => ({ ...p, os2l: { ...p.os2l, port: Number(e.target.value) || 4444 } }))
+            }
+          />
+          {status?.os2lConnected ? (
+            <span className="os2l-status connected">● DJ software connected</span>
+          ) : project.os2l.enabled ? (
+            <span className="os2l-status waiting">○ Waiting for connection…</span>
+          ) : null}
+        </div>
+        {status?.os2lError && <div className="banner error">OS2L: {status.os2lError}</div>}
+        <p className="settings-hint">
+          OS2L streams the exact beat grid and BPM from your DJ software — the most accurate sync
+          possible. In VirtualDJ, set <code>os2l</code> to <code>auto</code> in Options and it will
+          find this app automatically. If auto-detection fails, set VirtualDJ&rsquo;s{' '}
+          <code>os2lNetworkAddress</code> to <code>{status?.os2lAddress ?? '…'}</code>. While
+          connected, the beat source badge in Perform shows <strong>OS2L</strong> and effects lock
+          to the deck&rsquo;s bars and phrases.
         </p>
       </section>
 

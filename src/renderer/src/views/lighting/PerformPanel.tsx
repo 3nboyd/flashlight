@@ -57,6 +57,18 @@ export function PerformPanel(): JSX.Element {
         case 'tap':
           if (isNoteOn) window.djCompanion.lighting.tapTempo()
           break
+        case 'resync':
+          if (isNoteOn) window.djCompanion.lighting.resyncDownbeat()
+          break
+        case 'autopilot':
+          if (isNoteOn) {
+            const current = useLightingStore.getState().project
+            useLightingStore.getState().updateProject((p) => ({
+              ...p,
+              autopilot: { ...p.autopilot, enabled: !current.autopilot.enabled }
+            }))
+          }
+          break
       }
     },
     [triggerScene, setOverrides]
@@ -99,6 +111,18 @@ export function PerformPanel(): JSX.Element {
             {status ? status.bpm.toFixed(1) : '—'}
           </div>
           <div className="bpm-label">BPM</div>
+          <div
+            className={`beat-source-badge ${status?.beatSource ?? 'manual'}`}
+            title={
+              status?.beatSource === 'os2l'
+                ? 'Beat grid streamed live from your DJ software over OS2L'
+                : status?.beatSource === 'audio'
+                  ? 'Tempo estimated from the live audio input'
+                  : 'Manual tempo (tap or type a BPM)'
+            }
+          >
+            {status?.beatSource === 'os2l' ? '● OS2L' : status?.beatSource === 'audio' ? '● Audio' : '○ Manual'}
+          </div>
           <div className="bpm-controls">
             <button className="secondary-button" onClick={() => window.djCompanion.lighting.tapTempo()}>
               Tap
@@ -109,6 +133,40 @@ export function PerformPanel(): JSX.Element {
               onClick={() => window.djCompanion.lighting.resyncDownbeat()}
             >
               Sync 1
+            </button>
+          </div>
+          <div className="bpm-manual-row">
+            <button
+              className="secondary-button"
+              title="Nudge BPM down (takes manual control)"
+              onClick={() => status && window.djCompanion.lighting.setBpm(Math.round((status.bpm - 1) * 10) / 10)}
+            >
+              −
+            </button>
+            <input
+              className="bpm-manual-input"
+              type="number"
+              min={20}
+              max={300}
+              step={0.1}
+              placeholder="BPM"
+              title="Type a BPM for manual takeover"
+              onKeyDown={(e) => {
+                if (e.key === 'Enter') {
+                  const value = Number((e.target as HTMLInputElement).value)
+                  if (value >= 20 && value <= 300) {
+                    window.djCompanion.lighting.setBpm(value)
+                    ;(e.target as HTMLInputElement).value = ''
+                  }
+                }
+              }}
+            />
+            <button
+              className="secondary-button"
+              title="Nudge BPM up (takes manual control)"
+              onClick={() => status && window.djCompanion.lighting.setBpm(Math.round((status.bpm + 1) * 10) / 10)}
+            >
+              +
             </button>
           </div>
         </div>

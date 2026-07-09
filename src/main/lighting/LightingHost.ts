@@ -16,6 +16,9 @@ import type { AudioFeatures } from '@core/lighting/audio/features'
 import { SILENT_FEATURES } from '@core/lighting/audio/features'
 import { BpmEstimator } from '@core/lighting/audio/BeatDetector'
 import { DmxSender } from './DmxSender'
+import { Os2lServer } from './Os2lServer'
+
+export type BeatSource = 'os2l' | 'audio' | 'manual'
 
 export interface LightingStatus {
   running: boolean
@@ -27,6 +30,12 @@ export interface LightingStatus {
   overrides: LiveOverrides
   outputError: string | null
   audioActive: boolean
+  /** Which source is currently driving the beat clock. */
+  beatSource: BeatSource
+  os2lConnected: boolean
+  /** ip:port for pointing VirtualDJ manually if discovery fails. */
+  os2lAddress: string | null
+  os2lError: string | null
 }
 
 /**
@@ -47,16 +56,30 @@ export class LightingHost {
   private sender: DmxSender
   private timer: NodeJS.Timeout | null = null
   private readonly projectPath: string
+  private os2l: Os2lServer | null = null
+  private os2lConnected = false
+  private lastOs2lBeatAtMs = 0
 
   constructor(userDataDir: string) {
     this.projectPath = join(userDataDir, 'lighting-project.json')
-    this.sender = new DmxSender({ protocol: 'artnet', artnetHost: '255.255.255.255' })
+    this.sender = new DmxSender({
+      protocol: 'artnet',
+      artnetHost: '255.255.255.255',
+      serialPath: null
+    })
   }
 
   async load(): Promise<LightingProject> {
     try {
       const raw = await readFile(this.projectPath, 'utf-8')
-      this.project = { ...defaultLightingProject(), ...JSON.parse(raw) }
+      const parsed = JSON.parse(raw)
+      const defaults = defaultLightingProject()
+      this.project = {
+        ...defaults,
+        ...parsed,
+        output: { ...defaults.output, ...parsed.output },
+        os2l: { ...defaults.os2l, ...parsed.os2l }
+      }
     } catch {
       this.project = defaultLightingProject()
       this.project.scenes = [...PRESET_SCENES]
@@ -65,22 +88,46 @@ export class LightingHost {
         ...new Array(16 - PRESET_SCENES.length).fill(null)
       ]
     }
-    this.sender.reconfigure({
-      protocol: this.project.output.protocol,
-      artnetHost: this.project.output.artnetHost
-    })
+    this.applyIntegrationConfig()
     return this.project
   }
 
   async saveProject(project: LightingProject): Promise<LightingProject> {
     this.project = project
-    this.sender.reconfigure({
-      protocol: project.output.protocol,
-      artnetHost: project.output.artnetHost
-    })
+    this.applyIntegrationConfig()
     await mkdir(dirname(this.projectPath), { recursive: true })
     await writeFile(this.projectPath, JSON.stringify(project, null, 2), 'utf-8')
     return project
+  }
+
+  private applyIntegrationConfig(): void {
+    this.sender.reconfigure({
+      protocol: this.project.output.protocol,
+      artnetHost: this.project.output.artnetHost,
+      serialPath: this.project.output.serialPath
+    })
+
+    const wantOs2l = this.project.os2l.enabled
+    const portChanged = this.os2l !== null && this.os2l.getPort() !== this.project.os2l.port
+    if (this.os2l && (!wantOs2l || portChanged)) {
+      this.os2l.stop()
+      this.os2l = null
+      this.os2lConnected = false
+    }
+    if (wantOs2l && !this.os2l) {
+      this.os2l = new Os2lServer(this.project.os2l.port, {
+        onEvent: (event) => {
+          if (event.evt === 'beat') {
+            this.clock.syncToExternalBeat(event.bpm, event.pos, Date.now())
+            this.lastOs2lBeatAtMs = Date.now()
+          }
+        },
+        onConnectionChange: (connected) => {
+          this.os2lConnected = connected
+        }
+      })
+      this.os2l.start()
+    }
   }
 
   getProject(): LightingProject {
@@ -147,8 +194,19 @@ export class LightingHost {
       nowMs
     })
     for (const [universe, data] of universes) {
+      // A USB interface is a single DMX line: emit only its configured universe.
+      if (this.project.output.protocol === 'enttec' && universe !== this.project.output.usbUniverse) {
+        continue
+      }
       this.sender.sendUniverse(universe, data.toBuffer())
     }
+  }
+
+  /** OS2L wins while beats are flowing; audio analysis next; tap/manual otherwise. */
+  private currentBeatSource(nowMs: number): BeatSource {
+    if (this.os2lConnected && nowMs - this.lastOs2lBeatAtMs < 4000) return 'os2l'
+    if (this.bpmFollowsAudio && nowMs - this.lastAudioAtMs < 500) return 'audio'
+    return 'manual'
   }
 
   // ---- control surface (called from IPC) ----
@@ -187,7 +245,9 @@ export class LightingHost {
     this.lastAudioAtMs = Date.now()
     if (typeof features.flux === 'number') {
       this.bpmEstimator.addFrame(features.flux)
-      if (this.bpmFollowsAudio) {
+      // Audio-derived tempo only steers the clock when OS2L isn't — the DJ
+      // software's own grid is always more accurate than our estimation.
+      if (this.bpmFollowsAudio && this.currentBeatSource(Date.now()) !== 'os2l') {
         const bpm = this.bpmEstimator.estimate()
         if (bpm !== null && Math.abs(bpm - this.clock.getBpm()) > 1) {
           this.clock.setBpm(bpm, Date.now())
@@ -211,7 +271,11 @@ export class LightingHost {
       autopilotEnabled: this.project.autopilot.enabled,
       overrides: this.overrides,
       outputError: this.senderError(),
-      audioActive: nowMs - this.lastAudioAtMs < 500
+      audioActive: nowMs - this.lastAudioAtMs < 500,
+      beatSource: this.currentBeatSource(nowMs),
+      os2lConnected: this.os2lConnected,
+      os2lAddress: this.os2l?.getAdvertisedAddress() ?? null,
+      os2lError: this.os2l?.getLastError() ?? null
     }
   }
 
@@ -221,6 +285,8 @@ export class LightingHost {
 
   dispose(): void {
     this.stop()
+    this.os2l?.stop()
+    this.os2l = null
     this.sender.close()
   }
 }

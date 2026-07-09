@@ -11,12 +11,17 @@ Built with Electron + React + TypeScript. Dark theme, configurable accent color.
 
 A performance-first DMX lighting engine built for DJing while it runs:
 
-- **Output over Art-Net or sACN (E1.31)** — driverless network DMX that works with any modern
-  node/interface, at 40 fps with per-universe sequencing and an automatic blackout frame on stop
-  so fixtures never freeze mid-look.
-- **Beat-locked, not time-coded** — a beat clock (from live audio analysis or tap tempo) drives
-  every effect, so chases, pulses, and color cycles land on the beat/bar/phrase, SoundSwitch-style
-  but without pre-scripting tracks.
+- **Output over Art-Net, sACN (E1.31), or USB** — driverless network DMX that works with any
+  modern node/interface, plus Enttec DMX USB Pro-compatible serial interfaces, at 40 fps with
+  per-universe sequencing and an automatic blackout frame on stop so fixtures never freeze
+  mid-look. (The original "Open DMX USB"/raw-FTDI dongles are not supported — their bit-banged
+  timing can't be driven reliably from software.)
+- **OS2L beat link** — the app runs an OS2L server (os2l.org) with built-in DNS-SD discovery, so
+  VirtualDJ finds it automatically (or point `os2lNetworkAddress` at the ip:port shown in Setup)
+  and streams its exact beat grid: BPM, beat position, bars, and phrases, sample-accurate from the
+  deck. Beat source priority is OS2L → live audio analysis → tap/manual, with automatic fallback.
+- **Beat-locked, not time-coded** — a beat clock drives every effect, so chases, pulses, and
+  color cycles land on the beat/bar/phrase, SoundSwitch-style but without pre-scripting tracks.
 - **Real-time audio reactivity** — feed it your DJ software's master via a virtual audio cable;
   spectral-flux onset detection + autocorrelation BPM estimation (deterministic, no AI) keep the
   tempo locked, and bass/level-reactive effects ride the actual music.
@@ -118,8 +123,7 @@ verifies unrelated data survives an edit untouched — see `src/core/**/*.test.t
 - [ ] Direct rekordbox USB (`.pdb`) writing, if/when the format becomes tractable to write safely
 - [ ] MusicBrainz/AcoustID fingerprinting fallback for filenames too mangled for heuristic cleaning
 - [ ] Waveform/Overview tag support
-- [ ] USB-serial DMX interfaces (Enttec DMX USB Pro) — needs a native serialport dependency
-- [ ] Ableton Link tempo sync — needs a native module; audio BPM detection + tap tempo cover v1
+- [ ] Ableton Link tempo sync — needs a native module; OS2L + audio BPM + tap cover v1
 - [ ] Custom fixture profile editor + community fixture library import (e.g. OFL)
 - [ ] Camera-based visual effects engine
 

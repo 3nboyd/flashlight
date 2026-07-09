@@ -1,5 +1,6 @@
 import { ipcMain, app } from 'electron'
 import { LightingHost } from '../lighting/LightingHost'
+import { DmxSender } from '../lighting/DmxSender'
 import type { LightingProject, LiveOverrides } from '@core/lighting/engine/types'
 import type { AudioFeatures } from '@core/lighting/audio/features'
 
@@ -41,6 +42,7 @@ export function registerLightingHandlers(): void {
     lighting.setBpmFollowsAudio(follow)
   )
   ipcMain.handle('lighting:getStatus', async () => lighting.getStatus())
+  ipcMain.handle('lighting:listSerialPorts', async () => DmxSender.listSerialPorts())
 
   // High-frequency fire-and-forget stream (no reply needed).
   ipcMain.on('lighting:audioFeatures', (_e, features: AudioFeatures & { flux?: number }) => {

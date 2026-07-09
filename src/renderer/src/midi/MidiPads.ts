@@ -10,6 +10,8 @@ export type PadAction =
   | { kind: 'blackout' }
   | { kind: 'strobe' }
   | { kind: 'tap' }
+  | { kind: 'resync' }
+  | { kind: 'autopilot' }
 
 export interface MidiMapping {
   /** MIDI note number → action. */
