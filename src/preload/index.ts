@@ -6,6 +6,9 @@ import type { DirEntryInfo, FileMoveResult } from '@core/fileops/FileOperations'
 import type { LibrarySyncResult } from '@core/fileops/LibrarySync'
 import type { RenameCandidateInput, RenamePreview } from '@core/rename/RenameEngine'
 import type { RenameApplyItem } from '../main/ipc/rename'
+import type { LightingProject, LiveOverrides } from '@core/lighting/engine/types'
+import type { AudioFeatures } from '@core/lighting/audio/features'
+import type { LightingStatus } from '../main/lighting/LightingHost'
 
 interface MoveOrRenameResponse {
   result: FileMoveResult
@@ -63,6 +66,25 @@ const api = {
       ipcRenderer.invoke('rename:preview', candidates, knownArtists),
     apply: (items: RenameApplyItem[]): Promise<Array<FileMoveResult & { sync: LibrarySyncResult | null }>> =>
       ipcRenderer.invoke('rename:apply', items)
+  },
+  lighting: {
+    loadProject: (): Promise<LightingProject> => ipcRenderer.invoke('lighting:loadProject'),
+    saveProject: (project: LightingProject): Promise<LightingProject> =>
+      ipcRenderer.invoke('lighting:saveProject', project),
+    start: (): Promise<LightingStatus> => ipcRenderer.invoke('lighting:start'),
+    stop: (): Promise<LightingStatus> => ipcRenderer.invoke('lighting:stop'),
+    triggerScene: (sceneId: string | null): Promise<LightingStatus> =>
+      ipcRenderer.invoke('lighting:triggerScene', sceneId),
+    setOverrides: (partial: Partial<LiveOverrides>): Promise<LiveOverrides> =>
+      ipcRenderer.invoke('lighting:setOverrides', partial),
+    tapTempo: (): Promise<number> => ipcRenderer.invoke('lighting:tapTempo'),
+    setBpm: (bpm: number): Promise<number> => ipcRenderer.invoke('lighting:setBpm', bpm),
+    resyncDownbeat: (): Promise<void> => ipcRenderer.invoke('lighting:resyncDownbeat'),
+    setBpmFollowsAudio: (follow: boolean): Promise<void> =>
+      ipcRenderer.invoke('lighting:setBpmFollowsAudio', follow),
+    getStatus: (): Promise<LightingStatus> => ipcRenderer.invoke('lighting:getStatus'),
+    sendAudioFeatures: (features: AudioFeatures & { flux?: number }): void =>
+      ipcRenderer.send('lighting:audioFeatures', features)
   }
 }
 

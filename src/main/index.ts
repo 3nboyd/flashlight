@@ -6,6 +6,7 @@ import { registerDialogHandlers } from './ipc/dialog'
 import { registerLibraryHandlers } from './ipc/library'
 import { registerFileOpsHandlers } from './ipc/fileops'
 import { registerRenameHandlers } from './ipc/rename'
+import { registerLightingHandlers, disposeLighting } from './ipc/lighting'
 
 const isMac = process.platform === 'darwin'
 
@@ -51,6 +52,7 @@ app.whenReady().then(() => {
   registerLibraryHandlers()
   registerFileOpsHandlers()
   registerRenameHandlers()
+  registerLightingHandlers()
 
   createWindow()
 
@@ -61,4 +63,9 @@ app.whenReady().then(() => {
 
 app.on('window-all-closed', () => {
   if (!isMac) app.quit()
+})
+
+app.on('before-quit', () => {
+  // Stops the DMX loop and sends a final blackout so fixtures don't freeze lit.
+  disposeLighting()
 })

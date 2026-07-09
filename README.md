@@ -5,7 +5,30 @@ management tools that Serato, VirtualDJ, and rekordbox don't give you on their o
 
 Built with Electron + React + TypeScript. Dark theme, configurable accent color.
 
-## What it does (v1: Library)
+## What it does
+
+### Lighting (DMX)
+
+A performance-first DMX lighting engine built for DJing while it runs:
+
+- **Output over Art-Net or sACN (E1.31)** — driverless network DMX that works with any modern
+  node/interface, at 40 fps with per-universe sequencing and an automatic blackout frame on stop
+  so fixtures never freeze mid-look.
+- **Beat-locked, not time-coded** — a beat clock (from live audio analysis or tap tempo) drives
+  every effect, so chases, pulses, and color cycles land on the beat/bar/phrase, SoundSwitch-style
+  but without pre-scripting tracks.
+- **Real-time audio reactivity** — feed it your DJ software's master via a virtual audio cable;
+  spectral-flux onset detection + autocorrelation BPM estimation (deterministic, no AI) keep the
+  tempo locked, and bass/level-reactive effects ride the actual music.
+- **Perform mode** — a 4×4 pad grid of scenes, master fader, momentary strobe, blackout, one-tap
+  color overrides, and an autopilot that rotates looks every N bars while you're deep in a mix.
+- **Setup mode** — patch fixtures from generic profiles (RGB/RGBW pars, strobes, moving heads,
+  lasers, dimmers) with address-overlap detection, edit scenes/effects per fixture group, assign
+  pads, and map any MIDI pad controller with one-click learn.
+- **8 ready-made vibe presets** (Warm House, Peak Time, Bass Reactor, Rainbow Flow…) so it makes
+  light out of the box.
+
+### Library (v1)
 
 - **Cross-platform hotcue/loop sync** — read and write hotcues, loops, and track color for
   **Serato** (embedded in the audio file's ID3 tags), **VirtualDJ** (`database.xml`), and export
@@ -75,6 +98,11 @@ src/
     rename/        filename cleaning rules + artist/title swap detection
     backup/        automatic snapshot + retention pruning
     settings/      app settings shape
+    lighting/
+      dmx/         universe model + byte-exact Art-Net/sACN packet encoders
+      fixtures/    fixture channel model + built-in generic profiles
+      audio/       spectral-flux onset detection + autocorrelation BPM estimation
+      engine/      beat clock, scenes/effects, per-tick DMX rendering
   main/            Electron main process — IPC handlers wrapping core/
   preload/         contextBridge — typed API surface exposed to the renderer
   renderer/        React UI (dark theme, views, state)
@@ -90,6 +118,10 @@ verifies unrelated data survives an edit untouched — see `src/core/**/*.test.t
 - [ ] Direct rekordbox USB (`.pdb`) writing, if/when the format becomes tractable to write safely
 - [ ] MusicBrainz/AcoustID fingerprinting fallback for filenames too mangled for heuristic cleaning
 - [ ] Waveform/Overview tag support
+- [ ] USB-serial DMX interfaces (Enttec DMX USB Pro) — needs a native serialport dependency
+- [ ] Ableton Link tempo sync — needs a native module; audio BPM detection + tap tempo cover v1
+- [ ] Custom fixture profile editor + community fixture library import (e.g. OFL)
+- [ ] Camera-based visual effects engine
 
 ## Contributing
 

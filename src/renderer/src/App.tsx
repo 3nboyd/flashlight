@@ -5,6 +5,7 @@ import { LibraryView } from './views/LibraryView'
 import { FileExplorerView } from './views/FileExplorerView'
 import { RenameView } from './views/RenameView'
 import { BackupsView } from './views/BackupsView'
+import { LightingView } from './views/lighting/LightingView'
 import { useSettingsStore } from './state/settingsStore'
 import './styles/views.css'
 
@@ -18,6 +19,8 @@ function ViewRouter({ view }: { view: ViewId }): JSX.Element {
       return <FileExplorerView />
     case 'rename':
       return <RenameView />
+    case 'lighting':
+      return <LightingView />
     case 'backups':
       return <BackupsView />
   }
