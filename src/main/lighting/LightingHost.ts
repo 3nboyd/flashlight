@@ -9,7 +9,8 @@ import {
   type LiveOverrides,
   type Scene
 } from '@core/lighting/engine/types'
-import { PRESET_SCENES } from '@core/lighting/engine/presetScenes'
+import { PRESET_SCENES, defaultSmartPools } from '@core/lighting/engine/presetScenes'
+import { SmartModeEngine, type SmartPhase } from '@core/lighting/engine/SmartMode'
 import { fixturesById } from '@core/lighting/fixtures/library'
 import type { PatchedFixture } from '@core/lighting/fixtures/types'
 import type { AudioFeatures } from '@core/lighting/audio/features'
@@ -38,6 +39,9 @@ export interface LightingStatus {
   os2lError: string | null
   /** How the OS2L service is being advertised for auto-detection. */
   os2lDiscovery: DiscoveryMode
+  smartEnabled: boolean
+  smartPhase: SmartPhase
+  smartBuildProgress: number
 }
 
 /**
@@ -61,6 +65,11 @@ export class LightingHost {
   private os2l: Os2lServer | null = null
   private os2lConnected = false
   private lastOs2lBeatAtMs = 0
+  private readonly smart = new SmartModeEngine(40)
+  private smartEnabled = false
+  private smartIntensity = 1
+  private smartPhase: SmartPhase = 'steady'
+  private smartBuildProgress = 0
 
   constructor(userDataDir: string) {
     this.projectPath = join(userDataDir, 'lighting-project.json')
@@ -82,6 +91,7 @@ export class LightingHost {
         output: { ...defaults.output, ...parsed.output },
         os2l: { ...defaults.os2l, ...parsed.os2l },
         audio: { ...defaults.audio, ...parsed.audio },
+        smart: { ...defaults.smart, ...parsed.smart },
         stageProps: parsed.stageProps ?? defaults.stageProps
       }
     } catch {
@@ -89,6 +99,7 @@ export class LightingHost {
       this.project.scenes = [...PRESET_SCENES]
       const padIds = PRESET_SCENES.map((s) => s.id).slice(0, 16)
       this.project.padSceneIds = [...padIds, ...new Array(Math.max(0, 16 - padIds.length)).fill(null)]
+      this.project.smart.pools = defaultSmartPools(this.project.scenes.map((s) => s.id))
     }
     this.applyIntegrationConfig()
     return this.project
@@ -103,6 +114,7 @@ export class LightingHost {
   }
 
   private applyIntegrationConfig(): void {
+    this.smart.updateConfig(this.project.smart)
     this.sender.reconfigure({
       protocol: this.project.output.protocol,
       artnetHost: this.project.output.artnetHost,
@@ -169,14 +181,21 @@ export class LightingHost {
   }
 
   private currentScene(nowMs: number): Scene | null {
-    if (this.project.autopilot.enabled) {
+    // Smart mode owns scene selection while enabled (it sets activeSceneId
+    // directly), so autopilot rotation is suspended.
+    if (this.project.autopilot.enabled && !this.smartEnabled) {
       const rotation =
         this.project.autopilot.sceneIds.length > 0
           ? this.project.autopilot.sceneIds
           : this.project.scenes.map((s) => s.id)
       if (rotation.length > 0) {
         const bars = Math.max(1, this.project.autopilot.barsPerScene)
-        const slot = Math.floor(this.clock.positionAt(nowMs).barIndex / bars) % rotation.length
+        const step = Math.floor(this.clock.positionAt(nowMs).barIndex / bars)
+        // Shuffle: deterministic hash of the step, so the "random" order is
+        // stable within a step but non-sequential across steps.
+        const slot = this.project.autopilot.shuffle
+          ? Math.abs((step * 2654435761) % 2 ** 31) % rotation.length
+          : step % rotation.length
         const scene = this.project.scenes.find((s) => s.id === rotation[slot])
         if (scene) return scene
       }
@@ -187,10 +206,15 @@ export class LightingHost {
   private tick(): void {
     const nowMs = Date.now()
     const audioFresh = nowMs - this.lastAudioAtMs < 500
+    // Smart mode shapes intensity on top of the user's master fader.
+    const overrides =
+      this.smartEnabled && this.smartIntensity < 1
+        ? { ...this.overrides, masterDimmer: this.overrides.masterDimmer * this.smartIntensity }
+        : this.overrides
     const universes = renderTick({
       fixtures: this.resolveFixtures(),
       scene: this.currentScene(nowMs),
-      overrides: this.overrides,
+      overrides,
       beat: this.clock.positionAt(nowMs),
       audio: audioFresh ? this.audio : SILENT_FEATURES,
       nowMs
@@ -266,9 +290,32 @@ export class LightingHost {
     this.bpmFollowsAudio = follow
   }
 
+  setSmartMode(enabled: boolean): void {
+    this.smartEnabled = enabled
+    if (enabled) {
+      this.smart.updateConfig(this.project.smart)
+      this.smart.reset()
+      this.smartIntensity = 1
+      this.smartPhase = 'steady'
+      this.smartBuildProgress = 0
+    } else {
+      this.smartIntensity = 1
+    }
+  }
+
   updateAudioFeatures(features: AudioFeatures & { flux?: number }): void {
     this.audio = features
     this.lastAudioAtMs = Date.now()
+
+    if (this.smartEnabled) {
+      const decision = this.smart.addFrame(features, this.clock.positionAt(Date.now()))
+      this.smartPhase = decision.phase
+      this.smartIntensity = decision.intensity
+      this.smartBuildProgress = decision.buildProgress
+      if (decision.sceneId && this.project.scenes.some((s) => s.id === decision.sceneId)) {
+        this.activeSceneId = decision.sceneId
+      }
+    }
     if (typeof features.flux === 'number') {
       this.bpmEstimator.addFrame(features.flux)
       // Audio-derived tempo only steers the clock when OS2L isn't — the DJ
@@ -302,7 +349,10 @@ export class LightingHost {
       os2lConnected: this.os2lConnected,
       os2lAddress: this.os2l?.getAdvertisedAddress() ?? null,
       os2lError: this.os2l?.getLastError() ?? null,
-      os2lDiscovery: this.os2l?.getDiscoveryMode() ?? 'off'
+      os2lDiscovery: this.os2l?.getDiscoveryMode() ?? 'off',
+      smartEnabled: this.smartEnabled,
+      smartPhase: this.smartPhase,
+      smartBuildProgress: this.smartBuildProgress
     }
   }
 

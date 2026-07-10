@@ -47,10 +47,24 @@ const FLOOR_Y = 0.82
 
 const PROP_CHOICES: { type: StagePropType; label: string; hint: string }[] = [
   { type: 'vtruss', label: 'Vertical Truss', hint: 'Mount fixtures up its side' },
-  { type: 'speaker', label: 'Speaker Stack', hint: 'Set dressing' },
+  { type: 'speaker', label: 'Speaker Stack', hint: 'Drop one on another to stack higher' },
   { type: 'booth', label: 'DJ Booth', hint: 'Set dressing' },
   { type: 'riser', label: 'Riser', hint: 'Low platform' }
 ]
+
+/** Back-to-front draw order; hit-testing runs front-to-back (reverse). */
+const PROP_DEPTH: Record<StagePropType, number> = { booth: 0, riser: 1, speaker: 2, vtruss: 3 }
+
+const PROP_LABELS: Record<StagePropType, string> = {
+  vtruss: 'Vertical Truss',
+  speaker: 'Speaker Stack',
+  booth: 'DJ Booth',
+  riser: 'Riser'
+}
+
+function speakerMetrics(width: number, height: number): { w: number; boxH: number } {
+  return { w: Math.min(width * 0.085, 92), boxH: height * 0.115 }
+}
 
 export function StageVisualizer({
   height,
@@ -64,6 +78,9 @@ export function StageVisualizer({
   const dragRef = useRef<DragState | null>(null)
   const propDragXRef = useRef<Map<string, number>>(new Map())
   const [pickerOpen, setPickerOpen] = useState(false)
+  const [selected, setSelected] = useState<DragTarget | null>(null)
+  const selectedRef = useRef<DragTarget | null>(null)
+  selectedRef.current = selected
   const { project, updateProject } = useLightingStore()
   const projectRef = useRef(project)
   projectRef.current = project
@@ -133,7 +150,7 @@ export function StageVisualizer({
         positions: positionsRef.current,
         props: currentProps(),
         editable,
-        dragging: dragRef.current,
+        selected: selectedRef.current,
         timeMs: performance.now()
       })
     }
@@ -157,11 +174,19 @@ export function StageVisualizer({
 
   const hitTestFixture = useCallback(
     (mx: number, my: number, width: number, h: number): string | null => {
+      // Closest wins within the grab radius, so tightly-packed rigs grab
+      // the fixture you're actually pointing at.
+      let best: string | null = null
+      let bestDist = Infinity
       for (const [patchId, pos] of positionsRef.current) {
         const { x, y } = fixtureScreenPos(pos, width, h)
-        if (Math.abs(mx - x) < 18 && Math.abs(my - y) < 20) return patchId
+        const dist = Math.hypot(mx - x, my - y)
+        if (Math.abs(mx - x) < 18 && Math.abs(my - y) < 20 && dist < bestDist) {
+          best = patchId
+          bestDist = dist
+        }
       }
-      return null
+      return best
     },
     [fixtureScreenPos]
   )
@@ -170,11 +195,17 @@ export function StageVisualizer({
     (mx: number, my: number, width: number, h: number): string | null => {
       const trussY = TRUSS_Y * h
       const floorY = FLOOR_Y * h
-      for (const prop of currentProps()) {
+      // Front-to-back: small props grab before the big background booth.
+      const ordered = [...currentProps()].sort((a, b) => PROP_DEPTH[b.type] - PROP_DEPTH[a.type])
+      for (const prop of ordered) {
         const px = prop.x * width
         if (prop.type === 'vtruss') {
           if (Math.abs(mx - px) < 14 && my > trussY && my < floorY) return prop.id
-        } else if (Math.abs(mx - px) < width * 0.06 && my > floorY - h * 0.2 && my < floorY + 6) {
+        } else if (prop.type === 'speaker') {
+          const { w, boxH } = speakerMetrics(width, h)
+          const stackH = boxH * (prop.stack ?? 2)
+          if (Math.abs(mx - px) < w * 0.6 && my > floorY - stackH - 6 && my < floorY + 6) return prop.id
+        } else if (Math.abs(mx - px) < width * 0.07 && my > floorY - h * 0.18 && my < floorY + 6) {
           return prop.id
         }
       }
@@ -182,10 +213,6 @@ export function StageVisualizer({
     },
     [currentProps]
   )
-
-  function trashCenter(width: number, h: number): { x: number; y: number; r: number } {
-    return { x: width - 34, y: h - 30, r: 22 }
-  }
 
   function pointer(e: React.PointerEvent<HTMLCanvasElement>): { x: number; y: number } {
     const rect = e.currentTarget.getBoundingClientRect()
@@ -254,45 +281,94 @@ export function StageVisualizer({
     dragRef.current = null
     const canvas = e.currentTarget
     const { x, y } = pointer(e)
+    const width = canvas.clientWidth
+    const h = canvas.clientHeight
 
     if (drag && drag.moved) {
-      const trash = trashCenter(canvas.clientWidth, canvas.clientHeight)
-      const inTrash = Math.hypot(x - trash.x, y - trash.y) < trash.r + 12
-
       if (drag.target.type === 'fixture') {
         const id = drag.target.id
-        if (inTrash) {
-          positionsRef.current.delete(id)
-          updateProject((p) => ({ ...p, patches: p.patches.filter((patch) => patch.id !== id) }))
-        } else {
-          const pos = positionsRef.current.get(id)
-          if (pos) {
-            updateProject((p) => ({
-              ...p,
-              patches: p.patches.map((patch) => (patch.id === id ? { ...patch, stage: { ...pos } } : patch))
-            }))
-          }
+        const pos = positionsRef.current.get(id)
+        if (pos) {
+          updateProject((p) => ({
+            ...p,
+            patches: p.patches.map((patch) => (patch.id === id ? { ...patch, stage: { ...pos } } : patch))
+          }))
         }
       } else {
         const id = drag.target.id
         const nx = propDragXRef.current.get(id)
         propDragXRef.current.delete(id)
-        if (inTrash) {
-          updateProject((p) => ({ ...p, stageProps: p.stageProps.filter((prop) => prop.id !== id) }))
-        } else if (nx !== undefined) {
+        if (nx === undefined) return
+        // Dropping a speaker onto another speaker stacks them.
+        const dragged = projectRef.current.stageProps.find((prop) => prop.id === id)
+        const stackTarget =
+          dragged?.type === 'speaker'
+            ? projectRef.current.stageProps.find(
+                (prop) =>
+                  prop.id !== id && prop.type === 'speaker' && Math.abs(prop.x - nx) * width < speakerMetrics(width, h).w
+              )
+            : undefined
+        if (dragged && stackTarget) {
+          setSelected(null)
+          updateProject((p) => ({
+            ...p,
+            stageProps: p.stageProps
+              .filter((prop) => prop.id !== id)
+              .map((prop) =>
+                prop.id === stackTarget.id
+                  ? { ...prop, stack: Math.min(4, (prop.stack ?? 2) + (dragged.stack ?? 2)) }
+                  : prop
+              )
+          }))
+        } else {
           updateProject((p) => ({
             ...p,
             stageProps: p.stageProps.map((prop) => (prop.id === id ? { ...prop, x: nx } : prop))
           }))
         }
       }
+      setSelected(drag.target)
       return
     }
-    if (!drag && onBackgroundClick) {
-      const hit = hitTestFixture(x, y, canvas.clientWidth, canvas.clientHeight)
-      if (!hit) onBackgroundClick()
+
+    // Plain click: select in editable mode, expand in mini mode.
+    const fixtureHit = hitTestFixture(x, y, width, h)
+    const propHit = fixtureHit ? null : hitTestProp(x, y, width, h)
+    if (editable) {
+      if (fixtureHit) setSelected({ type: 'fixture', id: fixtureHit })
+      else if (propHit) setSelected({ type: 'prop', id: propHit })
+      else setSelected(null)
+    }
+    if (!fixtureHit && !propHit && onBackgroundClick) onBackgroundClick()
+  }
+
+  function deleteSelected(): void {
+    const sel = selectedRef.current
+    if (!sel) return
+    setSelected(null)
+    if (sel.type === 'fixture') {
+      positionsRef.current.delete(sel.id)
+      updateProject((p) => ({ ...p, patches: p.patches.filter((patch) => patch.id !== sel.id) }))
+    } else {
+      updateProject((p) => ({ ...p, stageProps: p.stageProps.filter((prop) => prop.id !== sel.id) }))
     }
   }
+
+  // Delete/Backspace removes the selected item while the playground is focused.
+  useEffect(() => {
+    if (!editable) return
+    const onKey = (e: KeyboardEvent): void => {
+      if ((e.key === 'Delete' || e.key === 'Backspace') && selectedRef.current) {
+        const target = e.target as HTMLElement | null
+        if (target && (target.tagName === 'INPUT' || target.tagName === 'TEXTAREA')) return
+        e.preventDefault()
+        deleteSelected()
+      }
+    }
+    window.addEventListener('keydown', onKey)
+    return () => window.removeEventListener('keydown', onKey)
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [editable])
 
   function addProp(type: StagePropType): void {
     updateProject((p) => ({
@@ -326,14 +402,33 @@ export function StageVisualizer({
                 </button>
               ))}
               <div className="stage-picker-hint" style={{ padding: '6px 4px 0' }}>
-                Lights are added in the Fixtures section below.
+                Lights are added in Setup → Fixtures.
               </div>
+            </div>
+          )}
+          {selected && (
+            <div className="stage-selection-chip">
+              <span>{selectedLabel(selected, projectRef.current)}</span>
+              <button className="chip-delete" onClick={deleteSelected} title="Remove (or press Delete)">
+                ✕ Remove
+              </button>
             </div>
           )}
         </>
       )}
     </div>
   )
+}
+
+function selectedLabel(
+  target: DragTarget,
+  project: { patches: { id: string; label: string }[]; stageProps: StageProp[] }
+): string {
+  if (target.type === 'fixture') {
+    return project.patches.find((p) => p.id === target.id)?.label ?? 'Fixture'
+  }
+  const prop = project.stageProps.find((p) => p.id === target.id)
+  return prop ? PROP_LABELS[prop.type] : 'Prop'
 }
 
 // ---------------------------------------------------------------------------
@@ -346,7 +441,7 @@ interface RenderContext {
   positions: Map<string, StagePosition>
   props: StageProp[]
   editable: boolean
-  dragging: DragState | null
+  selected: DragTarget | null
   timeMs: number
 }
 
@@ -392,8 +487,11 @@ function renderStage(
   }
 
   drawHorizontalTruss(ctx, width, trussY, height)
-  for (const prop of rc.props) {
-    drawProp(ctx, prop, width, height, trussY, floorY)
+  // Back-to-front so the booth sits behind speakers, trusses, and lights.
+  const orderedProps = [...rc.props].sort((a, b) => PROP_DEPTH[a.type] - PROP_DEPTH[b.type])
+  for (const prop of orderedProps) {
+    const isSelected = rc.selected?.type === 'prop' && rc.selected.id === prop.id
+    drawProp(ctx, prop, width, height, trussY, floorY, isSelected)
   }
 
   // --- fixture states ---
@@ -444,12 +542,21 @@ function renderStage(
   states.forEach(({ state, pos }) => {
     const { x: fx, y: fy } = screenPos(pos)
     drawFixtureBody(ctx, fx, fy, pos, state, rc.editable, height)
+    if (rc.selected?.type === 'fixture' && rc.selected.id === state.patchId) {
+      drawSelectionRing(ctx, fx, fy, height)
+    }
   })
+}
 
-  // --- trash bin while dragging ---
-  if (rc.editable && rc.dragging?.moved) {
-    drawTrashBin(ctx, width, height, rc.dragging)
-  }
+function drawSelectionRing(ctx: CanvasRenderingContext2D, fx: number, fy: number, height: number): void {
+  const r = Math.max(14, height * 0.05)
+  ctx.strokeStyle = 'rgba(139,92,246,0.9)'
+  ctx.lineWidth = 1.5
+  ctx.setLineDash([4, 3])
+  ctx.beginPath()
+  ctx.arc(fx, fy, r, 0, Math.PI * 2)
+  ctx.stroke()
+  ctx.setLineDash([])
 }
 
 function drawHorizontalTruss(ctx: CanvasRenderingContext2D, width: number, trussY: number, height: number): void {
@@ -480,17 +587,18 @@ function drawProp(
   width: number,
   height: number,
   trussY: number,
-  floorY: number
+  floorY: number,
+  isSelected: boolean
 ): void {
   const px = prop.x * width
-  ctx.strokeStyle = 'rgba(255,255,255,0.12)'
+  ctx.strokeStyle = isSelected ? 'rgba(139,92,246,0.9)' : 'rgba(255,255,255,0.12)'
   ctx.fillStyle = '#191920'
   ctx.lineWidth = 1
 
   switch (prop.type) {
     case 'vtruss': {
       const railGap = Math.max(5, height * 0.018)
-      ctx.strokeStyle = 'rgba(255,255,255,0.14)'
+      ctx.strokeStyle = isSelected ? 'rgba(139,92,246,0.9)' : 'rgba(255,255,255,0.14)'
       ctx.lineWidth = 1.5
       for (const dx of [-railGap / 2, railGap / 2]) {
         ctx.beginPath()
@@ -498,7 +606,7 @@ function drawProp(
         ctx.lineTo(px + dx, floorY)
         ctx.stroke()
       }
-      ctx.strokeStyle = 'rgba(255,255,255,0.08)'
+      ctx.strokeStyle = isSelected ? 'rgba(139,92,246,0.5)' : 'rgba(255,255,255,0.08)'
       const lattice = Math.max(12, height / 22)
       for (let y = trussY; y < floorY - lattice; y += lattice) {
         ctx.beginPath()
@@ -513,22 +621,26 @@ function drawProp(
       break
     }
     case 'speaker': {
-      const w = Math.min(width * 0.07, 70)
-      const boxH = height * 0.09
-      for (let i = 0; i < 2; i++) {
+      const { w, boxH } = speakerMetrics(width, height)
+      const stack = Math.min(4, Math.max(1, prop.stack ?? 2))
+      for (let i = 0; i < stack; i++) {
         const y = floorY - boxH * (i + 1)
         ctx.beginPath()
-        ctx.roundRect(px - w / 2, y, w, boxH - 2, 2)
+        ctx.roundRect(px - w / 2, y, w, boxH - 2, 3)
         ctx.fill()
         ctx.stroke()
+        // Woofer + tweeter.
         ctx.beginPath()
-        ctx.arc(px, y + boxH / 2, boxH * 0.28, 0, Math.PI * 2)
+        ctx.arc(px, y + boxH * 0.58, boxH * 0.26, 0, Math.PI * 2)
+        ctx.stroke()
+        ctx.beginPath()
+        ctx.arc(px, y + boxH * 0.2, boxH * 0.1, 0, Math.PI * 2)
         ctx.stroke()
       }
       break
     }
     case 'booth': {
-      drawBooth(ctx, px, floorY, Math.min(width * 0.16, 150), height)
+      drawBooth(ctx, px, floorY, Math.min(width * 0.16, 150), height, isSelected)
       break
     }
     case 'riser': {
@@ -541,35 +653,6 @@ function drawProp(
       break
     }
   }
-}
-
-function drawTrashBin(ctx: CanvasRenderingContext2D, width: number, height: number, drag: DragState): void {
-  const cx = width - 34
-  const cy = height - 30
-  const r = 22
-  const hot = Math.hypot(drag.px - cx, drag.py - cy) < r + 12
-
-  ctx.globalCompositeOperation = 'source-over'
-  ctx.beginPath()
-  ctx.arc(cx, cy, r, 0, Math.PI * 2)
-  ctx.fillStyle = hot ? 'rgba(239,68,68,0.35)' : 'rgba(255,255,255,0.06)'
-  ctx.fill()
-  ctx.strokeStyle = hot ? '#ef4444' : 'rgba(255,255,255,0.3)'
-  ctx.lineWidth = 1.5
-  ctx.stroke()
-
-  // Bin glyph.
-  ctx.strokeStyle = hot ? '#fff' : 'rgba(255,255,255,0.6)'
-  const s = 7
-  ctx.strokeRect(cx - s, cy - s + 3, s * 2, s * 2 - 3)
-  ctx.beginPath()
-  ctx.moveTo(cx - s - 3, cy - s + 3)
-  ctx.lineTo(cx + s + 3, cy - s + 3)
-  ctx.moveTo(cx - 3, cy - s + 3)
-  ctx.lineTo(cx - 3, cy - s)
-  ctx.lineTo(cx + 3, cy - s)
-  ctx.lineTo(cx + 3, cy - s + 3)
-  ctx.stroke()
 }
 
 function emptyState(fixture: PatchedFixture): FixtureVisualState {
@@ -943,11 +1026,12 @@ function drawBooth(
   cx: number,
   floorY: number,
   boothWidth: number,
-  height: number
+  height: number,
+  isSelected = false
 ): void {
   const boothH = Math.max(14, height * 0.14)
   ctx.fillStyle = '#191920'
-  ctx.strokeStyle = 'rgba(255,255,255,0.10)'
+  ctx.strokeStyle = isSelected ? 'rgba(139,92,246,0.9)' : 'rgba(255,255,255,0.10)'
   ctx.lineWidth = 1
   const x = cx - boothWidth / 2
   const y = floorY - boothH

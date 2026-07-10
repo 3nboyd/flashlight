@@ -65,7 +65,7 @@ export function LightingView(): JSX.Element {
 
       {mode === 'perform' ? <PerformPanel /> : <SetupPanel />}
 
-      {presetsOpen && <PresetBrowser onClose={() => setPresetsOpen(false)} />}
+      {presetsOpen && <PresetBrowser onClose={() => setPresetsOpen(false)} showStage={mode === 'setup'} />}
     </div>
   )
 }

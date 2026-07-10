@@ -323,3 +323,39 @@ export const PRESET_LIBRARY: PresetCategory[] = [
 
 /** Flat list, used to seed a brand-new project's scene list and pads. */
 export const PRESET_SCENES: Scene[] = PRESET_LIBRARY.flatMap((category) => category.scenes)
+
+/**
+ * Sensible Smart Mode pool assignment for whichever of these presets exist
+ * in a project: Chill → chill pool, Vibes/Beams → main rotation, Energy →
+ * peak (drops). Momentary bursts are never auto-assigned.
+ */
+export function defaultSmartPools(sceneIds: string[]): {
+  chill: string[]
+  main: string[]
+  peak: string[]
+} {
+  const categoryOf = new Map<string, string>()
+  for (const category of PRESET_LIBRARY) {
+    for (const scene of category.scenes) {
+      if (!scene.momentary) categoryOf.set(scene.id, category.name)
+    }
+  }
+  const pools = { chill: [] as string[], main: [] as string[], peak: [] as string[] }
+  for (const id of sceneIds) {
+    switch (categoryOf.get(id)) {
+      case 'Chill':
+        pools.chill.push(id)
+        break
+      case 'Vibes':
+      case 'Beams & Movers':
+        pools.main.push(id)
+        break
+      case 'Energy':
+        pools.peak.push(id)
+        break
+      default:
+        break
+    }
+  }
+  return pools
+}

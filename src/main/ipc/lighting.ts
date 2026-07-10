@@ -44,6 +44,10 @@ export function registerLightingHandlers(): void {
   ipcMain.handle('lighting:getStatus', async () => lighting.getStatus())
   ipcMain.handle('lighting:listSerialPorts', async () => DmxSender.listSerialPorts())
   ipcMain.handle('lighting:getUniverseSnapshot', async () => lighting.getUniverseSnapshot())
+  ipcMain.handle('lighting:setSmartMode', async (_e, enabled: boolean) => {
+    lighting.setSmartMode(enabled)
+    return lighting.getStatus()
+  })
 
   // High-frequency fire-and-forget stream (no reply needed).
   ipcMain.on('lighting:audioFeatures', (_e, features: AudioFeatures & { flux?: number }) => {

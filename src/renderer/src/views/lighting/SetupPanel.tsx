@@ -3,6 +3,7 @@ import { useLightingStore } from '../../state/lightingStore'
 import { BUILTIN_FIXTURES, fixturesById } from '@core/lighting/fixtures/library'
 import { findAddressOverlaps, fixtureFootprint } from '@core/lighting/fixtures/types'
 import type { OutputProtocol } from '@core/lighting/engine/types'
+import { defaultSmartPools } from '@core/lighting/engine/presetScenes'
 import { SceneEditor } from './SceneEditor'
 import { CustomFixtureEditor } from './CustomFixtureEditor'
 import { StageVisualizer } from './StageVisualizer'
@@ -671,6 +672,167 @@ export function SetupPanel(): JSX.Element {
             onClose={() => setEditingSceneId(null)}
           />
         )}
+      </section>
+
+      <section className="setup-section">
+        <h2>⚡ Smart Mode</h2>
+        <p className="settings-hint">
+          The automatic VJ: while enabled (button in Perform), scenes rotate on musical phrases,
+          intensity ramps through build-ups, a Peak scene slams on the drop, and breakdowns fall to
+          a Chill scene. Uses the OS2L beat grid plus live audio energy. Assign scenes to pools
+          below — anything unassigned is never auto-fired.
+        </p>
+        <div className="setup-row">
+          <label>Sensitivity</label>
+          <input
+            type="range"
+            min={0}
+            max={100}
+            value={Math.round(project.smart.sensitivity * 100)}
+            onChange={(e) =>
+              updateProject((p) => ({
+                ...p,
+                smart: { ...p.smart, sensitivity: Number(e.target.value) / 100 }
+              }))
+            }
+          />
+          <span className="settings-hint" style={{ margin: 0 }}>
+            {project.smart.sensitivity < 0.34 ? 'calm' : project.smart.sensitivity > 0.67 ? 'eager' : 'balanced'}
+          </span>
+          <label>Rotate every</label>
+          <input
+            type="number"
+            min={1}
+            max={8}
+            value={project.smart.phrasesPerScene}
+            onChange={(e) =>
+              updateProject((p) => ({
+                ...p,
+                smart: { ...p.smart, phrasesPerScene: Math.max(1, Number(e.target.value) || 2) }
+              }))
+            }
+          />
+          <span className="settings-hint" style={{ margin: 0 }}>
+            phrases (8 bars each)
+          </span>
+          <button
+            className="secondary-button"
+            title="Assign built-in presets to sensible pools automatically"
+            onClick={() =>
+              updateProject((p) => ({
+                ...p,
+                smart: { ...p.smart, pools: defaultSmartPools(p.scenes.map((s) => s.id)) }
+              }))
+            }
+          >
+            Auto-assign
+          </button>
+        </div>
+        <div className="smart-pool-grid">
+          {project.scenes
+            .filter((s) => !s.momentary)
+            .map((scene) => {
+              const pool = (['chill', 'main', 'peak'] as const).find((key) =>
+                project.smart.pools[key].includes(scene.id)
+              )
+              return (
+                <div key={scene.id} className="smart-pool-row">
+                  <span className="scene-dot" style={{ background: scene.uiColor }} />
+                  <span className="scene-name">{scene.name}</span>
+                  <select
+                    value={pool ?? ''}
+                    onChange={(e) => {
+                      const next = e.target.value as '' | 'chill' | 'main' | 'peak'
+                      updateProject((p) => {
+                        const pools = {
+                          chill: p.smart.pools.chill.filter((id) => id !== scene.id),
+                          main: p.smart.pools.main.filter((id) => id !== scene.id),
+                          peak: p.smart.pools.peak.filter((id) => id !== scene.id)
+                        }
+                        if (next) pools[next] = [...pools[next], scene.id]
+                        return { ...p, smart: { ...p.smart, pools } }
+                      })
+                    }}
+                  >
+                    <option value="">— not used —</option>
+                    <option value="chill">Chill (breakdowns)</option>
+                    <option value="main">Main (steady rotation)</option>
+                    <option value="peak">Peak (drops)</option>
+                  </select>
+                </div>
+              )
+            })}
+        </div>
+      </section>
+
+      <section className="setup-section">
+        <h2>Autopilot</h2>
+        <p className="settings-hint">
+          Simple rotation (no audio analysis): cycles the checked scenes every N bars. For the
+          full automatic show, use Smart Mode instead.
+        </p>
+        <div className="setup-row">
+          <label>Every</label>
+          <input
+            type="number"
+            min={1}
+            max={64}
+            value={project.autopilot.barsPerScene}
+            onChange={(e) =>
+              updateProject((p) => ({
+                ...p,
+                autopilot: { ...p.autopilot, barsPerScene: Number(e.target.value) || 8 }
+              }))
+            }
+          />
+          <span className="settings-hint" style={{ margin: 0 }}>
+            bars
+          </span>
+          <label className="settings-checkbox-row" style={{ marginBottom: 0 }}>
+            <input
+              type="checkbox"
+              checked={project.autopilot.shuffle ?? false}
+              onChange={(e) =>
+                updateProject((p) => ({
+                  ...p,
+                  autopilot: { ...p.autopilot, shuffle: e.target.checked }
+                }))
+              }
+            />
+            Shuffle order
+          </label>
+        </div>
+        <div className="smart-pool-grid">
+          {project.scenes
+            .filter((s) => !s.momentary)
+            .map((scene) => {
+              const included =
+                project.autopilot.sceneIds.length === 0 || project.autopilot.sceneIds.includes(scene.id)
+              return (
+                <label key={scene.id} className="smart-pool-row autopilot-row">
+                  <input
+                    type="checkbox"
+                    checked={included}
+                    onChange={(e) =>
+                      updateProject((p) => {
+                        // Empty list means "all": materialize it before editing.
+                        const current =
+                          p.autopilot.sceneIds.length === 0
+                            ? p.scenes.filter((s) => !s.momentary).map((s) => s.id)
+                            : p.autopilot.sceneIds
+                        const sceneIds = e.target.checked
+                          ? [...current, scene.id]
+                          : current.filter((id) => id !== scene.id)
+                        return { ...p, autopilot: { ...p.autopilot, sceneIds } }
+                      })
+                    }
+                  />
+                  <span className="scene-dot" style={{ background: scene.uiColor }} />
+                  <span className="scene-name">{scene.name}</span>
+                </label>
+              )
+            })}
+        </div>
       </section>
 
       <section className="setup-section">

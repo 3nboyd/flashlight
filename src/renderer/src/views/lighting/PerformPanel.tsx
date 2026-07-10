@@ -191,10 +191,29 @@ export function PerformPanel(): JSX.Element {
         </div>
 
         <div className="autopilot-block">
+          <button
+            className={`smart-button${status?.smartEnabled ? ' on' : ''}`}
+            title="Smart Mode: automatic scene changes on phrases, builds, drops, and breakdowns — driven by OS2L + live audio"
+            onClick={() => window.djCompanion.lighting.setSmartMode(!status?.smartEnabled)}
+          >
+            ⚡ SMART
+          </button>
+          {status?.smartEnabled && (
+            <div className={`smart-phase ${status.smartPhase}`}>
+              {status.smartPhase === 'build'
+                ? `BUILD ${Math.round(status.smartBuildProgress * 100)}%`
+                : status.smartPhase.toUpperCase()}
+            </div>
+          )}
+          {status?.smartEnabled && !audioRunning && (
+            <div className="smart-warning">needs Audio On for energy detection</div>
+          )}
           <label className="perform-check">
             <input
               type="checkbox"
               checked={project.autopilot.enabled}
+              disabled={status?.smartEnabled}
+              title={status?.smartEnabled ? 'Smart Mode is driving scene changes' : undefined}
               onChange={(e) =>
                 updateProject((p) => ({
                   ...p,

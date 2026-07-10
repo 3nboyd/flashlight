@@ -2,19 +2,26 @@ import { type JSX } from 'react'
 import { PRESET_LIBRARY } from '@core/lighting/engine/presetScenes'
 import type { Scene } from '@core/lighting/engine/types'
 import { useLightingStore } from '../../state/lightingStore'
+import { StageVisualizer } from './StageVisualizer'
 
 /**
- * Side drawer for browsing the built-in preset collection: play any preset
- * instantly (it's added to your scenes on first use) or pin it to the next
- * free performance pad. Kind-aware presets (fog, lasers, strobes…) work on
+ * Browser for the built-in preset collection: play any preset instantly
+ * (it's added to your scenes on first use) or pin it to the next free
+ * performance pad. Kind-aware presets (fog, lasers, strobes…) work on
  * whatever rig is patched.
+ *
+ * With `showStage` (Setup mode) it opens as a split view — live stage on
+ * the left, presets on the right — so auditioning a preset shows exactly
+ * what it does without leaving the browser. Perform mode keeps the compact
+ * drawer, since the mini stage is already on screen behind it.
  */
 
 interface PresetBrowserProps {
   onClose: () => void
+  showStage?: boolean
 }
 
-export function PresetBrowser({ onClose }: PresetBrowserProps): JSX.Element {
+export function PresetBrowser({ onClose, showStage = false }: PresetBrowserProps): JSX.Element {
   const { project, updateProject, triggerScene, status } = useLightingStore()
 
   const inProject = (scene: Scene): boolean => project.scenes.some((s) => s.id === scene.id)
@@ -46,6 +53,17 @@ export function PresetBrowser({ onClose }: PresetBrowserProps): JSX.Element {
 
   return (
     <div className="preset-drawer-backdrop" onClick={onClose}>
+      {showStage && (
+        <div className="preset-stage-pane" onClick={(e) => e.stopPropagation()}>
+          <div className="preset-stage-pane-header">
+            <h2>Live Stage</h2>
+            <span className="settings-hint" style={{ margin: 0 }}>
+              Hit Play on any preset — this is exactly what your rig does.
+            </span>
+          </div>
+          <StageVisualizer height={Math.min(520, window.innerHeight - 200)} />
+        </div>
+      )}
       <aside className="preset-drawer" onClick={(e) => e.stopPropagation()}>
         <div className="preset-drawer-header">
           <h2>Preset Library</h2>

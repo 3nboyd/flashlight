@@ -88,6 +88,8 @@ export interface AutopilotSettings {
   barsPerScene: number
   /** Scene ids in rotation order; empty = all scenes. */
   sceneIds: string[]
+  /** Pseudo-random rotation order instead of sequential. */
+  shuffle?: boolean
 }
 
 export type OutputProtocol = 'artnet' | 'sacn' | 'enttec'
@@ -124,6 +126,16 @@ export interface StageProp {
   type: StagePropType
   /** 0-1 across the stage. */
   x: number
+  /** Speaker stacks: number of boxes high (1-4). */
+  stack?: number
+}
+
+export interface SmartSettings {
+  pools: { chill: string[]; main: string[]; peak: string[] }
+  /** Rotate the main pool every N 8-bar phrases while steady. */
+  phrasesPerScene: number
+  /** 0-1 detection eagerness. */
+  sensitivity: number
 }
 
 export interface LightingProject {
@@ -136,6 +148,7 @@ export interface LightingProject {
   /** Scene ids assigned to the 4x4 performance pad grid (null = empty pad). */
   padSceneIds: (string | null)[]
   autopilot: AutopilotSettings
+  smart: SmartSettings
   output: OutputSettings
   os2l: Os2lSettings
   audio: AudioInputSettings
@@ -149,6 +162,7 @@ export function defaultLightingProject(): LightingProject {
     customFixtures: [],
     padSceneIds: new Array(16).fill(null),
     autopilot: { enabled: false, barsPerScene: 8, sceneIds: [] },
+    smart: { pools: { chill: [], main: [], peak: [] }, phrasesPerScene: 2, sensitivity: 0.5 },
     output: {
       protocol: 'artnet',
       artnetHost: '255.255.255.255',

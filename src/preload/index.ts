@@ -87,6 +87,8 @@ const api = {
       ipcRenderer.invoke('lighting:listSerialPorts'),
     getUniverseSnapshot: (): Promise<Record<number, number[]>> =>
       ipcRenderer.invoke('lighting:getUniverseSnapshot'),
+    setSmartMode: (enabled: boolean): Promise<LightingStatus> =>
+      ipcRenderer.invoke('lighting:setSmartMode', enabled),
     sendAudioFeatures: (features: AudioFeatures & { flux?: number }): void =>
       ipcRenderer.send('lighting:audioFeatures', features)
   }
