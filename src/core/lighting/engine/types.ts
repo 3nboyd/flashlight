@@ -34,7 +34,14 @@ export interface EffectSettings {
 }
 
 export interface SceneTarget {
-  /** 'all' or a group tag from FixturePatch.group. */
+  /**
+   * Which fixtures this target drives:
+   *  - 'all' — every patched fixture
+   *  - 'kind:<kind>' — every fixture of that kind (e.g. 'kind:fog',
+   *    'kind:laser', 'kind:movingHead') wherever it's patched, so presets
+   *    work on any rig without group setup
+   *  - anything else — a group tag from FixturePatch.group
+   */
   group: string
   color: Rgbw
   /** 0-1 base intensity. */
@@ -51,6 +58,11 @@ export interface Scene {
   /** Accent color shown on the pad in the UI (hex). */
   uiColor: string
   targets: SceneTarget[]
+  /**
+   * Momentary scenes fire while held (mouse down / MIDI note held) and
+   * restore the previous look on release — bursts like fog or strobe hits.
+   */
+  momentary?: boolean
 }
 
 export interface LiveOverrides {
@@ -105,9 +117,20 @@ export interface AudioInputSettings {
   autoListen: boolean
 }
 
+export type StagePropType = 'vtruss' | 'speaker' | 'booth' | 'riser'
+
+export interface StageProp {
+  id: string
+  type: StagePropType
+  /** 0-1 across the stage. */
+  x: number
+}
+
 export interface LightingProject {
   patches: import('../fixtures/types').FixturePatch[]
   scenes: Scene[]
+  /** Set dressing on the visualizer stage (trusses, speakers, booth…). */
+  stageProps: StageProp[]
   /** User-defined fixture profiles, merged over the built-in library. */
   customFixtures: import('../fixtures/types').FixtureDefinition[]
   /** Scene ids assigned to the 4x4 performance pad grid (null = empty pad). */
@@ -122,6 +145,7 @@ export function defaultLightingProject(): LightingProject {
   return {
     patches: [],
     scenes: [],
+    stageProps: [{ id: 'booth-default', type: 'booth', x: 0.5 }],
     customFixtures: [],
     padSceneIds: new Array(16).fill(null),
     autopilot: { enabled: false, barsPerScene: 8, sceneIds: [] },

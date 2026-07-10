@@ -111,7 +111,11 @@ function applyEffect(
 }
 
 function targetMatches(target: SceneTarget, fixture: PatchedFixture): boolean {
-  return target.group === 'all' || fixture.patch.group === target.group
+  if (target.group === 'all') return true
+  if (target.group.startsWith('kind:')) {
+    return fixture.definition.kind === target.group.slice(5)
+  }
+  return fixture.patch.group === target.group
 }
 
 /**

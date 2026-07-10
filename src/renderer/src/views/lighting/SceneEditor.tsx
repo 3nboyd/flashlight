@@ -67,11 +67,27 @@ export function SceneEditor({ scene, groups, onChange, onClose }: SceneEditorPro
             <label>Targets</label>
             <select value={target.group} onChange={(e) => updateTarget(index, { group: e.target.value })}>
               <option value="all">All fixtures</option>
-              {groups.map((g) => (
-                <option key={g} value={g}>
-                  Group: {g}
-                </option>
-              ))}
+              <optgroup label="By type (finds them anywhere)">
+                <option value="kind:par">All pars/washes</option>
+                <option value="kind:movingHead">All moving heads</option>
+                <option value="kind:movingBar">All moving bars</option>
+                <option value="kind:bar">All pixel bars</option>
+                <option value="kind:strobe">All strobes</option>
+                <option value="kind:laser">All lasers</option>
+                <option value="kind:derby">All derbies</option>
+                <option value="kind:scanner">All scanners</option>
+                <option value="kind:uv">All UV</option>
+                <option value="kind:fog">All fog machines</option>
+              </optgroup>
+              {groups.length > 0 && (
+                <optgroup label="Your groups">
+                  {groups.map((g) => (
+                    <option key={g} value={g}>
+                      Group: {g}
+                    </option>
+                  ))}
+                </optgroup>
+              )}
             </select>
 
             <label>Color</label>

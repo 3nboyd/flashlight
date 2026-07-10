@@ -3,6 +3,7 @@ import { useLightingStore } from '../../state/lightingStore'
 import { Banner } from '../../components/Banner'
 import { PerformPanel } from './PerformPanel'
 import { SetupPanel } from './SetupPanel'
+import { PresetBrowser } from './PresetBrowser'
 import { autoStartAudioIfConfigured } from './runtime'
 import './lighting.css'
 
@@ -11,6 +12,7 @@ type Mode = 'perform' | 'setup'
 export function LightingView(): JSX.Element {
   const { load, loaded, status, startEngine, stopEngine, project } = useLightingStore()
   const [mode, setMode] = useState<Mode>('perform')
+  const [presetsOpen, setPresetsOpen] = useState(false)
 
   useEffect(() => {
     if (!loaded) load()
@@ -36,6 +38,9 @@ export function LightingView(): JSX.Element {
           </p>
         </div>
         <div className="lighting-header-controls">
+          <button className="secondary-button" onClick={() => setPresetsOpen(true)}>
+            ✦ Presets
+          </button>
           <div className="mode-tabs">
             <button className={mode === 'perform' ? 'active' : ''} onClick={() => setMode('perform')}>
               Perform
@@ -59,6 +64,8 @@ export function LightingView(): JSX.Element {
       )}
 
       {mode === 'perform' ? <PerformPanel /> : <SetupPanel />}
+
+      {presetsOpen && <PresetBrowser onClose={() => setPresetsOpen(false)} />}
     </div>
   )
 }

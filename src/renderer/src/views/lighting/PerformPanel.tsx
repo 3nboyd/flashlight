@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState, type JSX } from 'react'
+import { useCallback, useEffect, useRef, useState, type JSX } from 'react'
 import { useLightingStore } from '../../state/lightingStore'
 import type { PadAction } from '../../midi/MidiPads'
 import {
@@ -30,8 +30,23 @@ export function PerformPanel(): JSX.Element {
   const [midiDevices, setMidiDevices] = useState<string[]>([])
   const [stageExpanded, setStageExpanded] = useState(false)
   const [audioRunning, setAudioRunning] = useState(audioAnalyzer.isRunning())
+  /** Scene to restore when a momentary (HOLD) pad is released. */
+  const momentaryRestoreRef = useRef<string | null>(null)
 
   useEffect(() => onAudioStateChange(setAudioRunning), [])
+
+  const pressMomentary = useCallback(
+    (sceneId: string) => {
+      momentaryRestoreRef.current = useLightingStore.getState().status?.activeSceneId ?? null
+      triggerScene(sceneId)
+    },
+    [triggerScene]
+  )
+
+  const releaseMomentary = useCallback(() => {
+    triggerScene(momentaryRestoreRef.current)
+    momentaryRestoreRef.current = null
+  }, [triggerScene])
 
   useEffect(() => {
     const interval = setInterval(refreshStatus, 250)
@@ -51,9 +66,17 @@ export function PerformPanel(): JSX.Element {
     (action: PadAction, _velocity: number, isNoteOn: boolean) => {
       switch (action.kind) {
         case 'pad': {
-          if (!isNoteOn) return
-          const sceneId = useLightingStore.getState().project.padSceneIds[action.padIndex]
-          if (sceneId) triggerScene(sceneId)
+          const state = useLightingStore.getState()
+          const sceneId = state.project.padSceneIds[action.padIndex]
+          if (!sceneId) return
+          const scene = state.project.scenes.find((s) => s.id === sceneId)
+          if (scene?.momentary) {
+            // HOLD pads: fire on note-on, restore the previous look on note-off.
+            if (isNoteOn) pressMomentary(sceneId)
+            else releaseMomentary()
+          } else if (isNoteOn) {
+            triggerScene(sceneId)
+          }
           break
         }
         case 'blackout':
@@ -81,7 +104,7 @@ export function PerformPanel(): JSX.Element {
           break
       }
     },
-    [triggerScene, setOverrides]
+    [triggerScene, setOverrides, pressMomentary, releaseMomentary]
   )
 
   useEffect(() => {
@@ -224,14 +247,19 @@ export function PerformPanel(): JSX.Element {
         {project.padSceneIds.map((sceneId, index) => {
           const scene = sceneId ? project.scenes.find((s) => s.id === sceneId) : null
           const isActive = scene !== null && scene !== undefined && scene.id === activeSceneId
+          const momentary = scene?.momentary === true
           return (
             <button
               key={index}
               className={`pad${isActive ? ' active' : ''}${scene ? '' : ' empty'}`}
               style={scene ? ({ '--pad-color': scene.uiColor } as React.CSSProperties) : undefined}
-              onClick={() => scene && triggerScene(isActive ? null : scene.id)}
+              onClick={momentary ? undefined : () => scene && triggerScene(isActive ? null : scene.id)}
+              onMouseDown={momentary && scene ? () => pressMomentary(scene.id) : undefined}
+              onMouseUp={momentary ? releaseMomentary : undefined}
+              onMouseLeave={momentary && isActive ? releaseMomentary : undefined}
             >
               {scene ? scene.name : ''}
+              {momentary && <span className="hold-tag pad-hold">HOLD</span>}
             </button>
           )
         })}

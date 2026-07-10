@@ -80,15 +80,15 @@ export class LightingHost {
         ...defaults,
         ...parsed,
         output: { ...defaults.output, ...parsed.output },
-        os2l: { ...defaults.os2l, ...parsed.os2l }
+        os2l: { ...defaults.os2l, ...parsed.os2l },
+        audio: { ...defaults.audio, ...parsed.audio },
+        stageProps: parsed.stageProps ?? defaults.stageProps
       }
     } catch {
       this.project = defaultLightingProject()
       this.project.scenes = [...PRESET_SCENES]
-      this.project.padSceneIds = [
-        ...PRESET_SCENES.map((s) => s.id),
-        ...new Array(16 - PRESET_SCENES.length).fill(null)
-      ]
+      const padIds = PRESET_SCENES.map((s) => s.id).slice(0, 16)
+      this.project.padSceneIds = [...padIds, ...new Array(Math.max(0, 16 - padIds.length)).fill(null)]
     }
     this.applyIntegrationConfig()
     return this.project

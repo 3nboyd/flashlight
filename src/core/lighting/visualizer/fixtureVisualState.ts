@@ -37,8 +37,13 @@ export interface FixtureVisualState {
 export interface StagePosition {
   /** 0-1 across the stage, left to right. */
   x: number
-  /** Mounted on the truss (pointing down) or the floor (pointing up). */
-  level: 'truss' | 'floor'
+  /**
+   * Mount: top truss (pointing down), floor (pointing up), or the side of
+   * a vertical truss (pointing across the stage).
+   */
+  level: 'truss' | 'floor' | 'side'
+  /** 0-1 height along a vertical truss; only meaningful for level 'side'. */
+  y?: number
 }
 
 /** Reads one fixture's visual state out of its universe's 512-byte buffer. */
