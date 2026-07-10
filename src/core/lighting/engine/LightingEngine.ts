@@ -1,5 +1,5 @@
 import { Universe } from '../dmx/Universe'
-import type { PatchedFixture } from '../fixtures/types'
+import { segmentCount, type PatchedFixture } from '../fixtures/types'
 import type { AudioFeatures } from '../audio/features'
 import { SILENT_FEATURES } from '../audio/features'
 import type { BeatPosition } from './BeatClock'
@@ -85,7 +85,10 @@ function applyEffect(
       return { ...base, dimmer: target.dimmer * Math.min(1, audio.bass * 1.3) }
     case 'movementCircle': {
       const amplitude = (effect.amplitude ?? 0.5) * 127
-      const angle = (beat.beat / beats) * 2 * Math.PI
+      // Phase-offset across the group so multiple heads (or the segments of
+      // a wave bar) ripple instead of moving in lockstep.
+      const spread = fixtureCount > 1 ? (fixtureIndex / fixtureCount) * Math.PI : 0
+      const angle = (beat.beat / beats) * 2 * Math.PI + spread
       return {
         ...base,
         pan: (target.pan ?? 128) + Math.sin(angle) * amplitude,
@@ -94,8 +97,13 @@ function applyEffect(
     }
     case 'movementSweep': {
       const amplitude = (effect.amplitude ?? 0.5) * 127
-      const angle = (beat.beat / beats) * 2 * Math.PI
-      return { ...base, pan: (target.pan ?? 128) + Math.sin(angle) * amplitude }
+      const spread = fixtureCount > 1 ? (fixtureIndex / fixtureCount) * Math.PI : 0
+      const angle = (beat.beat / beats) * 2 * Math.PI + spread
+      return {
+        ...base,
+        pan: (target.pan ?? 128) + Math.sin(angle) * amplitude,
+        tilt: (target.tilt ?? 128) + Math.sin(angle) * amplitude * 0.5
+      }
     }
     default:
       return base
@@ -137,8 +145,14 @@ export function renderTick(options: {
 
   for (const fixture of fixtures) {
     const universe = universeFor(fixture.patch.universe)
+    const segments = segmentCount(fixture.definition)
 
-    let output: FixtureOutput = { color: { r: 0, g: 0, b: 0 }, dimmer: 0, strobing: false, pan: 128, tilt: 128 }
+    const dark: FixtureOutput = { color: { r: 0, g: 0, b: 0 }, dimmer: 0, strobing: false, pan: 128, tilt: 128 }
+    let output: FixtureOutput = dark
+    // Per-segment outputs for multi-head fixtures: each segment participates
+    // in group effects as its own "virtual fixture", so a chase runs across a
+    // pixel bar's cells and movement effects wave across a bar's heads.
+    let segmentOutputs: FixtureOutput[] = []
 
     if (scene && !overrides.blackout) {
       // Last matching target wins; fixtures in no target stay dark.
@@ -148,20 +162,42 @@ export function renderTick(options: {
         const groupFixtures = fixtures.filter((f) => targetMatches(target, f))
         const indexInGroup = groupFixtures.findIndex((f) => f.patch.id === fixture.patch.id)
         output = applyEffect(target, target.effect, indexInGroup, groupFixtures.length, beat, audio)
+
+        if (segments > 1) {
+          let segmentBase = 0
+          for (let i = 0; i < indexInGroup; i++) {
+            segmentBase += segmentCount(groupFixtures[i].definition)
+          }
+          const totalSegments = groupFixtures.reduce((sum, f) => sum + segmentCount(f.definition), 0)
+          for (let s = 0; s < segments; s++) {
+            segmentOutputs.push(
+              applyEffect(target, target.effect, segmentBase + s, totalSegments, beat, audio)
+            )
+          }
+        }
       }
     }
+    if (segments > 1 && segmentOutputs.length === 0) {
+      segmentOutputs = new Array(segments).fill(output)
+    }
 
-    if (overrides.strobe && !overrides.blackout) {
-      output = { ...output, color: WHITE, dimmer: 1, strobing: true }
+    const applyOverrides = (out: FixtureOutput): FixtureOutput => {
+      let next = out
+      if (overrides.strobe && !overrides.blackout) {
+        next = { ...next, color: WHITE, dimmer: 1, strobing: true }
+      }
+      if (overrides.colorOverride && !overrides.blackout && next.dimmer > 0) {
+        next = { ...next, color: overrides.colorOverride }
+      }
+      return next
     }
-    if (overrides.colorOverride && !overrides.blackout && output.dimmer > 0) {
-      output = { ...output, color: overrides.colorOverride }
-    }
+    output = applyOverrides(output)
+    segmentOutputs = segmentOutputs.map(applyOverrides)
 
     const master = overrides.blackout ? 0 : overrides.masterDimmer
     const dimmer = Math.max(0, Math.min(1, output.dimmer)) * master
 
-    writeFixture(universe, fixture, output, dimmer, nowMs)
+    writeFixture(universe, fixture, output, segmentOutputs, dimmer, master, nowMs)
   }
 
   return universes
@@ -171,26 +207,45 @@ function writeFixture(
   universe: Universe,
   fixture: PatchedFixture,
   output: FixtureOutput,
+  segmentOutputs: FixtureOutput[],
   dimmer: number,
+  master: number,
   nowMs: number
 ): void {
   const { definition, patch } = fixture
   const hasDimmerChannel = definition.channels.some((c) => c.role === 'dimmer')
   const hasStrobeChannel = definition.channels.some((c) => c.role === 'strobe')
+  const hasWhiteChannel = definition.channels.some((c) => c.role === 'white')
+  const isUvFixture = definition.kind === 'uv'
 
   // Fixtures without a hardware strobe channel simulate strobing with a
   // ~10Hz square wave on their intensity.
   const simulatedStrobeGate = output.strobing && !hasStrobeChannel ? (Math.floor(nowMs / 50) % 2 === 0 ? 1 : 0) : 1
 
-  // Fixtures without a dedicated dimmer channel bake intensity into color.
-  const colorScale = (hasDimmerChannel ? 1 : dimmer) * simulatedStrobeGate
-  const { color } = output
-  // Map white onto RGB for fixtures lacking a white channel.
-  const hasWhiteChannel = definition.channels.some((c) => c.role === 'white')
-  const whiteBleed = !hasWhiteChannel && color.w ? color.w : 0
-
   definition.channels.forEach((channel, offset) => {
     const address = patch.address + offset
+    // Segmented channels read from their segment's output; the master
+    // dimmer channel carries the base intensity for the whole fixture.
+    const segOut =
+      channel.segment !== undefined && segmentOutputs.length > 0
+        ? segmentOutputs[Math.min(channel.segment, segmentOutputs.length - 1)]
+        : output
+    const segDimmer = Math.max(0, Math.min(1, segOut.dimmer)) * master
+    // Fixtures without a dedicated dimmer channel bake intensity into color.
+    // Segmented color channels additionally carry their own segment's
+    // intensity (relative — the master dimmer channel handles the rest), so
+    // chases/pulses can differ per cell despite one shared dimmer.
+    const colorScale =
+      (channel.segment !== undefined
+        ? hasDimmerChannel
+          ? Math.max(0, Math.min(1, segOut.dimmer))
+          : segDimmer
+        : hasDimmerChannel
+          ? 1
+          : segDimmer) * simulatedStrobeGate
+    const { color } = segOut
+    const whiteBleed = !hasWhiteChannel && color.w ? color.w : 0
+
     let value = 0
     switch (channel.role) {
       case 'dimmer':
@@ -208,22 +263,29 @@ function writeFixture(
       case 'white':
         value = (color.w ?? 0) * colorScale
         break
-      case 'amber':
       case 'uv':
+        // Dedicated UV fixtures run their UV emitters at scene intensity;
+        // UV channels on color pars stay off unless targeted explicitly.
+        value = isUvFixture ? dimmer * 255 * simulatedStrobeGate : 0
+        break
+      case 'amber':
         value = 0
         break
+      case 'onOff':
+        value = dimmer > 0.05 ? (channel.onValue ?? 255) : 0
+        break
       case 'strobe':
-        if (output.strobing && channel.strobeRange) {
+        if (segOut.strobing && channel.strobeRange) {
           value = (channel.strobeRange.min + channel.strobeRange.max) / 2
         } else {
           value = channel.strobeOpen ?? 0
         }
         break
       case 'pan':
-        value = output.pan
+        value = segOut.pan
         break
       case 'tilt':
-        value = output.tilt
+        value = segOut.tilt
         break
       case 'panFine':
       case 'tiltFine':

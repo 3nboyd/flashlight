@@ -1,7 +1,13 @@
 import { useCallback, useEffect, useState, type JSX } from 'react'
 import { useLightingStore } from '../../state/lightingStore'
 import type { PadAction } from '../../midi/MidiPads'
-import { midiPads as midi } from './runtime'
+import {
+  audioAnalyzer,
+  midiPads as midi,
+  onAudioStateChange,
+  startAudioListening,
+  stopAudioListening
+} from './runtime'
 import { StageVisualizer } from './StageVisualizer'
 import type { Rgbw } from '@core/lighting/engine/types'
 
@@ -23,6 +29,9 @@ export function PerformPanel(): JSX.Element {
     useLightingStore()
   const [midiDevices, setMidiDevices] = useState<string[]>([])
   const [stageExpanded, setStageExpanded] = useState(false)
+  const [audioRunning, setAudioRunning] = useState(audioAnalyzer.isRunning())
+
+  useEffect(() => onAudioStateChange(setAudioRunning), [])
 
   useEffect(() => {
     const interval = setInterval(refreshStatus, 250)
@@ -188,6 +197,21 @@ export function PerformPanel(): JSX.Element {
             />
             bars
           </div>
+          <button
+            className={`audio-toggle${audioRunning ? ' on' : ''}`}
+            title={
+              project.audio.deviceId
+                ? 'Audio-reactive effects: toggle listening to the saved audio input (works alongside OS2L)'
+                : 'Pick an audio input in Setup first'
+            }
+            disabled={!project.audio.deviceId}
+            onClick={async () => {
+              if (audioRunning) await stopAudioListening()
+              else if (project.audio.deviceId) await startAudioListening(project.audio.deviceId)
+            }}
+          >
+            {audioRunning ? '● Audio On' : '○ Audio Off'}
+          </button>
           {midiDevices.length > 0 && (
             <div className="midi-indicator" title={midiDevices.join(', ')}>
               ● MIDI: {midiDevices[0]}

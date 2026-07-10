@@ -23,19 +23,50 @@ export type ChannelRole =
   | 'gobo'
   | 'speed'
   | 'mode'
+  | 'onOff' // driven to onValue while the fixture is lit by a scene, 0 otherwise
   | 'static' // always output a fixed value (e.g. a mode/safety channel)
 
 export interface ChannelSpec {
   role: ChannelRole
+  /**
+   * For multi-head/multi-cell fixtures (pixel bars, wave bars): which
+   * segment this channel belongs to (0-based). Segmentless channels
+   * (master dimmer, global strobe) apply to the whole fixture.
+   */
+  segment?: number
   /** For role 'static': the constant value to hold this channel at. */
   staticValue?: number
+  /** For role 'onOff': value to write while lit (default 255). */
+  onValue?: number
   /** For 'strobe': value range that means "strobing" on this fixture; outside it = open. */
   strobeRange?: { min: number; max: number }
   /** Value meaning "open/no strobe" for the strobe channel. */
   strobeOpen?: number
 }
 
-export type FixtureKind = 'par' | 'wash' | 'strobe' | 'movingHead' | 'laser' | 'dimmer' | 'other'
+export type FixtureKind =
+  | 'par'
+  | 'wash'
+  | 'strobe'
+  | 'movingHead'
+  | 'laser'
+  | 'dimmer'
+  | 'bar' // static pixel/LED bar with color segments
+  | 'movingBar' // multi-head bar with per-head tilt (wave effects)
+  | 'derby' // moonflower/derby cluster effect
+  | 'scanner' // mirror scanner
+  | 'uv' // UV cannon/blacklight
+  | 'fog' // DMX-triggered fog machine
+  | 'other'
+
+/** Number of color/tilt segments a definition carries (1 for single-head fixtures). */
+export function segmentCount(definition: FixtureDefinition): number {
+  let max = -1
+  for (const channel of definition.channels) {
+    if (channel.segment !== undefined && channel.segment > max) max = channel.segment
+  }
+  return max + 1 || 1
+}
 
 export interface FixtureDefinition {
   id: string

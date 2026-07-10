@@ -1,4 +1,4 @@
-import type { FixtureDefinition, FixturePatch, PatchedFixture } from '../fixtures/types'
+import { segmentCount, type FixtureDefinition, type FixturePatch, type PatchedFixture } from '../fixtures/types'
 
 /**
  * Inverse of the engine's channel writer: given raw universe data, recover
@@ -6,6 +6,15 @@ import type { FixtureDefinition, FixturePatch, PatchedFixture } from '../fixture
  * draw it. Reads the same channel semantics the engine writes, so preview
  * and hardware can never disagree.
  */
+
+export interface SegmentVisualState {
+  r: number
+  g: number
+  b: number
+  intensity: number
+  /** 0-1 normalized tilt (0.5 = center); null for static segments. */
+  tilt: number | null
+}
 
 export interface FixtureVisualState {
   patchId: string
@@ -21,6 +30,8 @@ export interface FixtureVisualState {
   /** 0-1 normalized pan/tilt (0.5 = center); present only for movers. */
   pan: number | null
   tilt: number | null
+  /** Per-cell states for multi-head fixtures (pixel bars, wave bars). */
+  segments: SegmentVisualState[] | null
 }
 
 export interface StagePosition {
@@ -37,33 +48,52 @@ export function readFixtureVisualState(
 ): FixtureVisualState {
   const { patch, definition } = fixture
   const value = (offset: number): number => universeData[patch.address - 1 + offset] ?? 0
+  const segCount = segmentCount(definition)
 
   let dimmer: number | null = null
   let r = 0
   let g = 0
   let b = 0
   let w = 0
+  let uv = 0
+  let onOff = 0
   let strobing = false
   let pan: number | null = null
   let tilt: number | null = null
+  const segs: SegmentVisualState[] | null =
+    segCount > 1
+      ? Array.from({ length: segCount }, () => ({ r: 0, g: 0, b: 0, intensity: 0, tilt: null }))
+      : null
+  const segWhite = segCount > 1 ? new Array<number>(segCount).fill(0) : null
 
   definition.channels.forEach((channel, offset) => {
     const v = value(offset)
+    const seg = channel.segment !== undefined && segs ? segs[channel.segment] : null
     switch (channel.role) {
       case 'dimmer':
         dimmer = v / 255
         break
       case 'red':
-        r = v / 255
+        if (seg) seg.r = v / 255
+        else r = v / 255
         break
       case 'green':
-        g = v / 255
+        if (seg) seg.g = v / 255
+        else g = v / 255
         break
       case 'blue':
-        b = v / 255
+        if (seg) seg.b = v / 255
+        else b = v / 255
         break
       case 'white':
-        w = v / 255
+        if (seg && segWhite && channel.segment !== undefined) segWhite[channel.segment] = v / 255
+        else w = v / 255
+        break
+      case 'uv':
+        uv = Math.max(uv, v / 255)
+        break
+      case 'onOff':
+        onOff = v >= (channel.onValue ?? 255) * 0.5 ? 1 : 0
         break
       case 'strobe':
         if (channel.strobeRange && v >= channel.strobeRange.min && v <= channel.strobeRange.max) {
@@ -74,23 +104,47 @@ export function readFixtureVisualState(
         pan = v / 255
         break
       case 'tilt':
-        tilt = v / 255
+        if (seg) seg.tilt = v / 255
+        else tilt = v / 255
         break
       default:
         break
     }
   })
 
-  // Blend white into RGB for display.
+  // Blend white into RGB and finalize segments.
+  if (segs && segWhite) {
+    segs.forEach((seg, i) => {
+      seg.r = Math.min(1, seg.r + segWhite[i])
+      seg.g = Math.min(1, seg.g + segWhite[i])
+      seg.b = Math.min(1, seg.b + segWhite[i])
+      const magnitude = Math.max(seg.r, seg.g, seg.b)
+      seg.intensity = (dimmer !== null ? dimmer : 1) * magnitude
+    })
+  }
   r = Math.min(1, r + w)
   g = Math.min(1, g + w)
   b = Math.min(1, b + w)
 
-  const colorMagnitude = Math.max(r, g, b)
-  const intensity = dimmer !== null ? dimmer : colorMagnitude
+  // UV fixtures glow violet at their UV level.
+  if (uv > 0 && Math.max(r, g, b) === 0) {
+    r = 0.45
+    g = 0.1
+    b = 1
+    if (dimmer === null) dimmer = uv
+  }
 
-  // Lasers/dimmers have no RGB: give them a display color.
-  if (colorMagnitude === 0 && intensity > 0) {
+  const segMax = segs ? Math.max(...segs.map((s) => s.intensity)) : 0
+  const colorMagnitude = Math.max(r, g, b, segMax)
+  let intensity = dimmer !== null ? dimmer * Math.max(colorMagnitude, uv > 0 ? uv : 1) : colorMagnitude
+
+  // onOff fixtures (lasers) are simply on or off.
+  if (definition.channels.some((c) => c.role === 'onOff')) {
+    intensity = onOff
+  }
+
+  // Fixtures with no RGB at all get a display color.
+  if (Math.max(r, g, b) === 0 && intensity > 0) {
     if (definition.kind === 'laser') {
       g = 1 // classic green laser
     } else {
@@ -100,6 +154,14 @@ export function readFixtureVisualState(
     }
   }
 
+  // Representative color for segmented fixtures = brightest segment.
+  if (segs && segMax > 0) {
+    const brightest = segs.reduce((a, c) => (c.intensity > a.intensity ? c : a))
+    r = brightest.r
+    g = brightest.g
+    b = brightest.b
+  }
+
   return {
     patchId: patch.id,
     label: patch.label,
@@ -107,22 +169,27 @@ export function readFixtureVisualState(
     r,
     g,
     b,
-    intensity,
+    intensity: Math.max(0, Math.min(1, intensity)),
     strobing,
     pan,
-    tilt
+    tilt,
+    segments: segs
   }
 }
 
 /**
  * Default stage placement when a patch has no saved position: beam fixtures
- * (movers, strobes, lasers) hang from the truss; pars/washes/dimmers are
- * floor uplights — the standard DJ/small-club arrangement. Each level
- * spreads its fixtures evenly left-to-right in patch order.
+ * (movers, strobes, lasers, wave bars, derbies, scanners) hang from the
+ * truss; pars/washes/bars/UV/fog sit on the floor — the standard
+ * DJ/small-club arrangement. Each level spreads its fixtures evenly
+ * left-to-right in patch order.
  */
-export function defaultStageLayout(patches: FixturePatch[], kinds: Map<string, FixtureDefinition>): Map<string, StagePosition> {
+export function defaultStageLayout(
+  patches: FixturePatch[],
+  kinds: Map<string, FixtureDefinition>
+): Map<string, StagePosition> {
   const layout = new Map<string, StagePosition>()
-  const trussKinds = new Set(['movingHead', 'strobe', 'laser'])
+  const trussKinds = new Set(['movingHead', 'strobe', 'laser', 'movingBar', 'derby', 'scanner'])
   const truss: FixturePatch[] = []
   const floor: FixturePatch[] = []
 

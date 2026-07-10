@@ -1,12 +1,20 @@
 import { useCallback, useEffect, useMemo, useRef, useState, type JSX } from 'react'
 import { useLightingStore } from '../../state/lightingStore'
-import { BUILTIN_FIXTURES, builtinFixturesById } from '@core/lighting/fixtures/library'
+import { BUILTIN_FIXTURES, fixturesById } from '@core/lighting/fixtures/library'
 import { findAddressOverlaps, fixtureFootprint } from '@core/lighting/fixtures/types'
 import type { OutputProtocol } from '@core/lighting/engine/types'
 import { SceneEditor } from './SceneEditor'
+import { CustomFixtureEditor } from './CustomFixtureEditor'
 import { StageVisualizer } from './StageVisualizer'
-import { AudioAnalyzer, type AnalyzerFrame } from '../../audio/AudioAnalyzer'
-import { audioAnalyzer, midiPads } from './runtime'
+import { AudioAnalyzer } from '../../audio/AudioAnalyzer'
+import {
+  audioAnalyzer,
+  midiPads,
+  onAudioFrame,
+  onAudioStateChange,
+  startAudioListening,
+  stopAudioListening
+} from './runtime'
 import type { PadAction } from '../../midi/MidiPads'
 
 const LEARNABLE_ACTIONS: { label: string; action: PadAction }[] = [
@@ -54,30 +62,47 @@ export function SetupPanel(): JSX.Element {
   const [midiMapVersion, setMidiMapVersion] = useState(0)
   const [serialPorts, setSerialPorts] = useState<{ path: string; label: string }[]>([])
   const [audioDevices, setAudioDevices] = useState<MediaDeviceInfo[]>([])
-  const [audioDeviceId, setAudioDeviceId] = useState('')
   const [audioRunning, setAudioRunning] = useState(audioAnalyzer.isRunning())
   const [levels, setLevels] = useState({ rms: 0, bass: 0, mid: 0, high: 0 })
+  const [profileEditor, setProfileEditor] = useState<'closed' | 'new' | string>('closed')
   const lastMeterUpdateRef = useRef(0)
 
   const refreshSerialPorts = useCallback(async () => {
     setSerialPorts(await window.djCompanion.lighting.listSerialPorts())
   }, [])
 
-  async function toggleAudio(): Promise<void> {
-    if (audioRunning) {
-      await audioAnalyzer.stop()
-      setAudioRunning(false)
-      return
-    }
-    if (!audioDeviceId) return
-    await audioAnalyzer.start(audioDeviceId, (frame: AnalyzerFrame) => {
-      window.djCompanion.lighting.sendAudioFeatures(frame)
+  useEffect(() => {
+    const offFrame = onAudioFrame((frame) => {
       if (frame.timestampMs - lastMeterUpdateRef.current > 90) {
         lastMeterUpdateRef.current = frame.timestampMs
         setLevels({ rms: frame.rms, bass: frame.bass, mid: frame.mid, high: frame.high })
       }
     })
-    setAudioRunning(true)
+    const offState = onAudioStateChange(setAudioRunning)
+    return () => {
+      offFrame()
+      offState()
+    }
+  }, [])
+
+  async function selectAudioDevice(deviceId: string): Promise<void> {
+    const label = audioDevices.find((d) => d.deviceId === deviceId)?.label ?? null
+    await updateProject((p) => ({
+      ...p,
+      audio: { ...p.audio, deviceId: deviceId || null, deviceLabel: label }
+    }))
+    // Switching devices while listening restarts capture on the new one.
+    if (deviceId && audioAnalyzer.isRunning()) {
+      await startAudioListening(deviceId)
+    }
+  }
+
+  async function toggleAudio(): Promise<void> {
+    if (audioRunning) {
+      await stopAudioListening()
+      return
+    }
+    if (project.audio.deviceId) await startAudioListening(project.audio.deviceId)
   }
 
   useEffect(() => {
@@ -96,7 +121,11 @@ export function SetupPanel(): JSX.Element {
     }
   }, [refreshSerialPorts, refreshStatus])
 
-  const defs = useMemo(() => builtinFixturesById(), [])
+  const defs = useMemo(() => fixturesById(project.customFixtures), [project.customFixtures])
+  const allProfiles = useMemo(
+    () => [...BUILTIN_FIXTURES, ...project.customFixtures],
+    [project.customFixtures]
+  )
   const overlaps = useMemo(
     () => findAddressOverlaps(project.patches, defs),
     [project.patches, defs]
@@ -151,11 +180,7 @@ export function SetupPanel(): JSX.Element {
           is estimated from the live audio.
         </p>
         <div className="setup-row">
-          <select
-            value={audioDeviceId}
-            onChange={(e) => setAudioDeviceId(e.target.value)}
-            disabled={audioRunning}
-          >
+          <select value={project.audio.deviceId ?? ''} onChange={(e) => selectAudioDevice(e.target.value)}>
             <option value="">Select audio input…</option>
             {audioDevices.map((d) => (
               <option key={d.deviceId} value={d.deviceId}>
@@ -166,10 +191,20 @@ export function SetupPanel(): JSX.Element {
           <button
             className={audioRunning ? 'danger-button' : 'secondary-button'}
             onClick={toggleAudio}
-            disabled={!audioRunning && !audioDeviceId}
+            disabled={!audioRunning && !project.audio.deviceId}
           >
             {audioRunning ? 'Stop' : 'Listen'}
           </button>
+          <label className="settings-checkbox-row" style={{ marginBottom: 0 }}>
+            <input
+              type="checkbox"
+              checked={project.audio.autoListen}
+              onChange={(e) =>
+                updateProject((p) => ({ ...p, audio: { ...p.audio, autoListen: e.target.checked } }))
+              }
+            />
+            Start listening automatically
+          </label>
           {audioRunning && (
             <div className="setup-meters">
               {(
@@ -453,7 +488,7 @@ export function SetupPanel(): JSX.Element {
             value={addForm.definitionId}
             onChange={(e) => setAddForm({ ...addForm, definitionId: e.target.value })}
           >
-            {BUILTIN_FIXTURES.map((f) => (
+            {allProfiles.map((f) => (
               <option key={f.id} value={f.id}>
                 {f.name}
               </option>
@@ -493,6 +528,72 @@ export function SetupPanel(): JSX.Element {
             Add
           </button>
         </div>
+      </section>
+
+      <section className="setup-section">
+        <h2>Custom fixture profiles</h2>
+        <p className="settings-hint">
+          Fixture not in the built-in list? Build its profile from the DMX channel chart in its
+          manual — works for any brand and any channel mode.
+        </p>
+        {project.customFixtures.length > 0 && (
+          <div className="scene-list">
+            {project.customFixtures.map((profile) => (
+              <div key={profile.id} className="scene-list-item">
+                <span className="scene-name">
+                  {profile.name}{' '}
+                  <span className="settings-hint" style={{ margin: 0 }}>
+                    ({profile.channels.length}ch)
+                  </span>
+                </span>
+                <button className="text-button" onClick={() => setProfileEditor(profile.id)}>
+                  Edit
+                </button>
+                <button
+                  className="text-button danger"
+                  disabled={project.patches.some((p) => p.definitionId === profile.id)}
+                  title={
+                    project.patches.some((p) => p.definitionId === profile.id)
+                      ? 'In use by a patched fixture'
+                      : undefined
+                  }
+                  onClick={() =>
+                    updateProject((p) => ({
+                      ...p,
+                      customFixtures: p.customFixtures.filter((f) => f.id !== profile.id)
+                    }))
+                  }
+                >
+                  Delete
+                </button>
+              </div>
+            ))}
+          </div>
+        )}
+        {profileEditor === 'closed' ? (
+          <button className="secondary-button" onClick={() => setProfileEditor('new')}>
+            New Custom Profile
+          </button>
+        ) : (
+          <CustomFixtureEditor
+            existing={
+              profileEditor === 'new'
+                ? null
+                : (project.customFixtures.find((f) => f.id === profileEditor) ?? null)
+            }
+            onSave={(definition) => {
+              updateProject((p) => ({
+                ...p,
+                customFixtures: [
+                  ...p.customFixtures.filter((f) => f.id !== definition.id),
+                  definition
+                ]
+              }))
+              setProfileEditor('closed')
+            }}
+            onCancel={() => setProfileEditor('closed')}
+          />
+        )}
       </section>
 
       <section className="setup-section">

@@ -98,20 +98,31 @@ export interface Os2lSettings {
   port: number
 }
 
+export interface AudioInputSettings {
+  /** Saved capture device; auto-listen starts with it on app launch. */
+  deviceId: string | null
+  deviceLabel: string | null
+  autoListen: boolean
+}
+
 export interface LightingProject {
   patches: import('../fixtures/types').FixturePatch[]
   scenes: Scene[]
+  /** User-defined fixture profiles, merged over the built-in library. */
+  customFixtures: import('../fixtures/types').FixtureDefinition[]
   /** Scene ids assigned to the 4x4 performance pad grid (null = empty pad). */
   padSceneIds: (string | null)[]
   autopilot: AutopilotSettings
   output: OutputSettings
   os2l: Os2lSettings
+  audio: AudioInputSettings
 }
 
 export function defaultLightingProject(): LightingProject {
   return {
     patches: [],
     scenes: [],
+    customFixtures: [],
     padSceneIds: new Array(16).fill(null),
     autopilot: { enabled: false, barsPerScene: 8, sceneIds: [] },
     output: {
@@ -121,6 +132,7 @@ export function defaultLightingProject(): LightingProject {
       serialPath: null,
       usbUniverse: 1
     },
-    os2l: { enabled: true, port: 4444 }
+    os2l: { enabled: true, port: 4444 },
+    audio: { deviceId: null, deviceLabel: null, autoListen: true }
   }
 }

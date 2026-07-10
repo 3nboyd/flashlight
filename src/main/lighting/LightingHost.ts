@@ -10,7 +10,7 @@ import {
   type Scene
 } from '@core/lighting/engine/types'
 import { PRESET_SCENES } from '@core/lighting/engine/presetScenes'
-import { builtinFixturesById } from '@core/lighting/fixtures/library'
+import { fixturesById } from '@core/lighting/fixtures/library'
 import type { PatchedFixture } from '@core/lighting/fixtures/types'
 import type { AudioFeatures } from '@core/lighting/audio/features'
 import { SILENT_FEATURES } from '@core/lighting/audio/features'
@@ -159,7 +159,7 @@ export class LightingHost {
   }
 
   private resolveFixtures(): PatchedFixture[] {
-    const defs = builtinFixturesById()
+    const defs = fixturesById(this.project.customFixtures)
     return this.project.patches
       .map((patch) => {
         const definition = defs.get(patch.definitionId)

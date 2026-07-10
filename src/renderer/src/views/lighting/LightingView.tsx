@@ -3,6 +3,7 @@ import { useLightingStore } from '../../state/lightingStore'
 import { Banner } from '../../components/Banner'
 import { PerformPanel } from './PerformPanel'
 import { SetupPanel } from './SetupPanel'
+import { autoStartAudioIfConfigured } from './runtime'
 import './lighting.css'
 
 type Mode = 'perform' | 'setup'
@@ -14,6 +15,10 @@ export function LightingView(): JSX.Element {
   useEffect(() => {
     if (!loaded) load()
   }, [load, loaded])
+
+  useEffect(() => {
+    if (loaded) autoStartAudioIfConfigured(project.audio)
+  }, [loaded, project.audio])
 
   if (!loaded) {
     return <div className="view" />

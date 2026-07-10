@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useRef, type JSX } from 'react'
 import { useLightingStore } from '../../state/lightingStore'
-import { builtinFixturesById } from '@core/lighting/fixtures/library'
+import { fixturesById } from '@core/lighting/fixtures/library'
 import {
   readFixtureVisualState,
   resolveStagePositions,
@@ -71,11 +71,11 @@ export function StageVisualizer({
   // Keep resolved positions in sync with the project (unless mid-drag).
   useEffect(() => {
     if (dragRef.current) return
-    positionsRef.current = resolveStagePositions(project.patches, builtinFixturesById())
-  }, [project.patches])
+    positionsRef.current = resolveStagePositions(project.patches, fixturesById(project.customFixtures))
+  }, [project.patches, project.customFixtures])
 
   const resolveFixtures = useCallback((): PatchedFixture[] => {
-    const defs = builtinFixturesById()
+    const defs = fixturesById(projectRef.current.customFixtures)
     return projectRef.current.patches
       .map((patch) => {
         const definition = defs.get(patch.definitionId)
@@ -297,6 +297,12 @@ function renderStage(
 
     if (state.kind === 'laser') {
       drawLaserFan(ctx, fx, fy, pos.level, state, alpha, rc.timeMs, height)
+    } else if (state.kind === 'derby') {
+      drawDerby(ctx, fx, fy, pos.level, state, alpha, rc.timeMs, height)
+    } else if (state.kind === 'fog') {
+      drawFogPuff(ctx, fx, fy, alpha, rc.timeMs, height)
+    } else if (state.segments && state.segments.length > 1) {
+      drawSegmentBar(ctx, fx, fy, pos.level, state, alpha, width, height, floorY, state.kind === 'movingBar')
     } else {
       drawBeam(ctx, fx, fy, pos.level, state, alpha, width, height, floorY)
     }
@@ -322,7 +328,8 @@ function emptyState(fixture: PatchedFixture): FixtureVisualState {
     intensity: 0,
     strobing: false,
     pan: null,
-    tilt: null
+    tilt: null,
+    segments: null
   }
 }
 
@@ -420,6 +427,147 @@ function drawBeam(
   }
 }
 
+/** Width of a multi-cell bar fixture on screen. */
+function barWidth(segCount: number, height: number): number {
+  return Math.min(segCount * Math.max(10, height * 0.05), height * 0.9)
+}
+
+/**
+ * Multi-cell fixtures: pixel bars render a beam per cell in the cell's own
+ * color; wave bars additionally angle each cell's beam with its live tilt,
+ * producing the signature ripple.
+ */
+function drawSegmentBar(
+  ctx: CanvasRenderingContext2D,
+  fx: number,
+  fy: number,
+  level: StagePosition['level'],
+  state: FixtureVisualState,
+  alpha: number,
+  _width: number,
+  height: number,
+  floorY: number,
+  movingBar: boolean
+): void {
+  const segs = state.segments!
+  const total = barWidth(segs.length, height)
+  const cellW = total / segs.length
+  const down = level === 'truss'
+  const baseDir = down ? Math.PI / 2 : -Math.PI / 2
+
+  segs.forEach((seg, i) => {
+    const segAlpha = alpha <= 0 ? 0 : Math.max(0, Math.min(1, seg.intensity)) * (state.strobing ? alpha / Math.max(state.intensity, 0.01) : 1)
+    if (segAlpha <= 0.02) return
+    const cx = fx - total / 2 + cellW * (i + 0.5)
+    const tiltAngle = movingBar && seg.tilt !== null ? (seg.tilt - 0.5) * 1.6 : 0
+    const angle = baseDir + tiltAngle
+    const length = (down ? floorY - fy : fy) * 0.9
+    const tipX = cx + Math.cos(angle) * length
+    const tipY = fy + Math.sin(angle) * length
+    const perpX = -Math.sin(angle)
+    const perpY = Math.cos(angle)
+    const hw = Math.max(cellW * 0.5, length * 0.06)
+
+    const color = (a: number): string =>
+      `rgba(${Math.round(seg.r * 255)},${Math.round(seg.g * 255)},${Math.round(seg.b * 255)},${a})`
+    const grad = ctx.createLinearGradient(cx, fy, tipX, tipY)
+    grad.addColorStop(0, color(segAlpha * 0.35))
+    grad.addColorStop(1, color(segAlpha * 0.03))
+    ctx.fillStyle = grad
+    ctx.beginPath()
+    ctx.moveTo(cx, fy)
+    ctx.lineTo(tipX + perpX * hw, tipY + perpY * hw)
+    ctx.lineTo(tipX - perpX * hw, tipY - perpY * hw)
+    ctx.closePath()
+    ctx.fill()
+
+    // Cell lens glow.
+    const glowR = Math.max(3, cellW * 0.55)
+    const glow = ctx.createRadialGradient(cx, fy, 0, cx, fy, glowR)
+    glow.addColorStop(0, color(segAlpha * 0.95))
+    glow.addColorStop(1, color(0))
+    ctx.fillStyle = glow
+    ctx.beginPath()
+    ctx.arc(cx, fy, glowR, 0, Math.PI * 2)
+    ctx.fill()
+  })
+}
+
+/** Derby/moonflower: a rotating cluster of narrow beams from one head. */
+function drawDerby(
+  ctx: CanvasRenderingContext2D,
+  fx: number,
+  fy: number,
+  level: StagePosition['level'],
+  state: FixtureVisualState,
+  alpha: number,
+  timeMs: number,
+  height: number
+): void {
+  const down = level === 'truss'
+  const baseDir = down ? Math.PI / 2 : -Math.PI / 2
+  const spin = (timeMs / 900) % (Math.PI * 2)
+  const beams = 6
+  const length = height * 0.55
+  const color = (a: number): string =>
+    `rgba(${Math.round(state.r * 255)},${Math.round(state.g * 255)},${Math.round(state.b * 255)},${a})`
+
+  for (let i = 0; i < beams; i++) {
+    // Beams sweep back and forth as the derby barrel rotates.
+    const offset = Math.sin(spin + (i * Math.PI * 2) / beams) * 0.85
+    const angle = baseDir + offset
+    const tipX = fx + Math.cos(angle) * length
+    const tipY = fy + Math.sin(angle) * length
+    const perpX = -Math.sin(angle)
+    const perpY = Math.cos(angle)
+    const hw = length * 0.045
+
+    const grad = ctx.createLinearGradient(fx, fy, tipX, tipY)
+    grad.addColorStop(0, color(alpha * 0.4))
+    grad.addColorStop(1, color(alpha * 0.04))
+    ctx.fillStyle = grad
+    ctx.beginPath()
+    ctx.moveTo(fx, fy)
+    ctx.lineTo(tipX + perpX * hw, tipY + perpY * hw)
+    ctx.lineTo(tipX - perpX * hw, tipY - perpY * hw)
+    ctx.closePath()
+    ctx.fill()
+  }
+
+  const glowR = Math.max(6, height * 0.04)
+  const glow = ctx.createRadialGradient(fx, fy, 0, fx, fy, glowR)
+  glow.addColorStop(0, color(alpha * 0.9))
+  glow.addColorStop(1, color(0))
+  ctx.fillStyle = glow
+  ctx.beginPath()
+  ctx.arc(fx, fy, glowR, 0, Math.PI * 2)
+  ctx.fill()
+}
+
+/** DMX fog machine: a drifting gray puff while output is up. */
+function drawFogPuff(
+  ctx: CanvasRenderingContext2D,
+  fx: number,
+  fy: number,
+  alpha: number,
+  timeMs: number,
+  height: number
+): void {
+  const drift = (timeMs / 40) % (height * 0.4)
+  for (let i = 0; i < 3; i++) {
+    const r = height * (0.08 + i * 0.06) + drift * (0.5 + i * 0.3)
+    const cy = fy - height * 0.04 - drift * (0.4 + i * 0.2)
+    const puff = ctx.createRadialGradient(fx, cy, 0, fx, cy, r)
+    const a = alpha * 0.1 * (1 - drift / (height * 0.45))
+    puff.addColorStop(0, `rgba(180,180,195,${Math.max(0, a)})`)
+    puff.addColorStop(1, 'rgba(180,180,195,0)')
+    ctx.fillStyle = puff
+    ctx.beginPath()
+    ctx.arc(fx, cy, r, 0, Math.PI * 2)
+    ctx.fill()
+  }
+}
+
 function drawLaserFan(
   ctx: CanvasRenderingContext2D,
   fx: number,
@@ -484,6 +632,38 @@ function drawFixtureBody(
   } else if (state.kind === 'laser') {
     ctx.fillRect(fx - s * 0.8, fy - s * 0.5, s * 1.6, s)
     ctx.strokeRect(fx - s * 0.8, fy - s * 0.5, s * 1.6, s)
+  } else if (state.segments && state.segments.length > 1) {
+    // Bar chassis with visible cells.
+    const total = barWidth(state.segments.length, height)
+    const cellW = total / state.segments.length
+    ctx.beginPath()
+    ctx.roundRect(fx - total / 2, fy - s * 0.45, total, s * 0.9, 2)
+    ctx.fill()
+    ctx.stroke()
+    state.segments.forEach((_, i) => {
+      const cx = fx - total / 2 + cellW * (i + 0.5)
+      ctx.beginPath()
+      ctx.arc(cx, fy, Math.min(cellW * 0.3, s * 0.32), 0, Math.PI * 2)
+      ctx.stroke()
+    })
+  } else if (state.kind === 'derby') {
+    // Dome.
+    ctx.beginPath()
+    ctx.arc(fx, fy, s * 0.9, level === 'truss' ? 0 : Math.PI, level === 'truss' ? Math.PI : Math.PI * 2)
+    ctx.closePath()
+    ctx.fill()
+    ctx.stroke()
+  } else if (state.kind === 'scanner') {
+    // Body + angled mirror.
+    ctx.fillRect(fx - s * 1.1, fy - s * 0.4, s * 2.2, s * 0.8)
+    ctx.strokeRect(fx - s * 1.1, fy - s * 0.4, s * 2.2, s * 0.8)
+    ctx.beginPath()
+    ctx.moveTo(fx + s * 1.1, fy)
+    ctx.lineTo(fx + s * 1.7, fy + (level === 'truss' ? s * 0.7 : -s * 0.7))
+    ctx.stroke()
+  } else if (state.kind === 'fog') {
+    ctx.fillRect(fx - s * 1.3, fy - s * 0.7, s * 2.6, s * 0.7)
+    ctx.strokeRect(fx - s * 1.3, fy - s * 0.7, s * 2.6, s * 0.7)
   } else {
     // Par can: wedge pointing away from its mount.
     ctx.save()
