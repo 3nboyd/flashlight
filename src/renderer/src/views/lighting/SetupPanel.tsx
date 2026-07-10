@@ -1,10 +1,12 @@
-import { useCallback, useEffect, useMemo, useState, type JSX } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState, type JSX } from 'react'
 import { useLightingStore } from '../../state/lightingStore'
 import { BUILTIN_FIXTURES, builtinFixturesById } from '@core/lighting/fixtures/library'
 import { findAddressOverlaps, fixtureFootprint } from '@core/lighting/fixtures/types'
 import type { OutputProtocol } from '@core/lighting/engine/types'
 import { SceneEditor } from './SceneEditor'
-import { midiPads } from './runtime'
+import { StageVisualizer } from './StageVisualizer'
+import { AudioAnalyzer, type AnalyzerFrame } from '../../audio/AudioAnalyzer'
+import { audioAnalyzer, midiPads } from './runtime'
 import type { PadAction } from '../../midi/MidiPads'
 
 const LEARNABLE_ACTIONS: { label: string; action: PadAction }[] = [
@@ -51,10 +53,32 @@ export function SetupPanel(): JSX.Element {
   const [learningAction, setLearningAction] = useState<PadAction | null>(null)
   const [midiMapVersion, setMidiMapVersion] = useState(0)
   const [serialPorts, setSerialPorts] = useState<{ path: string; label: string }[]>([])
+  const [audioDevices, setAudioDevices] = useState<MediaDeviceInfo[]>([])
+  const [audioDeviceId, setAudioDeviceId] = useState('')
+  const [audioRunning, setAudioRunning] = useState(audioAnalyzer.isRunning())
+  const [levels, setLevels] = useState({ rms: 0, bass: 0, mid: 0, high: 0 })
+  const lastMeterUpdateRef = useRef(0)
 
   const refreshSerialPorts = useCallback(async () => {
     setSerialPorts(await window.djCompanion.lighting.listSerialPorts())
   }, [])
+
+  async function toggleAudio(): Promise<void> {
+    if (audioRunning) {
+      await audioAnalyzer.stop()
+      setAudioRunning(false)
+      return
+    }
+    if (!audioDeviceId) return
+    await audioAnalyzer.start(audioDeviceId, (frame: AnalyzerFrame) => {
+      window.djCompanion.lighting.sendAudioFeatures(frame)
+      if (frame.timestampMs - lastMeterUpdateRef.current > 90) {
+        lastMeterUpdateRef.current = frame.timestampMs
+        setLevels({ rms: frame.rms, bass: frame.bass, mid: frame.mid, high: frame.high })
+      }
+    })
+    setAudioRunning(true)
+  }
 
   useEffect(() => {
     // MIDI may not have been initialized yet if the user opened Setup first;
@@ -64,6 +88,7 @@ export function SetupPanel(): JSX.Element {
       midiPads.start({ onAction: () => undefined })
     }
     refreshSerialPorts()
+    AudioAnalyzer.listInputDevices().then(setAudioDevices)
     const interval = setInterval(refreshStatus, 1000) // live OS2L connection status
     return () => {
       midiPads.cancelLearn()
@@ -108,6 +133,70 @@ export function SetupPanel(): JSX.Element {
 
   return (
     <div className="setup-panel">
+      <section className="setup-section">
+        <h2>Stage preview</h2>
+        <p className="settings-hint">
+          Live view of your rig — exactly what the DMX output is doing, even with no lights
+          connected. Drag fixtures to match your real stage: sideways to reposition, up to the
+          truss, down to the floor.
+        </p>
+        <StageVisualizer height={300} editable className="stage-setup-canvas" />
+      </section>
+
+      <section className="setup-section">
+        <h2>Audio input — backup beat source</h2>
+        <p className="settings-hint">
+          Optional. OS2L is the primary beat source; use this only as a fallback (e.g. DJ software
+          without OS2L). Route your master output here through a virtual audio cable and the tempo
+          is estimated from the live audio.
+        </p>
+        <div className="setup-row">
+          <select
+            value={audioDeviceId}
+            onChange={(e) => setAudioDeviceId(e.target.value)}
+            disabled={audioRunning}
+          >
+            <option value="">Select audio input…</option>
+            {audioDevices.map((d) => (
+              <option key={d.deviceId} value={d.deviceId}>
+                {d.label || `Input ${d.deviceId.slice(0, 6)}`}
+              </option>
+            ))}
+          </select>
+          <button
+            className={audioRunning ? 'danger-button' : 'secondary-button'}
+            onClick={toggleAudio}
+            disabled={!audioRunning && !audioDeviceId}
+          >
+            {audioRunning ? 'Stop' : 'Listen'}
+          </button>
+          {audioRunning && (
+            <div className="setup-meters">
+              {(
+                [
+                  ['Bass', levels.bass],
+                  ['Mid', levels.mid],
+                  ['High', levels.high],
+                  ['Vol', levels.rms]
+                ] as const
+              ).map(([label, value]) => (
+                <div key={label} className="setup-meter" title={label}>
+                  <div className="setup-meter-fill" style={{ width: `${Math.round(value * 100)}%` }} />
+                </div>
+              ))}
+            </div>
+          )}
+          <label className="settings-checkbox-row" style={{ marginBottom: 0 }}>
+            <input
+              type="checkbox"
+              defaultChecked
+              onChange={(e) => window.djCompanion.lighting.setBpmFollowsAudio(e.target.checked)}
+            />
+            BPM follows audio
+          </label>
+        </div>
+      </section>
+
       <section className="setup-section">
         <h2>DMX output</h2>
         <div className="setup-row">

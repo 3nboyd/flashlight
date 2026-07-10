@@ -85,6 +85,8 @@ const api = {
     getStatus: (): Promise<LightingStatus> => ipcRenderer.invoke('lighting:getStatus'),
     listSerialPorts: (): Promise<{ path: string; label: string }[]> =>
       ipcRenderer.invoke('lighting:listSerialPorts'),
+    getUniverseSnapshot: (): Promise<Record<number, number[]>> =>
+      ipcRenderer.invoke('lighting:getUniverseSnapshot'),
     sendAudioFeatures: (features: AudioFeatures & { flux?: number }): void =>
       ipcRenderer.send('lighting:audioFeatures', features)
   }

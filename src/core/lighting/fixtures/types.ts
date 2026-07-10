@@ -53,6 +53,8 @@ export interface FixturePatch {
   address: number
   /** Optional group tag so effects can target subsets ("pars", "movers"...). */
   group?: string
+  /** Saved position on the visualizer stage; auto-layout applies when unset. */
+  stage?: { x: number; level: 'truss' | 'floor' }
 }
 
 export interface PatchedFixture {

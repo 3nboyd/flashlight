@@ -1,8 +1,8 @@
-import { useCallback, useEffect, useRef, useState, type JSX } from 'react'
+import { useCallback, useEffect, useState, type JSX } from 'react'
 import { useLightingStore } from '../../state/lightingStore'
-import { AudioAnalyzer, type AnalyzerFrame } from '../../audio/AudioAnalyzer'
 import type { PadAction } from '../../midi/MidiPads'
-import { audioAnalyzer as analyzer, midiPads as midi } from './runtime'
+import { midiPads as midi } from './runtime'
+import { StageVisualizer } from './StageVisualizer'
 import type { Rgbw } from '@core/lighting/engine/types'
 
 const OVERRIDE_COLORS: { name: string; color: Rgbw | null; css: string }[] = [
@@ -21,12 +21,8 @@ const OVERRIDE_COLORS: { name: string; color: Rgbw | null; css: string }[] = [
 export function PerformPanel(): JSX.Element {
   const { project, status, refreshStatus, triggerScene, setOverrides, overrides, updateProject } =
     useLightingStore()
-  const [audioDevices, setAudioDevices] = useState<MediaDeviceInfo[]>([])
-  const [audioDeviceId, setAudioDeviceId] = useState<string>('')
-  const [audioRunning, setAudioRunning] = useState(analyzer.isRunning())
-  const [levels, setLevels] = useState({ rms: 0, bass: 0, mid: 0, high: 0 })
   const [midiDevices, setMidiDevices] = useState<string[]>([])
-  const lastMeterUpdateRef = useRef(0)
+  const [stageExpanded, setStageExpanded] = useState(false)
 
   useEffect(() => {
     const interval = setInterval(refreshStatus, 250)
@@ -34,8 +30,13 @@ export function PerformPanel(): JSX.Element {
   }, [refreshStatus])
 
   useEffect(() => {
-    AudioAnalyzer.listInputDevices().then(setAudioDevices)
-  }, [])
+    if (!stageExpanded) return
+    const onKey = (e: KeyboardEvent): void => {
+      if (e.key === 'Escape') setStageExpanded(false)
+    }
+    window.addEventListener('keydown', onKey)
+    return () => window.removeEventListener('keydown', onKey)
+  }, [stageExpanded])
 
   const handleMidiAction = useCallback(
     (action: PadAction, _velocity: number, isNoteOn: boolean) => {
@@ -80,25 +81,6 @@ export function PerformPanel(): JSX.Element {
       onDevicesChanged: setMidiDevices
     })
   }, [handleMidiAction])
-
-  async function toggleAudio(): Promise<void> {
-    if (audioRunning) {
-      await analyzer.stop()
-      setAudioRunning(false)
-      return
-    }
-    if (!audioDeviceId) return
-    await analyzer.start(audioDeviceId, (frame: AnalyzerFrame) => {
-      window.djCompanion.lighting.sendAudioFeatures(frame)
-      // Update the on-screen meters at ~10fps to avoid re-render storms;
-      // the engine still receives every frame above.
-      if (frame.timestampMs - lastMeterUpdateRef.current > 90) {
-        lastMeterUpdateRef.current = frame.timestampMs
-        setLevels({ rms: frame.rms, bass: frame.bass, mid: frame.mid, high: frame.high })
-      }
-    })
-    setAudioRunning(true)
-  }
 
   const activeSceneId = status?.activeSceneId ?? null
   const beatFlash = status ? status.beatPhase < 0.15 : false
@@ -171,49 +153,9 @@ export function PerformPanel(): JSX.Element {
           </div>
         </div>
 
-        <div className="audio-block">
-          <div className="audio-row">
-            <select
-              value={audioDeviceId}
-              onChange={(e) => setAudioDeviceId(e.target.value)}
-              disabled={audioRunning}
-            >
-              <option value="">Select audio input (virtual cable)…</option>
-              {audioDevices.map((d) => (
-                <option key={d.deviceId} value={d.deviceId}>
-                  {d.label || `Input ${d.deviceId.slice(0, 6)}`}
-                </option>
-              ))}
-            </select>
-            <button className={audioRunning ? 'danger-button' : 'primary-button'} onClick={toggleAudio}>
-              {audioRunning ? 'Stop Audio' : 'Listen'}
-            </button>
-          </div>
-          <div className="meters">
-            {(
-              [
-                ['Bass', levels.bass],
-                ['Mid', levels.mid],
-                ['High', levels.high],
-                ['Vol', levels.rms]
-              ] as const
-            ).map(([label, value]) => (
-              <div key={label} className="meter">
-                <div className="meter-track">
-                  <div className="meter-fill" style={{ height: `${Math.round(value * 100)}%` }} />
-                </div>
-                <span>{label}</span>
-              </div>
-            ))}
-          </div>
-          <label className="perform-check">
-            <input
-              type="checkbox"
-              defaultChecked
-              onChange={(e) => window.djCompanion.lighting.setBpmFollowsAudio(e.target.checked)}
-            />
-            BPM follows audio
-          </label>
+        <div className="stage-mini" title="Live stage preview — click to expand">
+          <StageVisualizer height={172} onBackgroundClick={() => setStageExpanded(true)} />
+          <span className="stage-mini-hint">click to expand</span>
         </div>
 
         <div className="autopilot-block">
@@ -320,6 +262,23 @@ export function PerformPanel(): JSX.Element {
           BLACKOUT
         </button>
       </div>
+
+      {stageExpanded && (
+        <div className="stage-overlay" onClick={() => setStageExpanded(false)}>
+          <div className="stage-overlay-panel" onClick={(e) => e.stopPropagation()}>
+            <div className="stage-overlay-header">
+              <h2>Stage</h2>
+              <span className="settings-hint" style={{ margin: 0 }}>
+                Drag fixtures to arrange your rig — up to the truss, down to the floor.
+              </span>
+              <button className="secondary-button" onClick={() => setStageExpanded(false)}>
+                Close (Esc)
+              </button>
+            </div>
+            <StageVisualizer height={Math.min(560, window.innerHeight - 220)} editable />
+          </div>
+        </div>
+      )}
     </div>
   )
 }

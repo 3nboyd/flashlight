@@ -211,6 +211,30 @@ export class LightingHost {
     return 'manual'
   }
 
+  /**
+   * Renders the current look on demand for the stage visualizer — computed
+   * fresh rather than tapping the output loop, so the preview works
+   * identically whether DMX output is running or stopped (programming
+   * without lights connected).
+   */
+  getUniverseSnapshot(): Record<number, number[]> {
+    const nowMs = Date.now()
+    const audioFresh = nowMs - this.lastAudioAtMs < 500
+    const universes = renderTick({
+      fixtures: this.resolveFixtures(),
+      scene: this.currentScene(nowMs),
+      overrides: this.overrides,
+      beat: this.clock.positionAt(nowMs),
+      audio: audioFresh ? this.audio : SILENT_FEATURES,
+      nowMs
+    })
+    const snapshot: Record<number, number[]> = {}
+    for (const [universe, data] of universes) {
+      snapshot[universe] = Array.from(data.toBuffer())
+    }
+    return snapshot
+  }
+
   // ---- control surface (called from IPC) ----
 
   triggerScene(sceneId: string | null): void {
