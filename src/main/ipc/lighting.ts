@@ -48,6 +48,14 @@ export function registerLightingHandlers(): void {
     lighting.setSmartMode(enabled)
     return lighting.getStatus()
   })
+  ipcMain.handle('lighting:listStages', async () => lighting.listStages())
+  ipcMain.handle('lighting:saveStageAs', async (_e, name: string) => lighting.saveStageAs(name))
+  ipcMain.handle('lighting:newStage', async (_e, name: string) => lighting.newStage(name))
+  ipcMain.handle('lighting:switchStage', async (_e, id: string) => lighting.switchStage(id))
+  ipcMain.handle('lighting:renameStage', async (_e, id: string, name: string) =>
+    lighting.renameStage(id, name)
+  )
+  ipcMain.handle('lighting:deleteStage', async (_e, id: string) => lighting.deleteStage(id))
 
   // High-frequency fire-and-forget stream (no reply needed).
   ipcMain.on('lighting:audioFeatures', (_e, features: AudioFeatures & { flux?: number }) => {

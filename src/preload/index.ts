@@ -89,6 +89,15 @@ const api = {
       ipcRenderer.invoke('lighting:getUniverseSnapshot'),
     setSmartMode: (enabled: boolean): Promise<LightingStatus> =>
       ipcRenderer.invoke('lighting:setSmartMode', enabled),
+    listStages: (): Promise<{ id: string; name: string; active: boolean }[]> =>
+      ipcRenderer.invoke('lighting:listStages'),
+    saveStageAs: (name: string): Promise<LightingProject> =>
+      ipcRenderer.invoke('lighting:saveStageAs', name),
+    newStage: (name: string): Promise<LightingProject> => ipcRenderer.invoke('lighting:newStage', name),
+    switchStage: (id: string): Promise<LightingProject> => ipcRenderer.invoke('lighting:switchStage', id),
+    renameStage: (id: string, name: string): Promise<void> =>
+      ipcRenderer.invoke('lighting:renameStage', id, name),
+    deleteStage: (id: string): Promise<LightingProject> => ipcRenderer.invoke('lighting:deleteStage', id),
     sendAudioFeatures: (features: AudioFeatures & { flux?: number }): void =>
       ipcRenderer.send('lighting:audioFeatures', features)
   }

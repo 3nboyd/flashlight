@@ -61,9 +61,30 @@ function applyEffect(
       const envelope = Math.pow(1 - beat.beatPhase, 2)
       return { ...base, dimmer: target.dimmer * (0.15 + 0.85 * envelope) }
     }
+    case 'breathe': {
+      // Slow sine swell across the cycle — never fully dark.
+      const swell = 0.5 - 0.5 * Math.cos((beat.beat / beats) * 2 * Math.PI)
+      return { ...base, dimmer: target.dimmer * (0.25 + 0.75 * swell) }
+    }
     case 'colorCycle': {
       const step = Math.floor(beat.beat / beats) % palette.length
       return { ...base, color: palette[step] }
+    }
+    case 'alternate': {
+      // Odd/even fixtures swap two palette colors every N beats.
+      const colorA = palette[0]
+      const colorB = palette.length > 1 ? palette[1] : { r: 255 - colorA.r, g: 255 - colorA.g, b: 255 - colorA.b }
+      const flip = Math.floor(beat.beat / beats) % 2
+      const isEven = fixtureIndex % 2 === 0
+      return { ...base, color: isEven === (flip === 0) ? colorA : colorB }
+    }
+    case 'sparkle': {
+      // Deterministic twinkle: each fixture/cell flashes on pseudo-random
+      // beat subdivisions derived from its index and the beat counter.
+      const subdivision = Math.floor(beat.beat * 4) // 16th-note grid
+      const hash = Math.abs(Math.sin(subdivision * 12.9898 + fixtureIndex * 78.233)) * 43758.5453
+      const lit = hash - Math.floor(hash) < 0.28
+      return { ...base, dimmer: lit ? target.dimmer : target.dimmer * 0.06 }
     }
     case 'chase': {
       const positions = Math.max(2, fixtureCount)
@@ -103,6 +124,39 @@ function applyEffect(
         ...base,
         pan: (target.pan ?? 128) + Math.sin(angle) * amplitude,
         tilt: (target.tilt ?? 128) + Math.sin(angle) * amplitude * 0.5
+      }
+    }
+    case 'movementFigure8': {
+      // Lissajous 2:1 — the classic infinity trace.
+      const amplitude = (effect.amplitude ?? 0.5) * 127
+      const spread = fixtureCount > 1 ? (fixtureIndex / fixtureCount) * Math.PI : 0
+      const angle = (beat.beat / beats) * 2 * Math.PI + spread
+      return {
+        ...base,
+        pan: (target.pan ?? 128) + Math.sin(angle) * amplitude,
+        tilt: (target.tilt ?? 128) + Math.sin(angle * 2) * amplitude * 0.55
+      }
+    }
+    case 'movementNod': {
+      // Tilt-only wave: beams nod up/down, rippling across the group.
+      const amplitude = (effect.amplitude ?? 0.5) * 127
+      const spread = fixtureCount > 1 ? (fixtureIndex / fixtureCount) * Math.PI : 0
+      const angle = (beat.beat / beats) * 2 * Math.PI + spread
+      return { ...base, tilt: (target.tilt ?? 128) + Math.sin(angle) * amplitude * 0.7 }
+    }
+    case 'movementRandom': {
+      // Ballyhoo: each head jumps to a new pseudo-random position every N
+      // beats — deterministic per (step, fixture) so ticks agree.
+      const amplitude = (effect.amplitude ?? 0.5) * 127
+      const step = Math.floor(beat.beat / beats)
+      const hashOf = (salt: number): number => {
+        const v = Math.abs(Math.sin(step * 12.9898 + fixtureIndex * 78.233 + salt)) * 43758.5453
+        return (v - Math.floor(v)) * 2 - 1 // -1..1
+      }
+      return {
+        ...base,
+        pan: (target.pan ?? 128) + hashOf(1) * amplitude,
+        tilt: (target.tilt ?? 128) + hashOf(7) * amplitude * 0.6
       }
     }
     default:

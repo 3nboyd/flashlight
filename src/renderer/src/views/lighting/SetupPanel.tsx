@@ -4,7 +4,8 @@ import { BUILTIN_FIXTURES, fixturesById } from '@core/lighting/fixtures/library'
 import { findAddressOverlaps, fixtureFootprint } from '@core/lighting/fixtures/types'
 import type { OutputProtocol } from '@core/lighting/engine/types'
 import { defaultSmartPools } from '@core/lighting/engine/presetScenes'
-import { SceneEditor } from './SceneEditor'
+import { SceneEditorModal } from './SceneEditorModal'
+import { FixtureIcon } from './FixtureIcons'
 import { CustomFixtureEditor } from './CustomFixtureEditor'
 import { StageVisualizer } from './StageVisualizer'
 import { AudioAnalyzer } from '../../audio/AudioAnalyzer'
@@ -50,7 +51,12 @@ function describeAction(action: PadAction): string {
 let patchCounter = 0
 
 export function SetupPanel(): JSX.Element {
-  const { project, updateProject, status, refreshStatus } = useLightingStore()
+  const { project, updateProject, status, refreshStatus, applyLoadedProject } = useLightingStore()
+  const [stages, setStages] = useState<{ id: string; name: string; active: boolean }[]>([])
+
+  const refreshStages = useCallback(async () => {
+    setStages(await window.djCompanion.lighting.listStages())
+  }, [])
   const [addForm, setAddForm] = useState({
     definitionId: BUILTIN_FIXTURES[0].id,
     universe: 1,
@@ -114,13 +120,14 @@ export function SetupPanel(): JSX.Element {
       midiPads.start({ onAction: () => undefined })
     }
     refreshSerialPorts()
+    refreshStages()
     AudioAnalyzer.listInputDevices().then(setAudioDevices)
     const interval = setInterval(refreshStatus, 1000) // live OS2L connection status
     return () => {
       midiPads.cancelLearn()
       clearInterval(interval)
     }
-  }, [refreshSerialPorts, refreshStatus])
+  }, [refreshSerialPorts, refreshStatus, refreshStages])
 
   const defs = useMemo(() => fixturesById(project.customFixtures), [project.customFixtures])
   const allProfiles = useMemo(
@@ -163,6 +170,85 @@ export function SetupPanel(): JSX.Element {
 
   return (
     <div className="setup-panel">
+      <section className="setup-section">
+        <h2>Stages</h2>
+        <p className="settings-hint">
+          A stage is a complete saved setup — rig, scenes, pads, everything. Keep one per venue or
+          gig and switch between them.
+        </p>
+        <div className="stage-switcher">
+          <select
+            value={stages.find((s) => s.active)?.id ?? ''}
+            onChange={async (e) => {
+              const project = await window.djCompanion.lighting.switchStage(e.target.value)
+              applyLoadedProject(project)
+              refreshStages()
+            }}
+          >
+            {stages.map((stage) => (
+              <option key={stage.id} value={stage.id}>
+                {stage.name}
+              </option>
+            ))}
+          </select>
+          <button
+            className="secondary-button"
+            onClick={async () => {
+              const name = window.prompt('Save current stage as:', 'My Stage Copy')
+              if (!name) return
+              const project = await window.djCompanion.lighting.saveStageAs(name)
+              applyLoadedProject(project)
+              refreshStages()
+            }}
+          >
+            Save As…
+          </button>
+          <button
+            className="secondary-button"
+            onClick={async () => {
+              const name = window.prompt('New stage name:', 'New Stage')
+              if (!name) return
+              const project = await window.djCompanion.lighting.newStage(name)
+              applyLoadedProject(project)
+              refreshStages()
+            }}
+          >
+            New Stage
+          </button>
+          <button
+            className="text-button"
+            onClick={async () => {
+              const active = stages.find((s) => s.active)
+              if (!active) return
+              const name = window.prompt('Rename stage:', active.name)
+              if (!name) return
+              await window.djCompanion.lighting.renameStage(active.id, name)
+              refreshStages()
+            }}
+          >
+            Rename
+          </button>
+          {stages.length > 1 && (
+            <button
+              className="text-button danger"
+              onClick={async () => {
+                const active = stages.find((s) => s.active)
+                if (!active) return
+                if (!window.confirm(`Delete stage "${active.name}"? This cannot be undone.`)) return
+                const project = await window.djCompanion.lighting.deleteStage(active.id)
+                applyLoadedProject(project)
+                refreshStages()
+              }}
+            >
+              Delete
+            </button>
+          )}
+          <span className="settings-hint" style={{ margin: 0 }}>
+            Changes save automatically to the active stage.
+          </span>
+        </div>
+      </section>
+
       <section className="setup-section">
         <h2>Stage preview</h2>
         <p className="settings-hint">
@@ -408,7 +494,10 @@ export function SetupPanel(): JSX.Element {
                       }
                     />
                   </td>
-                  <td>{def?.name ?? patch.definitionId}</td>
+                  <td className="fixture-profile-cell">
+                    <FixtureIcon kind={def?.kind ?? 'other'} size={18} />
+                    <span>{def?.name ?? patch.definitionId}</span>
+                  </td>
                   <td>
                     <input
                       className="inline-input narrow"
@@ -660,9 +749,8 @@ export function SetupPanel(): JSX.Element {
         </button>
 
         {editingScene && (
-          <SceneEditor
+          <SceneEditorModal
             scene={editingScene}
-            groups={[...new Set(project.patches.map((p) => p.group).filter((g): g is string => !!g))]}
             onChange={(updated) =>
               updateProject((p) => ({
                 ...p,

@@ -1,5 +1,5 @@
-import { readFile, writeFile, mkdir } from 'fs/promises'
-import { join, dirname } from 'path'
+import { readFile, writeFile, mkdir, rm } from 'fs/promises'
+import { join } from 'path'
 import { renderTick } from '@core/lighting/engine/LightingEngine'
 import { BeatClock } from '@core/lighting/engine/BeatClock'
 import {
@@ -61,7 +61,12 @@ export class LightingHost {
   private bpmFollowsAudio = true
   private sender: DmxSender
   private timer: NodeJS.Timeout | null = null
-  private readonly projectPath: string
+  private readonly legacyProjectPath: string
+  private readonly stagesDir: string
+  private stageIndex: { activeId: string; stages: { id: string; name: string }[] } = {
+    activeId: '',
+    stages: []
+  }
   private os2l: Os2lServer | null = null
   private os2lConnected = false
   private lastOs2lBeatAtMs = 0
@@ -72,7 +77,8 @@ export class LightingHost {
   private smartBuildProgress = 0
 
   constructor(userDataDir: string) {
-    this.projectPath = join(userDataDir, 'lighting-project.json')
+    this.legacyProjectPath = join(userDataDir, 'lighting-project.json')
+    this.stagesDir = join(userDataDir, 'lighting-stages')
     this.sender = new DmxSender({
       protocol: 'artnet',
       artnetHost: '255.255.255.255',
@@ -80,26 +86,75 @@ export class LightingHost {
     })
   }
 
-  async load(): Promise<LightingProject> {
+  // ---- stage management (multiple saved rigs/shows) ----
+
+  private stagePath(id: string): string {
+    return join(this.stagesDir, `${id}.json`)
+  }
+
+  private async readStageIndex(): Promise<void> {
     try {
-      const raw = await readFile(this.projectPath, 'utf-8')
-      const parsed = JSON.parse(raw)
-      const defaults = defaultLightingProject()
-      this.project = {
-        ...defaults,
-        ...parsed,
-        output: { ...defaults.output, ...parsed.output },
-        os2l: { ...defaults.os2l, ...parsed.os2l },
-        audio: { ...defaults.audio, ...parsed.audio },
-        smart: { ...defaults.smart, ...parsed.smart },
-        stageProps: parsed.stageProps ?? defaults.stageProps
-      }
+      this.stageIndex = JSON.parse(await readFile(join(this.stagesDir, 'index.json'), 'utf-8'))
     } catch {
-      this.project = defaultLightingProject()
-      this.project.scenes = [...PRESET_SCENES]
-      const padIds = PRESET_SCENES.map((s) => s.id).slice(0, 16)
-      this.project.padSceneIds = [...padIds, ...new Array(Math.max(0, 16 - padIds.length)).fill(null)]
-      this.project.smart.pools = defaultSmartPools(this.project.scenes.map((s) => s.id))
+      this.stageIndex = { activeId: '', stages: [] }
+    }
+  }
+
+  private async writeStageIndex(): Promise<void> {
+    await mkdir(this.stagesDir, { recursive: true })
+    await writeFile(join(this.stagesDir, 'index.json'), JSON.stringify(this.stageIndex, null, 2), 'utf-8')
+  }
+
+  listStages(): { id: string; name: string; active: boolean }[] {
+    return this.stageIndex.stages.map((s) => ({ ...s, active: s.id === this.stageIndex.activeId }))
+  }
+
+  private freshProject(): LightingProject {
+    const project = defaultLightingProject()
+    project.scenes = [...PRESET_SCENES]
+    const padIds = PRESET_SCENES.map((s) => s.id).slice(0, 16)
+    project.padSceneIds = [...padIds, ...new Array(Math.max(0, 16 - padIds.length)).fill(null)]
+    project.smart.pools = defaultSmartPools(project.scenes.map((s) => s.id))
+    return project
+  }
+
+  private normalizeProject(parsed: Partial<LightingProject>): LightingProject {
+    const defaults = defaultLightingProject()
+    return {
+      ...defaults,
+      ...parsed,
+      output: { ...defaults.output, ...parsed.output },
+      os2l: { ...defaults.os2l, ...parsed.os2l },
+      audio: { ...defaults.audio, ...parsed.audio },
+      smart: { ...defaults.smart, ...parsed.smart },
+      stageProps: parsed.stageProps ?? defaults.stageProps
+    } as LightingProject
+  }
+
+  async load(): Promise<LightingProject> {
+    await this.readStageIndex()
+
+    if (this.stageIndex.stages.length === 0) {
+      // First run (or migration from the single-project era).
+      let initial: LightingProject
+      try {
+        initial = this.normalizeProject(JSON.parse(await readFile(this.legacyProjectPath, 'utf-8')))
+      } catch {
+        initial = this.freshProject()
+      }
+      const id = `stage-${Date.now()}`
+      this.stageIndex = { activeId: id, stages: [{ id, name: 'My Stage' }] }
+      this.project = initial
+      await this.writeStageIndex()
+      await writeFile(this.stagePath(id), JSON.stringify(initial, null, 2), 'utf-8')
+    } else {
+      try {
+        this.project = this.normalizeProject(
+          JSON.parse(await readFile(this.stagePath(this.stageIndex.activeId), 'utf-8'))
+        )
+      } catch {
+        this.project = this.freshProject()
+      }
     }
     this.applyIntegrationConfig()
     return this.project
@@ -108,9 +163,61 @@ export class LightingHost {
   async saveProject(project: LightingProject): Promise<LightingProject> {
     this.project = project
     this.applyIntegrationConfig()
-    await mkdir(dirname(this.projectPath), { recursive: true })
-    await writeFile(this.projectPath, JSON.stringify(project, null, 2), 'utf-8')
+    await mkdir(this.stagesDir, { recursive: true })
+    await writeFile(this.stagePath(this.stageIndex.activeId), JSON.stringify(project, null, 2), 'utf-8')
     return project
+  }
+
+  /** Save the current rig under a new name and make it the active stage. */
+  async saveStageAs(name: string): Promise<LightingProject> {
+    const id = `stage-${Date.now()}`
+    this.stageIndex.stages.push({ id, name })
+    this.stageIndex.activeId = id
+    await this.writeStageIndex()
+    return this.saveProject(structuredClone(this.project))
+  }
+
+  /** Create a fresh stage (default rig + presets) and switch to it. */
+  async newStage(name: string): Promise<LightingProject> {
+    const id = `stage-${Date.now()}`
+    this.stageIndex.stages.push({ id, name })
+    this.stageIndex.activeId = id
+    await this.writeStageIndex()
+    this.triggerScene(null)
+    return this.saveProject(this.freshProject())
+  }
+
+  async switchStage(id: string): Promise<LightingProject> {
+    if (!this.stageIndex.stages.some((s) => s.id === id)) return this.project
+    this.stageIndex.activeId = id
+    await this.writeStageIndex()
+    try {
+      this.project = this.normalizeProject(JSON.parse(await readFile(this.stagePath(id), 'utf-8')))
+    } catch {
+      this.project = this.freshProject()
+    }
+    this.triggerScene(null) // scene ids differ between stages
+    this.applyIntegrationConfig()
+    return this.project
+  }
+
+  async renameStage(id: string, name: string): Promise<void> {
+    const stage = this.stageIndex.stages.find((s) => s.id === id)
+    if (stage && name.trim()) {
+      stage.name = name.trim()
+      await this.writeStageIndex()
+    }
+  }
+
+  async deleteStage(id: string): Promise<LightingProject> {
+    if (this.stageIndex.stages.length <= 1) return this.project // always keep one
+    this.stageIndex.stages = this.stageIndex.stages.filter((s) => s.id !== id)
+    await rm(this.stagePath(id), { force: true })
+    if (this.stageIndex.activeId === id) {
+      return this.switchStage(this.stageIndex.stages[0].id)
+    }
+    await this.writeStageIndex()
+    return this.project
   }
 
   private applyIntegrationConfig(): void {

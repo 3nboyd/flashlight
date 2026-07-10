@@ -8,6 +8,8 @@ interface LightingState {
   status: LightingStatus | null
   loaded: boolean
   load: () => Promise<void>
+  /** Adopt a project loaded by stage operations (switch/new/save-as). */
+  applyLoadedProject: (project: LightingProject) => void
   /** Replace + persist the project. */
   updateProject: (mutate: (project: LightingProject) => LightingProject) => Promise<void>
   refreshStatus: () => Promise<void>
@@ -28,6 +30,11 @@ export const useLightingStore = create<LightingState>((set, get) => ({
     const project = await window.djCompanion.lighting.loadProject()
     const status = await window.djCompanion.lighting.getStatus()
     set({ project, status, loaded: true, overrides: status.overrides })
+  },
+
+  /** Adopt a project returned by stage switch/new/save-as IPC calls. */
+  applyLoadedProject: (project) => {
+    set({ project })
   },
 
   updateProject: async (mutate) => {

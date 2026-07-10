@@ -14,14 +14,20 @@ export interface Rgbw {
 export type EffectType =
   | 'static'
   | 'beatPulse' // dimmer decays from full on every beat
+  | 'breathe' // slow sine swell of intensity
   | 'colorCycle' // step through colors every N beats
+  | 'alternate' // odd/even fixtures swap two colors on the beat
   | 'chase' // one fixture (or position) lit at a time, advancing on the beat
+  | 'sparkle' // random fixtures/cells flash each beat subdivision
   | 'rainbow' // continuous hue rotation across fixtures
   | 'strobe' // continuous strobing while the scene is active
   | 'audioLevel' // dimmer follows overall loudness
   | 'bassPulse' // dimmer follows bass energy (kick-reactive)
   | 'movementCircle' // pan/tilt trace a circle (moving heads)
   | 'movementSweep' // pan sweeps side to side
+  | 'movementFigure8' // pan/tilt trace a lissajous figure-8
+  | 'movementNod' // tilt-only wave (the classic beam nod)
+  | 'movementRandom' // ballyhoo: heads jump to pseudo-random positions each beat
 
 export interface EffectSettings {
   type: EffectType
