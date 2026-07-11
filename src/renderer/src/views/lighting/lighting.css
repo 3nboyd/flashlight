@@ -898,15 +898,12 @@
   width: 100%;
 }
 
-.fixture-profile-cell {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-}
-
+/* Keep the cell a real table-cell (flex on <td> breaks row border
+   alignment); the icon aligns via vertical-align instead. */
 .fixture-profile-cell svg {
   color: var(--accent);
-  flex-shrink: 0;
+  vertical-align: -4px;
+  margin-right: 8px;
 }
 
 /* ---- Stage switcher ---- */
@@ -1371,18 +1368,170 @@
 .setup-panel {
   display: flex;
   flex-direction: column;
-  gap: 8px;
+  gap: 2px;
 }
 
 .setup-section {
-  padding: 16px 0 20px;
+  padding: 6px 0 14px;
   border-bottom: 1px solid var(--border-subtle);
 }
 
+.setup-section.collapsed {
+  padding-bottom: 6px;
+}
+
+.setup-section-header {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 8px 4px;
+  cursor: pointer;
+  user-select: none;
+  border-radius: var(--radius-sm);
+}
+
+.setup-section-header:hover {
+  background: var(--bg-hover);
+}
+
 .setup-section h2 {
-  font-size: 14px;
+  font-size: 12px;
+  font-weight: 700;
+  letter-spacing: 2.2px;
+  text-transform: uppercase;
+  margin: 0;
+  background: linear-gradient(90deg, var(--text-primary), var(--text-secondary));
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+}
+
+.setup-chevron {
+  display: inline-block;
+  font-size: 15px;
+  color: var(--text-tertiary);
+  transition: transform 0.15s ease;
+  width: 12px;
+}
+
+.setup-chevron.open {
+  transform: rotate(90deg);
+}
+
+.setup-section-body {
+  padding: 8px 4px 0 26px;
+}
+
+.help-bubble {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 16px;
+  height: 16px;
+  border-radius: 50%;
+  border: 1px solid var(--border-strong);
+  color: var(--text-tertiary);
+  font-size: 10px;
+  font-weight: 700;
+  cursor: help;
+}
+
+.help-bubble:hover {
+  color: var(--accent);
+  border-color: var(--accent);
+}
+
+.help-tooltip {
+  display: none;
+  position: absolute;
+  top: 22px;
+  left: -8px;
+  z-index: 40;
+  width: 380px;
+  background: var(--bg-2);
+  border: 1px solid var(--border-strong);
+  border-radius: var(--radius-md);
+  box-shadow: var(--shadow-panel);
+  padding: 10px 12px;
+  font-size: 12px;
+  font-weight: 400;
+  letter-spacing: normal;
+  text-transform: none;
+  line-height: 1.55;
+  color: var(--text-secondary);
+}
+
+.help-bubble:hover .help-tooltip {
+  display: block;
+}
+
+.help-tooltip code {
+  background: var(--bg-1);
+  padding: 1px 5px;
+  border-radius: 3px;
+}
+
+/* ---- Stage tabs ---- */
+
+.stage-tabs {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  flex-wrap: wrap;
+}
+
+.stage-tab {
+  background: var(--bg-2);
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-md) var(--radius-md) 0 0;
+  border-bottom: 2px solid transparent;
+  padding: 7px 16px;
+  font-size: 13px;
+  color: var(--text-secondary);
+  transition: all 0.1s ease;
+}
+
+.stage-tab:hover {
+  color: var(--text-primary);
+  background: var(--bg-hover);
+}
+
+.stage-tab.active {
+  color: var(--text-primary);
   font-weight: 600;
-  margin: 0 0 10px;
+  border-bottom-color: var(--accent);
+  background: var(--bg-3);
+}
+
+.stage-tab.ghost {
+  border-radius: var(--radius-md);
+  padding: 7px 11px;
+  color: var(--text-tertiary);
+}
+
+.stage-tab.ghost:hover {
+  color: var(--accent);
+}
+
+.stage-tab.ghost.danger:hover {
+  color: var(--danger);
+}
+
+.stage-tab-rename {
+  background: var(--bg-3);
+  border: 1px solid var(--accent);
+  border-radius: var(--radius-md) var(--radius-md) 0 0;
+  padding: 7px 12px;
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--text-primary);
+  width: 160px;
+  outline: none;
+}
+
+.midi-modal {
+  width: min(720px, calc(100vw - 80px));
 }
 
 .setup-row {

@@ -142,6 +142,54 @@ describe('SmartModeEngine', () => {
     expect(secondSpike.every((d) => d.sceneId === null || !d.sceneId.startsWith('peak-'))).toBe(true)
   })
 
+  it('holds the same scene while the mood is stable (no timer rotation before max hold)', () => {
+    const runner = new Runner()
+    runner.engine.updateConfig({ ...CONFIG, phrasesPerScene: 8 }) // max hold: 8 phrases (~2min)
+    // 60s of an unchanging groove → mood never shifts → no rotation at all.
+    const decisions = runner.run(60, feat(0.55, 0.5, 0.3))
+    expect(decisions.every((d) => d.phase === 'steady')).toBe(true)
+    expect(runner.sceneChanges()).toEqual([])
+  })
+
+  it('rotates on the next phrase boundary when the mood genuinely shifts', () => {
+    const runner = new Runner()
+    runner.engine.updateConfig({ ...CONFIG, phrasesPerScene: 8 })
+    runner.run(30, feat(0.55, 0.5, 0.3)) // settle a mood reference
+    expect(runner.sceneChanges()).toEqual([])
+    // Same overall loudness but very different spectral balance: the top
+    // end opens up (hats/melody) while bass thins — a section change.
+    runner.run(25, feat(0.3, 0.5, 0.75))
+    const changes = runner.sceneChanges()
+    expect(changes.length).toBeGreaterThanOrEqual(1)
+    expect(changes[0]).toMatch(/^main-/)
+  })
+
+  it('bass-dominant textures prefer reactive scenes; full textures prefer flow', () => {
+    const runner = new Runner()
+    runner.engine.updateConfig({
+      ...CONFIG,
+      phrasesPerScene: 1, // rotate every phrase so picks happen quickly
+      sceneCharacter: { 'main-1': 'reactive', 'main-2': 'flow', 'main-3': 'flow' }
+    })
+    // Stripped-back: heavy bass, almost no top end.
+    runner.run(40, feat(0.8, 0.5, 0.05))
+    const strippedPicks = runner.sceneChanges()
+    expect(strippedPicks.length).toBeGreaterThan(0)
+    expect(strippedPicks.every((s) => s === 'main-1')).toBe(true)
+
+    const runner2 = new Runner()
+    runner2.engine.updateConfig({
+      ...CONFIG,
+      phrasesPerScene: 1,
+      sceneCharacter: { 'main-1': 'reactive', 'main-2': 'flow', 'main-3': 'flow' }
+    })
+    // Full mix: balanced bass and highs.
+    runner2.run(40, feat(0.5, 0.5, 0.45))
+    const fullPicks = runner2.sceneChanges()
+    expect(fullPicks.length).toBeGreaterThan(0)
+    expect(fullPicks.every((s) => s === 'main-2' || s === 'main-3')).toBe(true)
+  })
+
   it('empty pools never emit scene switches but phases still track', () => {
     const runner = new Runner()
     runner.engine.updateConfig({ ...CONFIG, pools: { chill: [], main: [], peak: [] } })

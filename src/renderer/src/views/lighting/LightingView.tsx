@@ -7,11 +7,13 @@ import { PresetBrowser } from './PresetBrowser'
 import { autoStartAudioIfConfigured } from './runtime'
 import './lighting.css'
 
-type Mode = 'perform' | 'setup'
+interface LightingViewProps {
+  /** Perform/Setup selection lives in the app sidebar. */
+  mode: 'perform' | 'setup'
+}
 
-export function LightingView(): JSX.Element {
+export function LightingView({ mode }: LightingViewProps): JSX.Element {
   const { load, loaded, status, startEngine, stopEngine, project } = useLightingStore()
-  const [mode, setMode] = useState<Mode>('perform')
   const [presetsOpen, setPresetsOpen] = useState(false)
 
   useEffect(() => {
@@ -32,23 +34,17 @@ export function LightingView(): JSX.Element {
     <div className="view lighting-view">
       <header className="view-header lighting-header">
         <div>
-          <h1>Lighting</h1>
+          <h1>{mode === 'perform' ? 'Perform' : 'Setup'}</h1>
           <p className="view-subtitle">
-            Beat-synced, audio-reactive DMX over Art-Net/sACN — perform with pads, edit in Setup.
+            {mode === 'perform'
+              ? 'Pads, live overrides, and the automatic show — synced to your decks.'
+              : 'Rig, stages, presets, connections, and automation.'}
           </p>
         </div>
         <div className="lighting-header-controls">
           <button className="secondary-button" onClick={() => setPresetsOpen(true)}>
-            ✦ Presets
+            Presets
           </button>
-          <div className="mode-tabs">
-            <button className={mode === 'perform' ? 'active' : ''} onClick={() => setMode('perform')}>
-              Perform
-            </button>
-            <button className={mode === 'setup' ? 'active' : ''} onClick={() => setMode('setup')}>
-              Setup
-            </button>
-          </div>
           <button
             className={running ? 'danger-button' : 'primary-button'}
             onClick={() => (running ? stopEngine() : startEngine())}

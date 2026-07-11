@@ -1,5 +1,5 @@
 import { useEffect, useState, type JSX } from 'react'
-import { Sidebar, type ViewId } from './components/Sidebar'
+import { Sidebar, type NavState } from './components/Sidebar'
 import { SettingsView } from './views/SettingsView'
 import { LibraryView } from './views/LibraryView'
 import { FileExplorerView } from './views/FileExplorerView'
@@ -9,25 +9,25 @@ import { LightingView } from './views/lighting/LightingView'
 import { useSettingsStore } from './state/settingsStore'
 import './styles/views.css'
 
-function ViewRouter({ view }: { view: ViewId }): JSX.Element {
+function MusicRouter({ view }: { view: NavState['musicView'] }): JSX.Element {
   switch (view) {
-    case 'settings':
-      return <SettingsView />
     case 'library':
       return <LibraryView />
     case 'explorer':
       return <FileExplorerView />
     case 'rename':
       return <RenameView />
-    case 'lighting':
-      return <LightingView />
     case 'backups':
       return <BackupsView />
   }
 }
 
 function App(): JSX.Element {
-  const [view, setView] = useState<ViewId>('library')
+  const [nav, setNav] = useState<NavState>({
+    section: 'music',
+    musicView: 'library',
+    lightingView: 'perform'
+  })
   const { load, loaded } = useSettingsStore()
 
   useEffect(() => {
@@ -40,8 +40,10 @@ function App(): JSX.Element {
 
   return (
     <div className="app-shell">
-      <Sidebar active={view} onSelect={setView} />
-      <ViewRouter view={view} />
+      <Sidebar nav={nav} onChange={setNav} />
+      {nav.section === 'music' && <MusicRouter view={nav.musicView} />}
+      {nav.section === 'lighting' && <LightingView mode={nav.lightingView} />}
+      {nav.section === 'settings' && <SettingsView />}
     </div>
   )
 }

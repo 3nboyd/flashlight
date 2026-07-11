@@ -29,10 +29,21 @@ export interface SmartPools {
 
 export interface SmartConfig {
   pools: SmartPools
-  /** Rotate the main pool every N 8-bar phrases while steady. */
+  /**
+   * MAXIMUM hold in 8-bar phrases: while steady, a scene keeps playing
+   * until the track's mood actually shifts (see mood tracking below), but
+   * never longer than this many phrases.
+   */
   phrasesPerScene: number
-  /** 0-1, default 0.5. Higher = more eager build/drop detection. */
+  /** 0-1, default 0.5. Higher = more eager build/drop/mood detection. */
   sensitivity: number
+  /**
+   * How each main-pool scene reads visually, derived from its effects:
+   * 'reactive' scenes (bass/audio/beat-driven) suit stripped-back,
+   * bass-and-drums passages; 'flow' scenes (color cycles, movement) suit
+   * fuller musical sections. Optional — without it, picks are round-robin.
+   */
+  sceneCharacter?: Record<string, 'reactive' | 'flow'>
 }
 
 export interface SmartDecision {
@@ -62,8 +73,22 @@ export class SmartModeEngine {
   private emaLong = 0
   private highShort = 0
   private highLong = 0
+  private bassLong = 0
+  private onsetRate = 0
+  /** Medium EMAs (τ≈2s) for mood tracking: fast enough to settle quickly on
+   *  a stable signal (no warm-up false shifts), slow enough to ignore
+   *  per-beat ripple; the 3s sustain requirement does the rest. */
+  private energyMid = 0
+  private bassMid = 0
+  private highMid = 0
   private readonly trend: number[] = []
   private frames = 0
+
+  /** Mood snapshot at the last steady scene change; rotation happens when
+   *  the live mood drifts far enough from this reference. */
+  private moodRef: { energy: number; bassBalance: number; highBalance: number } | null = null
+  private moodShiftSinceFrame: number | null = null
+  private lastRotationBar = -1
 
   private phase: SmartPhase = 'steady'
   private phaseStartFrame = 0
@@ -74,7 +99,6 @@ export class SmartModeEngine {
   private mainRotation = 0
   private peakRotation = 0
   private chillRotation = 0
-  private lastPhraseSlot = -1
   private dropStartBar = 0
 
   constructor(framesPerSecond = 40) {
@@ -94,7 +118,9 @@ export class SmartModeEngine {
     this.phase = 'steady'
     this.phaseStartFrame = this.frames
     this.belowSinceFrame = null
-    this.lastPhraseSlot = -1
+    this.moodRef = null
+    this.moodShiftSinceFrame = null
+    this.lastRotationBar = -1
   }
 
   private seconds(frames: number): number {
@@ -104,6 +130,44 @@ export class SmartModeEngine {
   private pick(pool: string[], rotation: number): string | null {
     if (pool.length === 0) return null
     return pool[rotation % pool.length]
+  }
+
+  /** Live mood: overall level plus how bass- or high-weighted the mix is. */
+  private currentMood(): { energy: number; bassBalance: number; highBalance: number } {
+    const total = this.bassMid + this.highMid + 0.0001
+    return {
+      energy: this.energyMid,
+      bassBalance: this.bassMid / total,
+      highBalance: this.highMid / total
+    }
+  }
+
+  private moodDistance(a: { energy: number; bassBalance: number; highBalance: number }): number {
+    const b = this.currentMood()
+    return (
+      Math.abs(a.energy - b.energy) * 1.6 +
+      Math.abs(a.bassBalance - b.bassBalance) * 1.2 +
+      Math.abs(a.highBalance - b.highBalance) * 1.2
+    )
+  }
+
+  /**
+   * Picks the next main scene to fit the track's current texture: stripped
+   * bass-and-drums passages get 'reactive' scenes (bass/beat-driven looks),
+   * fuller sections get 'flow' scenes. Falls back to round-robin.
+   */
+  private pickMainForTexture(): string | null {
+    const pool = this.config.pools.main
+    if (pool.length === 0) return null
+    this.mainRotation += 1
+    const character = this.config.sceneCharacter
+    if (!character) return this.pick(pool, this.mainRotation)
+
+    const mood = this.currentMood()
+    const wantReactive = mood.bassBalance > 0.62 // bass-dominant, sparse top end
+    const preferred = pool.filter((id) => (character[id] ?? 'flow') === (wantReactive ? 'reactive' : 'flow'))
+    const candidates = preferred.length > 0 ? preferred : pool
+    return this.pick(candidates, this.mainRotation)
   }
 
   addFrame(features: AudioFeatures, beat: BeatPosition): SmartDecision {
@@ -118,6 +182,12 @@ export class SmartModeEngine {
     this.emaLong += alphaLong * (energy - this.emaLong)
     this.highShort += alphaHigh * (features.high - this.highShort)
     this.highLong += alphaLong * (features.high - this.highLong)
+    this.bassLong += alphaLong * (features.bass - this.bassLong)
+    this.onsetRate += alphaLong * ((features.onset ? 1 : 0) - this.onsetRate)
+    const alphaMid = 1 - Math.exp(-1 / (this.fps * 2))
+    this.energyMid += alphaMid * (energy - this.energyMid)
+    this.bassMid += alphaMid * (features.bass - this.bassMid)
+    this.highMid += alphaMid * (features.high - this.highMid)
 
     this.trend.push(this.emaShort)
     const trendFrames = Math.round(this.fps * TREND_WINDOW_SECONDS)
@@ -139,14 +209,36 @@ export class SmartModeEngine {
     switch (this.phase) {
       case 'steady': {
         intensity = 1
-        // Phrase-boundary rotation through the main pool.
-        const slot = Math.floor(beat.barIndex / (8 * Math.max(1, this.config.phrasesPerScene)))
-        if (slot !== this.lastPhraseSlot) {
-          if (this.lastPhraseSlot !== -1) {
-            this.mainRotation += 1
-            sceneId = this.pick(this.config.pools.main, this.mainRotation)
-          }
-          this.lastPhraseSlot = slot
+        // Mood-hold rotation: a scene keeps playing while the track keeps
+        // doing the same thing. Rotation happens on a phrase boundary only
+        // once the mood (level + spectral balance) has genuinely shifted —
+        // or when the max hold elapses as a fallback.
+        // Keep re-anchoring the reference while the long EMAs warm up (or
+        // right after a phase change), so settling baselines don't read as
+        // a mood shift.
+        if (this.seconds(framesInPhase) < 8 || this.moodRef === null) {
+          this.moodRef = this.currentMood()
+          this.moodShiftSinceFrame = null
+        }
+        if (this.lastRotationBar < 0) this.lastRotationBar = beat.barIndex
+
+        const moodThreshold = 0.12 / sens
+        if (this.moodDistance(this.moodRef) > moodThreshold) {
+          this.moodShiftSinceFrame ??= this.frames
+        } else {
+          this.moodShiftSinceFrame = null
+        }
+        const moodShifted =
+          this.moodShiftSinceFrame !== null && this.seconds(this.frames - this.moodShiftSinceFrame) > 3
+
+        const phraseBoundary = beat.barIndex % 8 === 0 && beat.barPhase < 0.5
+        const phrasesHeld = (beat.barIndex - this.lastRotationBar) / 8
+        const maxHold = Math.max(1, this.config.phrasesPerScene)
+        if (phraseBoundary && phrasesHeld >= 1 && (moodShifted || phrasesHeld >= maxHold)) {
+          sceneId = this.pickMainForTexture()
+          this.lastRotationBar = beat.barIndex
+          this.moodRef = this.currentMood()
+          this.moodShiftSinceFrame = null
         }
 
         // Breakdown: energy collapses well below the track's baseline.
@@ -235,7 +327,10 @@ export class SmartModeEngine {
         if (beat.barIndex >= this.dropStartBar + 8 || this.seconds(framesInPhase) > 15) {
           this.phase = 'steady'
           this.phaseStartFrame = this.frames
-          this.lastPhraseSlot = Math.floor(beat.barIndex / (8 * Math.max(1, this.config.phrasesPerScene)))
+          // Re-anchor mood tracking so the post-drop groove sets the reference.
+          this.lastRotationBar = beat.barIndex
+          this.moodRef = null
+          this.moodShiftSinceFrame = null
         }
         break
       }
@@ -259,8 +354,10 @@ export class SmartModeEngine {
           } else {
             this.phase = 'steady'
             this.phaseStartFrame = this.frames
-            this.mainRotation += 1
-            sceneId = this.pick(this.config.pools.main, this.mainRotation)
+            sceneId = this.pickMainForTexture()
+            this.lastRotationBar = beat.barIndex
+            this.moodRef = null
+            this.moodShiftSinceFrame = null
             intensity = 1
           }
         }

@@ -5,6 +5,7 @@ import { findAddressOverlaps, fixtureFootprint } from '@core/lighting/fixtures/t
 import type { OutputProtocol } from '@core/lighting/engine/types'
 import { defaultSmartPools } from '@core/lighting/engine/presetScenes'
 import { SceneEditorModal } from './SceneEditorModal'
+import { SetupSection } from './SetupSection'
 import { FixtureIcon } from './FixtureIcons'
 import { CustomFixtureEditor } from './CustomFixtureEditor'
 import { StageVisualizer } from './StageVisualizer'
@@ -53,6 +54,8 @@ let patchCounter = 0
 export function SetupPanel(): JSX.Element {
   const { project, updateProject, status, refreshStatus, applyLoadedProject } = useLightingStore()
   const [stages, setStages] = useState<{ id: string; name: string; active: boolean }[]>([])
+  const [renamingStageId, setRenamingStageId] = useState<string | null>(null)
+  const [midiModalOpen, setMidiModalOpen] = useState(false)
 
   const refreshStages = useCallback(async () => {
     setStages(await window.djCompanion.lighting.listStages())
@@ -170,67 +173,78 @@ export function SetupPanel(): JSX.Element {
 
   return (
     <div className="setup-panel">
-      <section className="setup-section">
-        <h2>Stages</h2>
-        <p className="settings-hint">
-          A stage is a complete saved setup — rig, scenes, pads, everything. Keep one per venue or
-          gig and switch between them.
-        </p>
-        <div className="stage-switcher">
-          <select
-            value={stages.find((s) => s.active)?.id ?? ''}
-            onChange={async (e) => {
-              const project = await window.djCompanion.lighting.switchStage(e.target.value)
-              applyLoadedProject(project)
-              refreshStages()
-            }}
-          >
-            {stages.map((stage) => (
-              <option key={stage.id} value={stage.id}>
+      <SetupSection title="Stages" help={<>A stage is a complete saved setup — rig, scenes, pads, everything. Keep one per venue or
+          gig and switch between them.</>}>
+        <div className="stage-tabs">
+          {stages.map((stage) =>
+            renamingStageId === stage.id ? (
+              <input
+                key={stage.id}
+                className="stage-tab-rename"
+                autoFocus
+                defaultValue={stage.name}
+                onFocus={(e) => e.target.select()}
+                onBlur={async (e) => {
+                  const name = e.target.value.trim()
+                  if (name && name !== stage.name) {
+                    await window.djCompanion.lighting.renameStage(stage.id, name)
+                  }
+                  setRenamingStageId(null)
+                  refreshStages()
+                }}
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter') (e.target as HTMLInputElement).blur()
+                  if (e.key === 'Escape') setRenamingStageId(null)
+                }}
+              />
+            ) : (
+              <button
+                key={stage.id}
+                className={`stage-tab${stage.active ? ' active' : ''}`}
+                title={stage.active ? 'Double-click to rename' : `Switch to ${stage.name}`}
+                onClick={async () => {
+                  if (stage.active) return
+                  const project = await window.djCompanion.lighting.switchStage(stage.id)
+                  applyLoadedProject(project)
+                  refreshStages()
+                }}
+                onDoubleClick={() => stage.active && setRenamingStageId(stage.id)}
+              >
                 {stage.name}
-              </option>
-            ))}
-          </select>
+              </button>
+            )
+          )}
           <button
-            className="secondary-button"
+            className="stage-tab ghost"
+            title="New empty stage"
             onClick={async () => {
-              const name = window.prompt('Save current stage as:', 'My Stage Copy')
-              if (!name) return
-              const project = await window.djCompanion.lighting.saveStageAs(name)
+              const project = await window.djCompanion.lighting.newStage('New Stage')
               applyLoadedProject(project)
-              refreshStages()
+              const list = await window.djCompanion.lighting.listStages()
+              setStages(list)
+              setRenamingStageId(list.find((s) => s.active)?.id ?? null)
             }}
           >
-            Save As…
+            +
           </button>
           <button
-            className="secondary-button"
-            onClick={async () => {
-              const name = window.prompt('New stage name:', 'New Stage')
-              if (!name) return
-              const project = await window.djCompanion.lighting.newStage(name)
-              applyLoadedProject(project)
-              refreshStages()
-            }}
-          >
-            New Stage
-          </button>
-          <button
-            className="text-button"
+            className="stage-tab ghost"
+            title="Duplicate current stage"
             onClick={async () => {
               const active = stages.find((s) => s.active)
-              if (!active) return
-              const name = window.prompt('Rename stage:', active.name)
-              if (!name) return
-              await window.djCompanion.lighting.renameStage(active.id, name)
-              refreshStages()
+              const project = await window.djCompanion.lighting.saveStageAs(`${active?.name ?? 'Stage'} copy`)
+              applyLoadedProject(project)
+              const list = await window.djCompanion.lighting.listStages()
+              setStages(list)
+              setRenamingStageId(list.find((s) => s.active)?.id ?? null)
             }}
           >
-            Rename
+            ⧉
           </button>
           {stages.length > 1 && (
             <button
-              className="text-button danger"
+              className="stage-tab ghost danger"
+              title="Delete current stage"
               onClick={async () => {
                 const active = stages.find((s) => s.active)
                 if (!active) return
@@ -240,32 +254,21 @@ export function SetupPanel(): JSX.Element {
                 refreshStages()
               }}
             >
-              Delete
+              ✕
             </button>
           )}
-          <span className="settings-hint" style={{ margin: 0 }}>
-            Changes save automatically to the active stage.
-          </span>
         </div>
-      </section>
+      </SetupSection>
 
-      <section className="setup-section">
-        <h2>Stage preview</h2>
-        <p className="settings-hint">
-          Live view of your rig — exactly what the DMX output is doing, even with no lights
+      <SetupSection title="Stage preview" help={<>Live view of your rig — exactly what the DMX output is doing, even with no lights
           connected. Drag fixtures to match your real stage: sideways to reposition, up to the
-          truss, down to the floor.
-        </p>
+          truss, down to the floor.</>}>
         <StageVisualizer height={300} editable className="stage-setup-canvas" />
-      </section>
+      </SetupSection>
 
-      <section className="setup-section">
-        <h2>Audio input — backup beat source</h2>
-        <p className="settings-hint">
-          Optional. OS2L is the primary beat source; use this only as a fallback (e.g. DJ software
+      <SetupSection title="Audio input — backup beat source" help={<>Optional. OS2L is the primary beat source; use this only as a fallback (e.g. DJ software
           without OS2L). Route your master output here through a virtual audio cable and the tempo
-          is estimated from the live audio.
-        </p>
+          is estimated from the live audio.</>}>
         <div className="setup-row">
           <select value={project.audio.deviceId ?? ''} onChange={(e) => selectAudioDevice(e.target.value)}>
             <option value="">Select audio input…</option>
@@ -317,10 +320,9 @@ export function SetupPanel(): JSX.Element {
             BPM follows audio
           </label>
         </div>
-      </section>
+      </SetupSection>
 
-      <section className="setup-section">
-        <h2>DMX output</h2>
+      <SetupSection title="DMX output">
         <div className="setup-row">
           <label>Protocol</label>
           <select
@@ -393,10 +395,9 @@ export function SetupPanel(): JSX.Element {
             ? 'Works with the Enttec DMX USB Pro and Pro-compatible clones (framed serial protocol). The original "Open DMX USB" (raw FTDI) is not supported — it can\'t be timed reliably from software.'
             : 'Works with any Art-Net/sACN node or interface. Note: sACN universes start at 1.'}
         </p>
-      </section>
+      </SetupSection>
 
-      <section className="setup-section">
-        <h2>OS2L — DJ software beat link</h2>
+      <SetupSection title="OS2L — DJ software beat link">
         <div className="setup-row">
           <label className="settings-checkbox-row">
             <input
@@ -453,10 +454,9 @@ export function SetupPanel(): JSX.Element {
           possible. While connected, the beat source badge in Perform shows <strong>OS2L</strong>{' '}
           and effects lock to the deck&rsquo;s bars and phrases.
         </p>
-      </section>
+      </SetupSection>
 
-      <section className="setup-section">
-        <h2>Fixtures</h2>
+      <SetupSection title="Fixtures">
         {overlaps.length > 0 && (
           <div className="banner error">
             {overlaps.length} address overlap{overlaps.length === 1 ? '' : 's'} — highlighted fixtures
@@ -618,14 +618,10 @@ export function SetupPanel(): JSX.Element {
             Add
           </button>
         </div>
-      </section>
+      </SetupSection>
 
-      <section className="setup-section">
-        <h2>Custom fixture profiles</h2>
-        <p className="settings-hint">
-          Fixture not in the built-in list? Build its profile from the DMX channel chart in its
-          manual — works for any brand and any channel mode.
-        </p>
+      <SetupSection title="Custom fixture profiles" help={<>Fixture not in the built-in list? Build its profile from the DMX channel chart in its
+          manual — works for any brand and any channel mode.</>}>
         {project.customFixtures.length > 0 && (
           <div className="scene-list">
             {project.customFixtures.map((profile) => (
@@ -684,10 +680,9 @@ export function SetupPanel(): JSX.Element {
             onCancel={() => setProfileEditor('closed')}
           />
         )}
-      </section>
+      </SetupSection>
 
-      <section className="setup-section">
-        <h2>Scenes</h2>
+      <SetupSection title="Scenes">
         <div className="scene-list">
           {project.scenes.map((scene) => (
             <div key={scene.id} className="scene-list-item">
@@ -760,16 +755,14 @@ export function SetupPanel(): JSX.Element {
             onClose={() => setEditingSceneId(null)}
           />
         )}
-      </section>
+      </SetupSection>
 
-      <section className="setup-section">
-        <h2>⚡ Smart Mode</h2>
-        <p className="settings-hint">
-          The automatic VJ: while enabled (button in Perform), scenes rotate on musical phrases,
-          intensity ramps through build-ups, a Peak scene slams on the drop, and breakdowns fall to
-          a Chill scene. Uses the OS2L beat grid plus live audio energy. Assign scenes to pools
-          below — anything unassigned is never auto-fired.
-        </p>
+      <SetupSection title="Smart Mode" help={<>The automatic VJ: while enabled (button in Perform), a scene keeps playing as long as the
+          track keeps its mood — it rotates only when the music genuinely changes (level or bass/high
+          balance shifting for a few seconds), always on a phrase boundary. Build-ups ramp intensity,
+          a Peak scene slams on the drop, breakdowns fall to a Chill scene, and stripped-back
+          bass-and-drums passages prefer beat-reactive looks. Uses the OS2L beat grid plus live audio
+          energy. Anything unassigned below is never auto-fired.</>}>
         <div className="setup-row">
           <label>Sensitivity</label>
           <input
@@ -787,21 +780,22 @@ export function SetupPanel(): JSX.Element {
           <span className="settings-hint" style={{ margin: 0 }}>
             {project.smart.sensitivity < 0.34 ? 'calm' : project.smart.sensitivity > 0.67 ? 'eager' : 'balanced'}
           </span>
-          <label>Rotate every</label>
+          <label>Max hold</label>
           <input
             type="number"
             min={1}
-            max={8}
+            max={16}
+            title="Even with an unchanging mood, rotate after this many 8-bar phrases"
             value={project.smart.phrasesPerScene}
             onChange={(e) =>
               updateProject((p) => ({
                 ...p,
-                smart: { ...p.smart, phrasesPerScene: Math.max(1, Number(e.target.value) || 2) }
+                smart: { ...p.smart, phrasesPerScene: Math.max(1, Number(e.target.value) || 4) }
               }))
             }
           />
           <span className="settings-hint" style={{ margin: 0 }}>
-            phrases (8 bars each)
+            phrases
           </span>
           <button
             className="secondary-button"
@@ -851,14 +845,10 @@ export function SetupPanel(): JSX.Element {
               )
             })}
         </div>
-      </section>
+      </SetupSection>
 
-      <section className="setup-section">
-        <h2>Autopilot</h2>
-        <p className="settings-hint">
-          Simple rotation (no audio analysis): cycles the checked scenes every N bars. For the
-          full automatic show, use Smart Mode instead.
-        </p>
+      <SetupSection title="Autopilot" help={<>Simple rotation (no audio analysis): cycles the checked scenes every N bars. For the
+          full automatic show, use Smart Mode instead.</>}>
         <div className="setup-row">
           <label>Every</label>
           <input
@@ -921,58 +911,96 @@ export function SetupPanel(): JSX.Element {
               )
             })}
         </div>
-      </section>
+      </SetupSection>
 
-      <section className="setup-section">
-        <h2>MIDI controller</h2>
-        <p className="settings-hint">
-          Bind pads on any MIDI controller: click Learn next to an action, then hit the pad.
-          {midiPads.deviceNames().length > 0
-            ? ` Connected: ${midiPads.deviceNames().join(', ')}.`
-            : ' No MIDI device detected — plug one in and it will appear automatically.'}
-        </p>
-        <div className="midi-learn-grid" data-version={midiMapVersion}>
-          {LEARNABLE_ACTIONS.map((entry) => {
-            const boundNote = Object.entries(midiPads.getMapping().notes).find(
-              ([, action]) => describeAction(action) === entry.label
-            )?.[0]
-            const isLearning =
-              learningAction !== null && describeAction(learningAction) === entry.label
-            return (
-              <div key={entry.label} className="midi-learn-row">
-                <span>{entry.label}</span>
-                <span className="midi-note">{boundNote ? `note ${boundNote}` : '—'}</span>
+      <SetupSection title="MIDI controller" help={<>Bind pads on any MIDI controller to scenes and live controls. Click a Learn button, hit a
+          pad, done — click again to cancel a learn.</>}>
+        <div className="setup-row">
+          <button className="secondary-button" onClick={() => setMidiModalOpen(true)}>
+            Assign MIDI Pads…
+          </button>
+          <span className="settings-hint" style={{ margin: 0 }}>
+            {midiPads.deviceNames().length > 0
+              ? `Connected: ${midiPads.deviceNames().join(', ')}`
+              : 'No MIDI device detected — plug one in and it appears automatically.'}
+          </span>
+        </div>
+
+        {midiModalOpen && (
+          <div
+            className="stage-overlay"
+            onClick={() => {
+              midiPads.cancelLearn()
+              setLearningAction(null)
+              setMidiModalOpen(false)
+            }}
+          >
+            <div className="stage-overlay-panel midi-modal" onClick={(e) => e.stopPropagation()}>
+              <div className="stage-overlay-header">
+                <h2>MIDI Assignments</h2>
+                <span className="settings-hint" style={{ margin: 0 }}>
+                  Click Learn, hit a pad on your controller. Click again to cancel.
+                </span>
                 <button
-                  className={isLearning ? 'primary-button' : 'secondary-button'}
+                  className="secondary-button"
                   onClick={() => {
-                    setLearningAction(entry.action)
-                    midiPads.learnOnce((note) => {
-                      midiPads.bind(note, entry.action)
-                      setLearningAction(null)
-                      setMidiMapVersion((v) => v + 1)
-                    })
+                    midiPads.cancelLearn()
+                    setLearningAction(null)
+                    setMidiModalOpen(false)
                   }}
                 >
-                  {isLearning ? 'Hit a pad…' : 'Learn'}
+                  Done
                 </button>
               </div>
-            )
-          })}
-        </div>
-        <button
-          className="text-button danger"
-          onClick={() => {
-            midiPads.unbindAll()
-            setMidiMapVersion((v) => v + 1)
-          }}
-        >
-          Clear all MIDI bindings
-        </button>
-      </section>
+              <div className="midi-learn-grid" data-version={midiMapVersion}>
+                {LEARNABLE_ACTIONS.map((entry) => {
+                  const boundNote = Object.entries(midiPads.getMapping().notes).find(
+                    ([, action]) => describeAction(action) === entry.label
+                  )?.[0]
+                  const isLearning =
+                    learningAction !== null && describeAction(learningAction) === entry.label
+                  return (
+                    <div key={entry.label} className="midi-learn-row">
+                      <span>{entry.label}</span>
+                      <span className="midi-note">{boundNote ? `note ${boundNote}` : '—'}</span>
+                      <button
+                        className={isLearning ? 'primary-button' : 'secondary-button'}
+                        onClick={() => {
+                          if (isLearning) {
+                            // Second click cancels the armed learn.
+                            midiPads.cancelLearn()
+                            setLearningAction(null)
+                            return
+                          }
+                          setLearningAction(entry.action)
+                          midiPads.learnOnce((note) => {
+                            midiPads.bind(note, entry.action)
+                            setLearningAction(null)
+                            setMidiMapVersion((v) => v + 1)
+                          })
+                        }}
+                      >
+                        {isLearning ? 'Cancel' : 'Learn'}
+                      </button>
+                    </div>
+                  )
+                })}
+              </div>
+              <button
+                className="text-button danger"
+                onClick={() => {
+                  midiPads.unbindAll()
+                  setMidiMapVersion((v) => v + 1)
+                }}
+              >
+                Clear all MIDI bindings
+              </button>
+            </div>
+          </div>
+        )}
+      </SetupSection>
 
-      <section className="setup-section">
-        <h2>Performance pads</h2>
-        <p className="settings-hint">Assign scenes to the 4×4 pad grid used in Perform mode.</p>
+      <SetupSection title="Performance pads" help={<>Assign scenes to the 4×4 pad grid used in Perform mode.</>}>
         <div className="pad-assign-grid">
           {project.padSceneIds.map((sceneId, index) => (
             <select
@@ -995,7 +1023,7 @@ export function SetupPanel(): JSX.Element {
             </select>
           ))}
         </div>
-      </section>
+      </SetupSection>
     </div>
   )
 }

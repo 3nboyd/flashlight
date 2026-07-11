@@ -221,7 +221,19 @@ export class LightingHost {
   }
 
   private applyIntegrationConfig(): void {
-    this.smart.updateConfig(this.project.smart)
+    // Classify each scene for texture-aware smart picks: scenes built on
+    // audio/beat-driven effects read as 'reactive'; color/movement flows
+    // read as 'flow'.
+    const reactiveEffects = new Set(['bassPulse', 'audioLevel', 'beatPulse', 'sparkle', 'strobe'])
+    const sceneCharacter: Record<string, 'reactive' | 'flow'> = {}
+    for (const scene of this.project.scenes) {
+      sceneCharacter[scene.id] = scene.targets.some(
+        (t) => t.effect && reactiveEffects.has(t.effect.type)
+      )
+        ? 'reactive'
+        : 'flow'
+    }
+    this.smart.updateConfig({ ...this.project.smart, sceneCharacter })
     this.sender.reconfigure({
       protocol: this.project.output.protocol,
       artnetHost: this.project.output.artnetHost,
