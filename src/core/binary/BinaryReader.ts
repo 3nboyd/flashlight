@@ -111,7 +111,7 @@ export class BinaryReader {
     return value
   }
 
-  /** UTF-16BE string, null-terminated by a 0x0000 code unit — Serato DB V2 text fields. */
+  /** UTF-16BE string, null-terminated by a 0x0000 code unit - Serato DB V2 text fields. */
   readUtf16BEString(byteLength?: number): string {
     if (byteLength !== undefined) {
       const bytes = this.readBytes(byteLength)
@@ -127,7 +127,7 @@ export class BinaryReader {
     return Buffer.from(bytes).swap16().toString('utf16le')
   }
 
-  /** Null-terminated UTF-8 string — used inside Serato Markers2 entry payloads. */
+  /** Null-terminated UTF-8 string - used inside Serato Markers2 entry payloads. */
   readUtf8CString(): string {
     return this.readCString('utf8')
   }

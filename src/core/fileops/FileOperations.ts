@@ -43,11 +43,11 @@ export interface FileMoveResult {
 
 /**
  * fs.rename() only works within a single filesystem/volume. Moving between
- * two different volumes (e.g. a USB drive and the internal disk — the
+ * two different volumes (e.g. a USB drive and the internal disk - the
  * common case for DJ crate management) fails with EXDEV. We fall back to
  * copy-then-delete-original in that case, and only delete the source after
  * the copy has fully succeeded, so a failure mid-copy never loses the
- * original file — worst case is a leftover duplicate, never data loss.
+ * original file - worst case is a leftover duplicate, never data loss.
  */
 async function renameAcrossVolumes(fromPath: string, destPath: string): Promise<void> {
   try {

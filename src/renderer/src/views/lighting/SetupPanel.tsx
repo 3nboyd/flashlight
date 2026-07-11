@@ -5,8 +5,9 @@ import { findAddressOverlaps, fixtureFootprint } from '@core/lighting/fixtures/t
 import type { OutputProtocol } from '@core/lighting/engine/types'
 import { defaultSmartPools } from '@core/lighting/engine/presetScenes'
 import { SceneEditorModal } from './SceneEditorModal'
-import { SetupSection } from './SetupSection'
+import { SetupSection, SetupViewContext, type SetupView } from './SetupSection'
 import { FixtureIcon } from './FixtureIcons'
+import { padColumns, resizePadArray } from './padGrid'
 import { CustomFixtureEditor } from './CustomFixtureEditor'
 import { StageVisualizer } from './StageVisualizer'
 import { AudioAnalyzer } from '../../audio/AudioAnalyzer'
@@ -29,7 +30,8 @@ const LEARNABLE_ACTIONS: { label: string; action: PadAction }[] = [
   { label: 'Strobe (hold)', action: { kind: 'strobe' } },
   { label: 'Tap tempo', action: { kind: 'tap' } },
   { label: 'Resync beat 1', action: { kind: 'resync' } },
-  { label: 'Autopilot on/off', action: { kind: 'autopilot' } }
+  { label: 'Autopilot on/off', action: { kind: 'autopilot' } },
+  { label: 'Manual trigger', action: { kind: 'manual' } }
 ]
 
 function describeAction(action: PadAction): string {
@@ -46,12 +48,40 @@ function describeAction(action: PadAction): string {
       return 'Resync beat 1'
     case 'autopilot':
       return 'Autopilot on/off'
+    case 'manual':
+      return 'Manual trigger'
   }
 }
 
 let patchCounter = 0
 
-export function SetupPanel(): JSX.Element {
+function ViewModeToggle({
+  mode,
+  onChange
+}: {
+  mode: 'grid' | 'list'
+  onChange: (mode: 'grid' | 'list') => void
+}): JSX.Element {
+  return (
+    <div className="segmented view-toggle">
+      <button className={mode === 'grid' ? 'active' : ''} title="Grid view" onClick={() => onChange('grid')}>
+        <svg viewBox="0 0 24 24" width="15" height="15" fill="currentColor">
+          <rect x="3" y="3" width="7" height="7" rx="1.5" />
+          <rect x="14" y="3" width="7" height="7" rx="1.5" />
+          <rect x="3" y="14" width="7" height="7" rx="1.5" />
+          <rect x="14" y="14" width="7" height="7" rx="1.5" />
+        </svg>
+      </button>
+      <button className={mode === 'list' ? 'active' : ''} title="List view" onClick={() => onChange('list')}>
+        <svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" strokeWidth="2">
+          <path d="M4 6h16M4 12h16M4 18h16" strokeLinecap="round" />
+        </svg>
+      </button>
+    </div>
+  )
+}
+
+export function SetupPanel({ view }: { view: SetupView }): JSX.Element {
   const { project, updateProject, status, refreshStatus, applyLoadedProject } = useLightingStore()
   const [stages, setStages] = useState<{ id: string; name: string; active: boolean }[]>([])
   const [renamingStageId, setRenamingStageId] = useState<string | null>(null)
@@ -172,9 +202,14 @@ export function SetupPanel(): JSX.Element {
   const editingScene = project.scenes.find((s) => s.id === editingSceneId) ?? null
 
   return (
+    <SetupViewContext.Provider value={view}>
     <div className="setup-panel">
-      <SetupSection title="Stages" help={<>A stage is a complete saved setup — rig, scenes, pads, everything. Keep one per venue or
-          gig and switch between them.</>}>
+      <SetupSection
+        id="stages"
+        title="Stages & Rig"
+        help={<>A stage is a complete saved setup: rig, scenes, pads, everything. Keep one per venue or
+          gig and switch between them. The preview below shows the active stage.</>}
+      >
         <div className="stage-tabs">
           {stages.map((stage) =>
             renamingStageId === stage.id ? (
@@ -258,17 +293,21 @@ export function SetupPanel(): JSX.Element {
             </button>
           )}
         </div>
-      </SetupSection>
-
-      <SetupSection title="Stage preview" help={<>Live view of your rig — exactly what the DMX output is doing, even with no lights
-          connected. Drag fixtures to match your real stage: sideways to reposition, up to the
-          truss, down to the floor.</>}>
+        <div className="stages-preview-hint settings-hint">
+          Live preview of the active stage. Drag fixtures to match your real rig: sideways to
+          reposition, up to the truss, down to the floor.
+        </div>
         <StageVisualizer height={300} editable className="stage-setup-canvas" />
       </SetupSection>
 
-      <SetupSection title="Audio input — backup beat source" help={<>Optional. OS2L is the primary beat source; use this only as a fallback (e.g. DJ software
+      <SetupSection
+        id="audio"
+        views={['settings']}
+        title="Audio input, backup beat source"
+        help={<>Optional. OS2L is the primary beat source; use this only as a fallback (e.g. DJ software
           without OS2L). Route your master output here through a virtual audio cable and the tempo
-          is estimated from the live audio.</>}>
+          is estimated from the live audio.</>}
+      >
         <div className="setup-row">
           <select value={project.audio.deviceId ?? ''} onChange={(e) => selectAudioDevice(e.target.value)}>
             <option value="">Select audio input…</option>
@@ -322,7 +361,7 @@ export function SetupPanel(): JSX.Element {
         </div>
       </SetupSection>
 
-      <SetupSection title="DMX output">
+      <SetupSection id="dmx" views={['settings']} title="DMX output">
         <div className="setup-row">
           <label>Protocol</label>
           <select
@@ -336,7 +375,7 @@ export function SetupPanel(): JSX.Element {
           >
             <option value="artnet">Art-Net (network, broadcast/unicast)</option>
             <option value="sacn">sACN E1.31 (network, multicast)</option>
-            <option value="enttec">USB — Enttec DMX USB Pro / compatible</option>
+            <option value="enttec">USB - Enttec DMX USB Pro / compatible</option>
           </select>
           {project.output.protocol === 'artnet' && (
             <>
@@ -379,7 +418,7 @@ export function SetupPanel(): JSX.Element {
                 min={0}
                 max={63999}
                 value={project.output.usbUniverse}
-                title="A USB interface drives one DMX line — fixtures patched to this universe are output"
+                title="A USB interface drives one DMX line - fixtures patched to this universe are output"
                 onChange={(e) =>
                   updateProject((p) => ({
                     ...p,
@@ -392,12 +431,12 @@ export function SetupPanel(): JSX.Element {
         </div>
         <p className="settings-hint">
           {project.output.protocol === 'enttec'
-            ? 'Works with the Enttec DMX USB Pro and Pro-compatible clones (framed serial protocol). The original "Open DMX USB" (raw FTDI) is not supported — it can\'t be timed reliably from software.'
+            ? 'Works with the Enttec DMX USB Pro and Pro-compatible clones (framed serial protocol). The original "Open DMX USB" (raw FTDI) is not supported - it can\'t be timed reliably from software.'
             : 'Works with any Art-Net/sACN node or interface. Note: sACN universes start at 1.'}
         </p>
       </SetupSection>
 
-      <SetupSection title="OS2L — DJ software beat link">
+      <SetupSection id="os2l" views={['settings']} title="OS2L, DJ software beat link">
         <div className="setup-row">
           <label className="settings-checkbox-row">
             <input
@@ -434,7 +473,7 @@ export function SetupPanel(): JSX.Element {
                 In VirtualDJ: Settings → Options, search <code>os2l</code>, set it to{' '}
                 <code>yes</code>
                 {status?.os2lDiscovery === 'bonjour'
-                  ? ' — this app is being advertised via Bonjour, so auto-detection should find it.'
+                  ? ' - this app is being advertised via Bonjour, so auto-detection should find it.'
                   : '.'}
               </li>
               <li>
@@ -443,23 +482,23 @@ export function SetupPanel(): JSX.Element {
                 or <code>{status?.os2lAddress ?? '…'}</code> from another machine.
               </li>
               <li>
-                <strong>Restart VirtualDJ</strong> — it only (re)connects on startup or when the
+                <strong>Restart VirtualDJ</strong> - it only (re)connects on startup or when the
                 os2l settings change. Then play a track.
               </li>
             </ol>
           </div>
         )}
         <p className="settings-hint">
-          OS2L streams the exact beat grid and BPM from your DJ software — the most accurate sync
+          OS2L streams the exact beat grid and BPM from your DJ software - the most accurate sync
           possible. While connected, the beat source badge in Perform shows <strong>OS2L</strong>{' '}
           and effects lock to the deck&rsquo;s bars and phrases.
         </p>
       </SetupSection>
 
-      <SetupSection title="Fixtures">
+      <SetupSection id="fixtures" title="Fixtures">
         {overlaps.length > 0 && (
           <div className="banner error">
-            {overlaps.length} address overlap{overlaps.length === 1 ? '' : 's'} — highlighted fixtures
+            {overlaps.length} address overlap{overlaps.length === 1 ? '' : 's'} - highlighted fixtures
             share DMX channels.
           </div>
         )}
@@ -502,7 +541,7 @@ export function SetupPanel(): JSX.Element {
                     <input
                       className="inline-input narrow"
                       value={patch.group ?? ''}
-                      placeholder="—"
+                      placeholder="-"
                       onChange={(e) =>
                         updateProject((p) => ({
                           ...p,
@@ -566,7 +605,7 @@ export function SetupPanel(): JSX.Element {
             {project.patches.length === 0 && (
               <tr>
                 <td colSpan={7} className="setup-empty">
-                  No fixtures patched yet — add your rig below.
+                  No fixtures patched yet - add your rig below.
                 </td>
               </tr>
             )}
@@ -621,7 +660,7 @@ export function SetupPanel(): JSX.Element {
       </SetupSection>
 
       <SetupSection title="Custom fixture profiles" help={<>Fixture not in the built-in list? Build its profile from the DMX channel chart in its
-          manual — works for any brand and any channel mode.</>}>
+          manual. Works for any brand and any channel mode.</>}>
         {project.customFixtures.length > 0 && (
           <div className="scene-list">
             {project.customFixtures.map((profile) => (
@@ -682,47 +721,104 @@ export function SetupPanel(): JSX.Element {
         )}
       </SetupSection>
 
-      <SetupSection title="Scenes">
-        <div className="scene-list">
-          {project.scenes.map((scene) => (
-            <div key={scene.id} className="scene-list-item">
-              <span className="scene-dot" style={{ background: scene.uiColor }} />
-              <span className="scene-name">{scene.name}</span>
-              <button className="text-button" onClick={() => setEditingSceneId(scene.id)}>
-                Edit
-              </button>
-              <button
-                className="text-button"
-                onClick={() =>
-                  updateProject((p) => {
-                    const copy = structuredClone(p.scenes.find((s) => s.id === scene.id)!)
-                    copy.id = `scene-${Date.now()}`
-                    copy.name = `${copy.name} Copy`
-                    return { ...p, scenes: [...p.scenes, copy] }
-                  })
-                }
-              >
-                Duplicate
-              </button>
-              <button
-                className="text-button danger"
-                onClick={() =>
-                  updateProject((p) => ({
-                    ...p,
-                    scenes: p.scenes.filter((s) => s.id !== scene.id),
-                    padSceneIds: p.padSceneIds.map((id) => (id === scene.id ? null : id)),
-                    autopilot: {
-                      ...p.autopilot,
-                      sceneIds: p.autopilot.sceneIds.filter((id) => id !== scene.id)
-                    }
-                  }))
-                }
-              >
-                Delete
-              </button>
-            </div>
-          ))}
+      <SetupSection id="scenes" title="Scenes">
+        <div className="section-toolbar">
+          <ViewModeToggle
+            mode={project.sceneViewMode}
+            onChange={(m) => updateProject((p) => ({ ...p, sceneViewMode: m }))}
+          />
         </div>
+        {project.sceneViewMode === 'grid' ? (
+          <div className="scene-tile-grid">
+            {project.scenes.map((scene) => (
+              <div
+                key={scene.id}
+                className="scene-tile"
+                style={{ '--tile': scene.uiColor } as React.CSSProperties}
+                onClick={() => setEditingSceneId(scene.id)}
+              >
+                <div className="scene-tile-name">
+                  {scene.name}
+                  {scene.momentary && <span className="tile-hold">HOLD</span>}
+                </div>
+                <div className="scene-tile-actions" onClick={(e) => e.stopPropagation()}>
+                  <button
+                    className="tile-icon-btn"
+                    title="Duplicate"
+                    onClick={() =>
+                      updateProject((p) => {
+                        const copy = structuredClone(p.scenes.find((s) => s.id === scene.id)!)
+                        copy.id = `scene-${Date.now()}`
+                        copy.name = `${copy.name} Copy`
+                        return { ...p, scenes: [...p.scenes, copy] }
+                      })
+                    }
+                  >
+                    ⧉
+                  </button>
+                  <button
+                    className="tile-icon-btn danger"
+                    title="Delete"
+                    onClick={() =>
+                      updateProject((p) => ({
+                        ...p,
+                        scenes: p.scenes.filter((s) => s.id !== scene.id),
+                        padSceneIds: p.padSceneIds.map((id) => (id === scene.id ? null : id)),
+                        autopilot: {
+                          ...p.autopilot,
+                          sceneIds: p.autopilot.sceneIds.filter((id) => id !== scene.id)
+                        }
+                      }))
+                    }
+                  >
+                    ✕
+                  </button>
+                </div>
+              </div>
+            ))}
+          </div>
+        ) : (
+          <div className="scene-list">
+            {project.scenes.map((scene) => (
+              <div key={scene.id} className="scene-list-item">
+                <span className="scene-dot" style={{ background: scene.uiColor }} />
+                <span className="scene-name">{scene.name}</span>
+                <button className="text-button" onClick={() => setEditingSceneId(scene.id)}>
+                  Edit
+                </button>
+                <button
+                  className="text-button"
+                  onClick={() =>
+                    updateProject((p) => {
+                      const copy = structuredClone(p.scenes.find((s) => s.id === scene.id)!)
+                      copy.id = `scene-${Date.now()}`
+                      copy.name = `${copy.name} Copy`
+                      return { ...p, scenes: [...p.scenes, copy] }
+                    })
+                  }
+                >
+                  Duplicate
+                </button>
+                <button
+                  className="text-button danger"
+                  onClick={() =>
+                    updateProject((p) => ({
+                      ...p,
+                      scenes: p.scenes.filter((s) => s.id !== scene.id),
+                      padSceneIds: p.padSceneIds.map((id) => (id === scene.id ? null : id)),
+                      autopilot: {
+                        ...p.autopilot,
+                        sceneIds: p.autopilot.sceneIds.filter((id) => id !== scene.id)
+                      }
+                    }))
+                  }
+                >
+                  Delete
+                </button>
+              </div>
+            ))}
+          </div>
+        )}
         <button
           className="secondary-button"
           onClick={() =>
@@ -757,8 +853,8 @@ export function SetupPanel(): JSX.Element {
         )}
       </SetupSection>
 
-      <SetupSection title="Smart Mode" help={<>The automatic VJ: while enabled (button in Perform), a scene keeps playing as long as the
-          track keeps its mood — it rotates only when the music genuinely changes (level or bass/high
+      <SetupSection id="smart" title="Smart Mode" help={<>The automatic VJ: while enabled (button in Perform), a scene keeps playing as long as the
+          track keeps its mood - it rotates only when the music genuinely changes (level or bass/high
           balance shifting for a few seconds), always on a phrase boundary. Build-ups ramp intensity,
           a Peak scene slams on the drop, breakdowns fall to a Chill scene, and stripped-back
           bass-and-drums passages prefer beat-reactive looks. Uses the OS2L beat grid plus live audio
@@ -810,7 +906,7 @@ export function SetupPanel(): JSX.Element {
             Auto-assign
           </button>
         </div>
-        <div className="smart-pool-grid">
+        <div className={`smart-pool-grid ${project.sceneViewMode}`}>
           {project.scenes
             .filter((s) => !s.momentary)
             .map((scene) => {
@@ -836,7 +932,7 @@ export function SetupPanel(): JSX.Element {
                       })
                     }}
                   >
-                    <option value="">— not used —</option>
+                    <option value="">- not used -</option>
                     <option value="chill">Chill (breakdowns)</option>
                     <option value="main">Main (steady rotation)</option>
                     <option value="peak">Peak (drops)</option>
@@ -847,7 +943,7 @@ export function SetupPanel(): JSX.Element {
         </div>
       </SetupSection>
 
-      <SetupSection title="Autopilot" help={<>Simple rotation (no audio analysis): cycles the checked scenes every N bars. For the
+      <SetupSection id="autopilot" title="Autopilot" help={<>Simple rotation (no audio analysis): cycles the checked scenes every N bars. For the
           full automatic show, use Smart Mode instead.</>}>
         <div className="setup-row">
           <label>Every</label>
@@ -880,7 +976,7 @@ export function SetupPanel(): JSX.Element {
             Shuffle order
           </label>
         </div>
-        <div className="smart-pool-grid">
+        <div className={`smart-pool-grid ${project.sceneViewMode}`}>
           {project.scenes
             .filter((s) => !s.momentary)
             .map((scene) => {
@@ -913,8 +1009,8 @@ export function SetupPanel(): JSX.Element {
         </div>
       </SetupSection>
 
-      <SetupSection title="MIDI controller" help={<>Bind pads on any MIDI controller to scenes and live controls. Click a Learn button, hit a
-          pad, done — click again to cancel a learn.</>}>
+      <SetupSection id="midi" views={['settings']} title="MIDI controller" help={<>Bind pads on any MIDI controller to scenes and live controls. Click a Learn button, hit a
+          pad, done - click again to cancel a learn.</>}>
         <div className="setup-row">
           <button className="secondary-button" onClick={() => setMidiModalOpen(true)}>
             Assign MIDI Pads…
@@ -922,7 +1018,7 @@ export function SetupPanel(): JSX.Element {
           <span className="settings-hint" style={{ margin: 0 }}>
             {midiPads.deviceNames().length > 0
               ? `Connected: ${midiPads.deviceNames().join(', ')}`
-              : 'No MIDI device detected — plug one in and it appears automatically.'}
+              : 'No MIDI device detected - plug one in and it appears automatically.'}
           </span>
         </div>
 
@@ -962,7 +1058,7 @@ export function SetupPanel(): JSX.Element {
                   return (
                     <div key={entry.label} className="midi-learn-row">
                       <span>{entry.label}</span>
-                      <span className="midi-note">{boundNote ? `note ${boundNote}` : '—'}</span>
+                      <span className="midi-note">{boundNote ? `note ${boundNote}` : '-'}</span>
                       <button
                         className={isLearning ? 'primary-button' : 'secondary-button'}
                         onClick={() => {
@@ -1000,8 +1096,29 @@ export function SetupPanel(): JSX.Element {
         )}
       </SetupSection>
 
-      <SetupSection title="Performance pads" help={<>Assign scenes to the 4×4 pad grid used in Perform mode.</>}>
-        <div className="pad-assign-grid">
+      <SetupSection id="pads" title="Performance pads" help={<>Assign scenes to the pad grid used in Perform mode. Change the grid size here; you can
+          also reassign any pad live from Perform with its corner menu.</>}>
+        <div className="setup-row">
+          <label>Grid size</label>
+          <div className="segmented">
+            {[8, 16, 32, 64].map((count) => (
+              <button
+                key={count}
+                className={project.padCount === count ? 'active' : ''}
+                onClick={() =>
+                  updateProject((p) => ({
+                    ...p,
+                    padCount: count,
+                    padSceneIds: resizePadArray(p.padSceneIds, count)
+                  }))
+                }
+              >
+                {count}
+              </button>
+            ))}
+          </div>
+        </div>
+        <div className={`pad-assign-grid cols-${padColumns(project.padCount)}`}>
           {project.padSceneIds.map((sceneId, index) => (
             <select
               key={index}
@@ -1014,7 +1131,7 @@ export function SetupPanel(): JSX.Element {
                 })
               }
             >
-              <option value="">— empty —</option>
+              <option value="">empty</option>
               {project.scenes.map((scene) => (
                 <option key={scene.id} value={scene.id}>
                   {scene.name}
@@ -1025,5 +1142,6 @@ export function SetupPanel(): JSX.Element {
         </div>
       </SetupSection>
     </div>
+    </SetupViewContext.Provider>
   )
 }

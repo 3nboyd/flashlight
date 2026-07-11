@@ -3,13 +3,13 @@ import type { ChannelSpec, FixtureDefinition } from './types'
 /**
  * Built-in generic fixture profiles covering the DJ/small-club market.
  * These mirror the de-facto channel layouts that budget fixtures (and the
- * "basic" DMX modes of name brands like Chauvet DJ / ADJ) ship with —
+ * "basic" DMX modes of name brands like Chauvet DJ / ADJ) ship with -
  * e.g. multi-head wave bars follow the Intimidator Wave pattern of
  * per-head tilt plus per-head color. Pick the profile that matches your
  * fixture's mode (channel counts are in every fixture's manual); anything
  * not covered can be defined in Setup → Custom fixture profiles.
  *
- * Laser profiles are deliberately minimal (on/off + pattern) — beam
+ * Laser profiles are deliberately minimal (on/off + pattern) - beam
  * steering is left to the fixture's own safety-tested modes on purpose.
  */
 
@@ -175,7 +175,7 @@ export const BUILTIN_FIXTURES: FixtureDefinition[] = [
   // ---- Multi-head bars ----
   {
     id: 'generic-moving-bar-5head-27ch',
-    name: '5-Head Moving Beam Bar (27ch: D/Strobe + 5×Tilt + 5×RGBW) — Wave style',
+    name: '5-Head Moving Beam Bar (27ch: D/Strobe + 5×Tilt + 5×RGBW) - Wave style',
     kind: 'movingBar',
     channels: [
       { role: 'dimmer' },

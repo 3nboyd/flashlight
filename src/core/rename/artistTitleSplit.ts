@@ -6,7 +6,7 @@
  * from the rest of the user's library. No AI/network lookup involved.
  */
 
-const SEPARATOR_PATTERN = /\s+[-–—]\s+/
+const SEPARATOR_PATTERN = /\s+[-–-]\s+/
 
 export interface ArtistTitleCandidate {
   artist?: string

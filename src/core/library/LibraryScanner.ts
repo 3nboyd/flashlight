@@ -46,7 +46,7 @@ export interface ScanResult {
  * Reads standard tag metadata for every audio file under a folder (any
  * supported format), and additionally reads embedded Serato hotcues/loops
  * for MP3 files. FLAC/M4A Serato cue reading is not yet implemented (see
- * README roadmap) — those files still get full standard-metadata scanning.
+ * README roadmap) - those files still get full standard-metadata scanning.
  */
 export async function scanLibraryFolder(rootDir: string): Promise<ScanResult> {
   const files = await findAudioFiles(rootDir)

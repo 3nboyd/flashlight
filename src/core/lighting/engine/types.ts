@@ -42,11 +42,11 @@ export interface EffectSettings {
 export interface SceneTarget {
   /**
    * Which fixtures this target drives:
-   *  - 'all' — every patched fixture
-   *  - 'kind:<kind>' — every fixture of that kind (e.g. 'kind:fog',
+   *  - 'all' - every patched fixture
+   *  - 'kind:<kind>' - every fixture of that kind (e.g. 'kind:fog',
    *    'kind:laser', 'kind:movingHead') wherever it's patched, so presets
    *    work on any rig without group setup
-   *  - anything else — a group tag from FixturePatch.group
+   *  - anything else - a group tag from FixturePatch.group
    */
   group: string
   color: Rgbw
@@ -66,7 +66,7 @@ export interface Scene {
   targets: SceneTarget[]
   /**
    * Momentary scenes fire while held (mouse down / MIDI note held) and
-   * restore the previous look on release — bursts like fog or strobe hits.
+   * restore the previous look on release - bursts like fog or strobe hits.
    */
   momentary?: boolean
 }
@@ -79,13 +79,25 @@ export interface LiveOverrides {
   strobe: boolean
   /** Replaces every target's color while set. */
   colorOverride: Rgbw | null
+  /** Knob: shifts every fixture's pan left/right, -1..1 (0 = no shift). */
+  panOffset: number
+  /** Knob: shifts every fixture's tilt up/down, -1..1. */
+  tiltOffset: number
+  /** Knob: multiplies movement-effect speed, 0.25..4 (1 = as programmed). */
+  movementSpeed: number
+  /** Knob: scales audio-reactive intensity, 0..2 (1 = as programmed). */
+  reactivity: number
 }
 
 export const DEFAULT_OVERRIDES: LiveOverrides = {
   masterDimmer: 1,
   blackout: false,
   strobe: false,
-  colorOverride: null
+  colorOverride: null,
+  panOffset: 0,
+  tiltOffset: 0,
+  movementSpeed: 1,
+  reactivity: 1
 }
 
 export interface AutopilotSettings {
@@ -151,8 +163,12 @@ export interface LightingProject {
   stageProps: StageProp[]
   /** User-defined fixture profiles, merged over the built-in library. */
   customFixtures: import('../fixtures/types').FixtureDefinition[]
-  /** Scene ids assigned to the 4x4 performance pad grid (null = empty pad). */
+  /** Scene ids assigned to the performance pad grid (null = empty pad). */
   padSceneIds: (string | null)[]
+  /** Number of performance pads: 8, 16, 32, or 64. */
+  padCount: number
+  /** Scene / pool lists render as a grid of tiles or a compact list. */
+  sceneViewMode: 'grid' | 'list'
   autopilot: AutopilotSettings
   smart: SmartSettings
   output: OutputSettings
@@ -167,6 +183,8 @@ export function defaultLightingProject(): LightingProject {
     stageProps: [{ id: 'booth-default', type: 'booth', x: 0.5 }],
     customFixtures: [],
     padSceneIds: new Array(16).fill(null),
+    padCount: 16,
+    sceneViewMode: 'grid',
     autopilot: { enabled: false, barsPerScene: 8, sceneIds: [] },
     smart: { pools: { chill: [], main: [], peak: [] }, phrasesPerScene: 2, sensitivity: 0.5 },
     output: {

@@ -150,7 +150,7 @@ export function FileExplorerView(): JSX.Element {
       <header className="view-header">
         <h1>File Explorer</h1>
         <p className="view-subtitle">
-          Move, copy, and organize your crates — connected databases stay in sync automatically.
+          Move, copy, and organize your crates - connected databases stay in sync automatically.
         </p>
       </header>
 
@@ -235,7 +235,7 @@ export function FileExplorerView(): JSX.Element {
                       {entry.isDirectory ? '📁 ' : '🎵 '}
                       {entry.name}
                     </td>
-                    <td>{entry.isDirectory ? '—' : formatBytes(entry.sizeBytes)}</td>
+                    <td>{entry.isDirectory ? '-' : formatBytes(entry.sizeBytes)}</td>
                     <td>{new Date(entry.modifiedAt).toLocaleDateString()}</td>
                   </tr>
                 ))}

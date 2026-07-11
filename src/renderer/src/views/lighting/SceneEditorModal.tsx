@@ -9,7 +9,7 @@ import { EFFECT_CATALOG, EffectIcon } from './EffectIcons'
 
 /**
  * Full-screen scene editor. The live stage renders on the left with the
- * edited scene auto-previewing, so every change is visible instantly —
+ * edited scene auto-previewing, so every change is visible instantly -
  * program the whole show with no lights connected. Targets are cards on
  * the right: pick fixtures from an icon grid (types you've actually
  * patched, plus your groups), choose effects from animated cards, edit
@@ -101,7 +101,7 @@ export function SceneEditorModal({ scene, onChange, onClose }: SceneEditorModalP
         <div className="scene-modal-stage">
           <div className="scene-modal-stage-header">
             <span className="settings-hint" style={{ margin: 0 }}>
-              Live preview — every change shows here instantly
+              Live preview - every change shows here instantly
             </span>
           </div>
           <StageVisualizer height={Math.min(440, window.innerHeight - 320)} />

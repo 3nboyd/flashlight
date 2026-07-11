@@ -1,7 +1,7 @@
 /**
  * MIDI pad-controller support via Web MIDI (no native deps). Note-on
  * messages trigger mapped actions; a "learn" mode captures the next note
- * and binds it. Mappings persist in localStorage keyed by note number —
+ * and binds it. Mappings persist in localStorage keyed by note number -
  * they're device-agnostic on purpose, since DJs swap controllers.
  */
 
@@ -12,6 +12,7 @@ export type PadAction =
   | { kind: 'tap' }
   | { kind: 'resync' }
   | { kind: 'autopilot' }
+  | { kind: 'manual' }
 
 export interface MidiMapping {
   /** MIDI note number → action. */

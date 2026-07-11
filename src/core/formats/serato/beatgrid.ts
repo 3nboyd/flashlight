@@ -3,14 +3,14 @@ import { BinaryWriter } from '@core/binary/BinaryWriter'
 
 /**
  * Parses/serializes the "Serato BeatGrid" GEOB tag content (raw binary, NOT
- * base64 — unlike Markers2). Structure per community reverse-engineering:
+ * base64 - unlike Markers2). Structure per community reverse-engineering:
  * a 2-byte version header, a BE uint32 marker count, that many markers, and
  * a 1-byte footer.
  *
  * CONFIDENCE NOTE: this layout is less independently verified than
  * markers2.ts's. It round-trips correctly against our own synthetic
  * fixtures but has not been validated against a real Serato-written file.
- * Treat beatgrid writes as best-effort — everything else in this app
+ * Treat beatgrid writes as best-effort - everything else in this app
  * degrades gracefully (hotcues/loops are unaffected) if a beatgrid write
  * is skipped, and every write is backed up first regardless.
  */

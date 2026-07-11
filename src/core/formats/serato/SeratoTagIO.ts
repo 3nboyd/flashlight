@@ -21,12 +21,12 @@ interface GeneralObjectFrame {
  * clobbering "Serato Autotags" while intending to update "Serato
  * Markers2"). We work around this by reading the full simplified tag set,
  * manually replacing only the matching-by-contentDescription GEOB entry,
- * and writing the full tag set back — every other frame (including
+ * and writing the full tag set back - every other frame (including
  * non-Serato GEOB frames, cover art, and standard metadata) passes through
  * untouched.
  *
  * FLAC (Vorbis comments) and MP4/M4A (custom atoms) are not yet supported
- * here — see README roadmap. Callers should check file extension first.
+ * here - see README roadmap. Callers should check file extension first.
  */
 
 export interface ParsedSeratoTags {
@@ -68,7 +68,7 @@ function replaceGeneralObject(
 /**
  * Overwrites the Markers2 (hotcues/loops/color/bpm-lock) GEOB frame,
  * leaving every other frame in the file untouched. Callers are responsible
- * for backing up the file first (see BackupManager) — this function does
+ * for backing up the file first (see BackupManager) - this function does
  * not snapshot on its own, so it can also be used for restores/tests.
  */
 export function writeMarkers2Tags(filePath: string, entries: Markers2Entry[]): void {

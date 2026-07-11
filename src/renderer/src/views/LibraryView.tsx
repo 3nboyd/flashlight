@@ -6,7 +6,7 @@ import { Banner } from '../components/Banner'
 import './LibraryView.css'
 
 function formatDuration(seconds?: number): string {
-  if (!seconds) return '—'
+  if (!seconds) return '-'
   const m = Math.floor(seconds / 60)
   const s = Math.round(seconds % 60)
   return `${m}:${s.toString().padStart(2, '0')}`
@@ -117,13 +117,13 @@ export function LibraryView(): JSX.Element {
                       <td className="track-title-cell" title={track.filePath}>
                         {track.metadata.title || track.filePath.split(/[/\\]/).pop()}
                       </td>
-                      <td>{track.metadata.artist || '—'}</td>
-                      <td>{track.metadata.album || '—'}</td>
-                      <td>{track.metadata.genre || '—'}</td>
-                      <td>{track.metadata.bpm ? Math.round(track.metadata.bpm) : '—'}</td>
+                      <td>{track.metadata.artist || '-'}</td>
+                      <td>{track.metadata.album || '-'}</td>
+                      <td>{track.metadata.genre || '-'}</td>
+                      <td>{track.metadata.bpm ? Math.round(track.metadata.bpm) : '-'}</td>
                       <td>{formatDuration(track.metadata.durationSeconds)}</td>
-                      <td>{track.cues.length || '—'}</td>
-                      <td>{track.loops.length || '—'}</td>
+                      <td>{track.cues.length || '-'}</td>
+                      <td>{track.loops.length || '-'}</td>
                       <td>
                         {track.sources.serato && <span className="source-badge serato">Serato</span>}
                         {track.sources.virtualDj && <span className="source-badge vdj">VDJ</span>}

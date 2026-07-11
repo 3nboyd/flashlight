@@ -3,7 +3,7 @@ import type { Rgbw, Scene } from './types'
 /**
  * Built-in preset collection, organized for the preset browser. Presets
  * lean on kind-targeting ('kind:movingHead', 'kind:fog', …) so they light
- * the right fixtures on ANY rig with zero group setup — a fog preset finds
+ * the right fixtures on ANY rig with zero group setup - a fog preset finds
  * your fog machine wherever it's patched. Layered presets combine several
  * targets (pars + movers + strobes) into one look.
  *
@@ -175,7 +175,7 @@ export const PRESET_LIBRARY: PresetCategory[] = [
   },
   {
     name: 'Energy',
-    description: 'Peak-time pressure — drops, builds, and full-rig moments.',
+    description: 'Peak-time pressure - drops, builds, and full-rig moments.',
     scenes: [
       scene('preset-peak-time', 'Peak Time', '#ef4444', [
         {
@@ -265,7 +265,7 @@ export const PRESET_LIBRARY: PresetCategory[] = [
   },
   {
     name: 'FX & Bursts',
-    description: 'Kind-aware effects — they find your fog, lasers, UV, and strobes automatically. HOLD pads fire while pressed.',
+    description: 'Kind-aware effects - they find your fog, lasers, UV, and strobes automatically. HOLD pads fire while pressed.',
     scenes: [
       scene(
         'preset-fog-burst',

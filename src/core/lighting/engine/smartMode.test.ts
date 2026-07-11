@@ -157,7 +157,7 @@ describe('SmartModeEngine', () => {
     runner.run(30, feat(0.55, 0.5, 0.3)) // settle a mood reference
     expect(runner.sceneChanges()).toEqual([])
     // Same overall loudness but very different spectral balance: the top
-    // end opens up (hats/melody) while bass thins — a section change.
+    // end opens up (hats/melody) while bass thins - a section change.
     runner.run(25, feat(0.3, 0.5, 0.75))
     const changes = runner.sceneChanges()
     expect(changes.length).toBeGreaterThanOrEqual(1)

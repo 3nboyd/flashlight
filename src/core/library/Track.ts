@@ -1,7 +1,7 @@
 /**
  * The app's platform-agnostic track model. Cue/loop positions are stored in
  * milliseconds (Serato's native precision) and hotcue/loop `index` is
- * always 0-based — format-specific writers/readers translate to each
+ * always 0-based - format-specific writers/readers translate to each
  * platform's own numbering and units at the boundary (see cueMapping.ts).
  */
 

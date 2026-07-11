@@ -10,8 +10,8 @@ import { StageVisualizer } from './StageVisualizer'
  * performance pad. Kind-aware presets (fog, lasers, strobes…) work on
  * whatever rig is patched.
  *
- * With `showStage` (Setup mode) it opens as a split view — live stage on
- * the left, presets on the right — so auditioning a preset shows exactly
+ * With `showStage` (Setup mode) it opens as a split view - live stage on
+ * the left, presets on the right - so auditioning a preset shows exactly
  * what it does without leaving the browser. Perform mode keeps the compact
  * drawer, since the mini stage is already on screen behind it.
  */
@@ -58,7 +58,7 @@ export function PresetBrowser({ onClose, showStage = false }: PresetBrowserProps
           <div className="preset-stage-pane-header">
             <h2>Live Stage</h2>
             <span className="settings-hint" style={{ margin: 0 }}>
-              Hit Play on any preset — this is exactly what your rig does.
+              Hit Play on any preset - this is exactly what your rig does.
             </span>
           </div>
           <StageVisualizer height={Math.min(520, window.innerHeight - 200)} />

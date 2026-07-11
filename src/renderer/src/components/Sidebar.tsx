@@ -1,22 +1,25 @@
 import type { JSX } from 'react'
+import { SETUP_SECTIONS, SETTINGS_SECTIONS } from '../views/lighting/lightingSections'
 import './Sidebar.css'
 
 /**
  * Two-level navigation: a slim icon rail picks the app section (Music
  * library tools, Lighting, Camera, Settings), and a contextual sidebar
- * lists that section's views — so Lighting gets Perform/Setup right in the
- * sidebar instead of tabs buried in a header.
+ * lists that section's views. Lighting's Setup and Settings views expand
+ * into jump-links for their sections, so nothing needs a long scroll.
  */
 
 export type Section = 'music' | 'lighting' | 'camera' | 'settings'
 
 export type MusicViewId = 'library' | 'explorer' | 'rename' | 'backups'
-export type LightingViewId = 'perform' | 'setup'
+export type LightingViewId = 'perform' | 'setup' | 'settings'
 
 export interface NavState {
   section: Section
   musicView: MusicViewId
   lightingView: LightingViewId
+  /** Section anchor to scroll to within the current lighting view. */
+  lightingSection: string | null
 }
 
 function Icon({ path, size = 20 }: { path: string; size?: number }): JSX.Element {
@@ -57,18 +60,13 @@ const MUSIC_ITEMS: { id: MusicViewId; label: string; icon: JSX.Element }[] = [
   { id: 'backups', label: 'Backups', icon: <Icon path="M12 8v4l3 2M20 12a8 8 0 1 1-3-6.2" size={18} /> }
 ]
 
-const LIGHTING_ITEMS: { id: LightingViewId; label: string; icon: JSX.Element }[] = [
-  {
-    id: 'perform',
-    label: 'Perform',
-    icon: <Icon path="M5 4h4v16H5zM15 4h4v16h-4zM9 9h6M9 15h6" size={18} />
-  },
-  {
-    id: 'setup',
-    label: 'Setup',
-    icon: <Icon path="M4 21v-7M4 10V3M12 21v-9M12 8V3M20 21v-5M20 12V3M2 14h4M10 8h4M18 16h4" size={18} />
-  }
-]
+const PERFORM_ICON = <Icon path="M5 4h4v16H5zM15 4h4v16h-4zM9 9h6M9 15h6" size={18} />
+const SETUP_ICON = (
+  <Icon path="M4 21v-7M4 10V3M12 21v-9M12 8V3M20 21v-5M20 12V3M2 14h4M10 8h4M18 16h4" size={18} />
+)
+const SETTINGS_ICON = (
+  <Icon path="M10.3 4.3a1.94 1.94 0 0 1 3.4 0l.3.6a1.94 1.94 0 0 0 2.4.9l.6-.2a1.94 1.94 0 0 1 2.4 2.4l-.2.6a1.94 1.94 0 0 0 .9 2.4l.6.3a1.94 1.94 0 0 1 0 3.4l-.6.3a1.94 1.94 0 0 0-.9 2.4l.2.6a1.94 1.94 0 0 1-2.4 2.4l-.6-.2a1.94 1.94 0 0 0-2.4.9l-.3.6a1.94 1.94 0 0 1-3.4 0l-.3-.6a1.94 1.94 0 0 0-2.4-.9l-.6.2a1.94 1.94 0 0 1-2.4-2.4l.2-.6a1.94 1.94 0 0 0-.9-2.4l-.6-.3a1.94 1.94 0 0 1 0-3.4l.6-.3a1.94 1.94 0 0 0 .9-2.4l-.2-.6a1.94 1.94 0 0 1 2.4-2.4l.6.2a1.94 1.94 0 0 0 2.4-.9l.3-.6ZM12 15a3 3 0 1 0 0-6 3 3 0 0 0 0 6Z" size={18} />
+)
 
 interface SidebarProps {
   nav: NavState
@@ -84,7 +82,7 @@ export function Sidebar({ nav, onChange }: SidebarProps): JSX.Element {
           <button
             key={item.id}
             className={`nav-rail-item${nav.section === item.id ? ' active' : ''}`}
-            title={item.disabled ? `${item.label} — coming soon` : item.label}
+            title={item.disabled ? `${item.label} - coming soon` : item.label}
             disabled={item.disabled}
             onClick={() => onChange({ ...nav, section: item.id })}
           >
@@ -122,16 +120,55 @@ export function Sidebar({ nav, onChange }: SidebarProps): JSX.Element {
       {nav.section === 'lighting' && (
         <nav className="nav-context">
           <div className="nav-context-title">Lighting</div>
-          {LIGHTING_ITEMS.map((item) => (
-            <button
-              key={item.id}
-              className={`sidebar-nav-item${nav.lightingView === item.id ? ' active' : ''}`}
-              onClick={() => onChange({ ...nav, lightingView: item.id })}
-            >
-              {item.icon}
-              <span>{item.label}</span>
-            </button>
-          ))}
+          <button
+            className={`sidebar-nav-item${nav.lightingView === 'perform' ? ' active' : ''}`}
+            onClick={() => onChange({ ...nav, lightingView: 'perform', lightingSection: null })}
+          >
+            {PERFORM_ICON}
+            <span>Perform</span>
+          </button>
+
+          <button
+            className={`sidebar-nav-item${nav.lightingView === 'setup' ? ' active' : ''}`}
+            onClick={() => onChange({ ...nav, lightingView: 'setup', lightingSection: null })}
+          >
+            {SETUP_ICON}
+            <span>Setup</span>
+          </button>
+          {nav.lightingView === 'setup' && (
+            <div className="nav-subitems">
+              {SETUP_SECTIONS.map((s) => (
+                <button
+                  key={s.id}
+                  className="nav-subitem"
+                  onClick={() => onChange({ ...nav, lightingView: 'setup', lightingSection: s.id })}
+                >
+                  {s.label}
+                </button>
+              ))}
+            </div>
+          )}
+
+          <button
+            className={`sidebar-nav-item${nav.lightingView === 'settings' ? ' active' : ''}`}
+            onClick={() => onChange({ ...nav, lightingView: 'settings', lightingSection: null })}
+          >
+            {SETTINGS_ICON}
+            <span>Settings</span>
+          </button>
+          {nav.lightingView === 'settings' && (
+            <div className="nav-subitems">
+              {SETTINGS_SECTIONS.map((s) => (
+                <button
+                  key={s.id}
+                  className="nav-subitem"
+                  onClick={() => onChange({ ...nav, lightingView: 'settings', lightingSection: s.id })}
+                >
+                  {s.label}
+                </button>
+              ))}
+            </div>
+          )}
         </nav>
       )}
     </div>

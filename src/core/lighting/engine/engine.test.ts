@@ -32,7 +32,7 @@ const beatAt = (ms: number, bpm = 120): ReturnType<BeatClock['positionAt']> => {
   return clock.positionAt(ms)
 }
 
-describe('renderTick — basic rendering', () => {
+describe('renderTick - basic rendering', () => {
   it('writes RGB color scaled by dimmer for a 3ch par (no dimmer channel)', () => {
     const fixtures = [patched('p1', 'generic-rgb-3ch', 1, 10)]
     const universes = renderTick({
@@ -97,7 +97,7 @@ describe('renderTick — basic rendering', () => {
   })
 })
 
-describe('renderTick — live overrides', () => {
+describe('renderTick - live overrides', () => {
   const fixtures = [patched('p1', 'generic-rgb-3ch', 1, 1)]
   const scene = staticScene({ r: 255, g: 255, b: 255 })
 
@@ -170,7 +170,7 @@ describe('renderTick — live overrides', () => {
   })
 })
 
-describe('renderTick — beat-locked effects', () => {
+describe('renderTick - beat-locked effects', () => {
   it('beatPulse is bright on the beat and decays into the off-beat', () => {
     const fixtures = [patched('p1', 'generic-rgb-4ch', 1, 1)]
     const scene: Scene = {

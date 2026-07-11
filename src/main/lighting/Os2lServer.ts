@@ -50,7 +50,7 @@ function localIpv4(): string | null {
  * Discovery is best-effort: a minimal built-in mDNS responder answers
  * DNS-SD queries for _os2l._tcp so VirtualDJ finds us automatically on
  * most networks. If multicast is blocked (some venue WiFi, VPNs), VDJ can
- * be pointed manually via its `os2lNetworkAddress` setting — the Setup UI
+ * be pointed manually via its `os2lNetworkAddress` setting - the Setup UI
  * shows the exact ip:port to enter.
  */
 export class Os2lServer {

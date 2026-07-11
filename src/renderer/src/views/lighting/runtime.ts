@@ -60,6 +60,6 @@ export async function autoStartAudioIfConfigured(settings: {
   try {
     await startAudioListening(settings.deviceId)
   } catch {
-    // Device unplugged/renamed — user can re-pick it in Setup.
+    // Device unplugged/renamed - user can re-pick it in Setup.
   }
 }

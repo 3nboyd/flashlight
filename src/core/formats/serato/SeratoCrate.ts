@@ -5,7 +5,7 @@ const CRATE_VERSION = '1.0/Serato ScratchLive Crate'
 /**
  * Parses/serializes a single Serato `.crate` file (Subcrates/<Name>.crate).
  * Nested crates are represented by '%%' in the filename (e.g.
- * "Techno%%Peak Time.crate" is the "Peak Time" sub-crate of "Techno") —
+ * "Techno%%Peak Time.crate" is the "Peak Time" sub-crate of "Techno") -
  * that's a filesystem naming convention, not something encoded in the file
  * content, so it's handled by callers working with paths, not here.
  */

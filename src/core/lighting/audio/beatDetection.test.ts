@@ -127,7 +127,7 @@ describe('BeatClock', () => {
     const clock = new BeatClock()
     clock.setBpm(128, 0)
     clock.tap(0)
-    clock.tap(10) // 6000 BPM — ignored
+    clock.tap(10) // 6000 BPM - ignored
     expect(clock.getBpm()).toBe(128)
   })
 })

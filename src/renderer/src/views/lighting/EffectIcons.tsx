@@ -4,7 +4,7 @@ import type { EffectType } from '@core/lighting/engine/types'
 /**
  * Animated effect icons for the scene editor's effect picker. Each is a
  * small CSS-animated vignette that *demonstrates* the effect rather than
- * describing it — a pulsing dot for Beat Pulse, an orbiting beam for
+ * describing it - a pulsing dot for Beat Pulse, an orbiting beam for
  * Circle, a running light for Chase. Animations live in lighting.css.
  */
 

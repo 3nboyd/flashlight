@@ -14,7 +14,7 @@ import type { BeatPosition } from './BeatClock'
  *   - drop:   slam a "peak" scene at full intensity for one phrase
  *   - break:  fall to a "chill" scene at reduced intensity
  *
- * Detection is deterministic — EMAs, slopes, and thresholds, no ML — so
+ * Detection is deterministic - EMAs, slopes, and thresholds, no ML - so
  * behavior is predictable and unit-testable. All timings derive from the
  * frame rate; thresholds scale with one user-facing sensitivity knob.
  */
@@ -41,7 +41,7 @@ export interface SmartConfig {
    * How each main-pool scene reads visually, derived from its effects:
    * 'reactive' scenes (bass/audio/beat-driven) suit stripped-back,
    * bass-and-drums passages; 'flow' scenes (color cycles, movement) suit
-   * fuller musical sections. Optional — without it, picks are round-robin.
+   * fuller musical sections. Optional - without it, picks are round-robin.
    */
   sceneCharacter?: Record<string, 'reactive' | 'flow'>
 }
@@ -211,7 +211,7 @@ export class SmartModeEngine {
         intensity = 1
         // Mood-hold rotation: a scene keeps playing while the track keeps
         // doing the same thing. Rotation happens on a phrase boundary only
-        // once the mood (level + spectral balance) has genuinely shifted —
+        // once the mood (level + spectral balance) has genuinely shifted -
         // or when the max hold elapses as a fallback.
         // Keep re-anchoring the reference while the long EMAs warm up (or
         // right after a phase change), so settling baselines don't read as
@@ -257,8 +257,8 @@ export class SmartModeEngine {
         }
 
         // Direct drop: a bass slam out of nowhere (hard cut-drops without a
-        // long telegraphed build). Requires a genuine transient — bass far
-        // above even the SHORT-term level — so smooth ramps don't trigger it.
+        // long telegraphed build). Requires a genuine transient - bass far
+        // above even the SHORT-term level - so smooth ramps don't trigger it.
         const slamThreshold = Math.max(0.6, this.emaShort * 1.6, this.emaLong * (1.35 / sens))
         if (
           this.seconds(framesInPhase) > 4 &&
@@ -295,7 +295,7 @@ export class SmartModeEngine {
         // Tension ramp: 80% → 100% intensity across the build.
         intensity = 0.8 + 0.2 * buildProgress
 
-        // The drop: bass SLAMS — a transient leap above even the short-term
+        // The drop: bass SLAMS - a transient leap above even the short-term
         // level, not just the ramp itself crossing the lagging baseline.
         const dropThreshold = Math.max(0.5, this.emaShort * 1.2, this.emaLong * (1.35 / sens))
         const dropReady =

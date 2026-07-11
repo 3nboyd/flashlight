@@ -56,6 +56,14 @@ export function registerLightingHandlers(): void {
     lighting.renameStage(id, name)
   )
   ipcMain.handle('lighting:deleteStage', async (_e, id: string) => lighting.deleteStage(id))
+  ipcMain.handle('lighting:manualPulse', async () => {
+    lighting.manualPulse()
+    return lighting.getStatus()
+  })
+  ipcMain.handle('lighting:clearManual', async () => {
+    lighting.clearManual()
+    return lighting.getStatus()
+  })
 
   // High-frequency fire-and-forget stream (no reply needed).
   ipcMain.on('lighting:audioFeatures', (_e, features: AudioFeatures & { flux?: number }) => {

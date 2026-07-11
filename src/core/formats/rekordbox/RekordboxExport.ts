@@ -2,14 +2,14 @@ import { escapeXml } from '../virtualdj/xmlUtil'
 import { pathToFileUri } from './fileUri'
 
 /**
- * Generates a rekordbox.xml — the standard bridge for getting hotcues/loops
+ * Generates a rekordbox.xml - the standard bridge for getting hotcues/loops
  * onto a CDJ, since writing Pioneer's proprietary USB .pdb format directly
  * is still an unsolved problem even for the Mixxx project. The user imports
  * this file into rekordbox and syncs it to USB from there.
  *
  * This is a from-scratch export (not a surgical patch of an existing file
  * like the Serato/VirtualDJ writers), so a straightforward XML builder is
- * safe here — rekordbox re-imports and normalizes the file itself.
+ * safe here - rekordbox re-imports and normalizes the file itself.
  */
 
 export interface RekordboxCue {

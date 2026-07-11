@@ -2,7 +2,7 @@ import { BinaryReader } from '@core/binary/BinaryReader'
 import { BinaryWriter } from '@core/binary/BinaryWriter'
 
 /**
- * Parses/serializes the decoded content of the "Serato Markers2" tag —
+ * Parses/serializes the decoded content of the "Serato Markers2" tag -
  * hotcues, loops, track color and BPM-lock, embedded directly in the audio
  * file (GEOB frame for MP3, Vorbis comment for FLAC, custom atom for
  * MP4/M4A). The GEOB/atom/comment *envelope* is handled elsewhere; this
@@ -32,7 +32,7 @@ export interface LoopEntry {
   locked: boolean
   name: string
   /** Middle bytes (loop color / reserved flags) whose exact semantics are
-   *  unconfirmed — preserved verbatim rather than reinterpreted. */
+   *  unconfirmed - preserved verbatim rather than reinterpreted. */
   reservedMiddle: Buffer
 }
 
@@ -103,7 +103,7 @@ function parseEntryPayload(typeName: string, payload: Buffer): Markers2Entry {
         return { kind: 'unknown', typeName, raw: payload }
     }
   } catch {
-    // Payload didn't match our assumed layout for this type — preserve raw
+    // Payload didn't match our assumed layout for this type - preserve raw
     // rather than risk emitting a malformed entry.
     return { kind: 'unknown', typeName, raw: payload }
   }

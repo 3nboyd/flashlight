@@ -21,6 +21,25 @@ import { Os2lServer, type DiscoveryMode } from './Os2lServer'
 
 export type BeatSource = 'os2l' | 'audio' | 'manual'
 
+/** Grows/shrinks the pad-scene array to exactly `count`, preserving assignments. */
+export function resizePads(pads: (string | null)[], count: number): (string | null)[] {
+  const next = pads.slice(0, count)
+  while (next.length < count) next.push(null)
+  return next
+}
+
+/** Vivid, well-separated colors the manual trigger steps through. */
+const MANUAL_PALETTE: { r: number; g: number; b: number }[] = [
+  { r: 255, g: 0, b: 0 },
+  { r: 0, g: 100, b: 255 },
+  { r: 0, g: 255, b: 60 },
+  { r: 255, g: 0, b: 200 },
+  { r: 255, g: 160, b: 0 },
+  { r: 150, g: 0, b: 255 },
+  { r: 0, g: 230, b: 255 },
+  { r: 255, g: 255, b: 255 }
+]
+
 export interface LightingStatus {
   running: boolean
   activeSceneId: string | null
@@ -42,6 +61,8 @@ export interface LightingStatus {
   smartEnabled: boolean
   smartPhase: SmartPhase
   smartBuildProgress: number
+  /** Manual trigger currently overriding color/movement. */
+  manualActive: boolean
 }
 
 /**
@@ -75,6 +96,12 @@ export class LightingHost {
   private smartIntensity = 1
   private smartPhase: SmartPhase = 'steady'
   private smartBuildProgress = 0
+  // Manual trigger pad: each tap cycles a color and jumps movers, so the DJ
+  // can drive changes by hand (following the melody), then clear to revert.
+  private manualIndex = 0
+  private manualColor: { r: number; g: number; b: number } | null = null
+  private manualPan = 0
+  private manualTilt = 0
 
   constructor(userDataDir: string) {
     this.legacyProjectPath = join(userDataDir, 'lighting-project.json')
@@ -114,21 +141,30 @@ export class LightingHost {
     project.scenes = [...PRESET_SCENES]
     const padIds = PRESET_SCENES.map((s) => s.id).slice(0, 16)
     project.padSceneIds = [...padIds, ...new Array(Math.max(0, 16 - padIds.length)).fill(null)]
-    project.smart.pools = defaultSmartPools(project.scenes.map((s) => s.id))
+    const pools = defaultSmartPools(project.scenes.map((s) => s.id))
+    project.smart.pools = pools
+    // Autopilot defaults to the calm/flow looks (main + chill), never the
+    // peak/strobe/blinder scenes, so out of the box it stays tasteful.
+    project.autopilot.sceneIds = [...pools.main, ...pools.chill]
     return project
   }
 
   private normalizeProject(parsed: Partial<LightingProject>): LightingProject {
     const defaults = defaultLightingProject()
-    return {
+    const project = {
       ...defaults,
       ...parsed,
       output: { ...defaults.output, ...parsed.output },
       os2l: { ...defaults.os2l, ...parsed.os2l },
       audio: { ...defaults.audio, ...parsed.audio },
       smart: { ...defaults.smart, ...parsed.smart },
-      stageProps: parsed.stageProps ?? defaults.stageProps
+      stageProps: parsed.stageProps ?? defaults.stageProps,
+      padCount: parsed.padCount ?? 16,
+      sceneViewMode: parsed.sceneViewMode ?? 'grid'
     } as LightingProject
+    // Keep the pad array sized to padCount (older stages saved 16).
+    project.padSceneIds = resizePads(project.padSceneIds ?? [], project.padCount)
+    return project
   }
 
   async load(): Promise<LightingProject> {
@@ -322,18 +358,34 @@ export class LightingHost {
     return this.project.scenes.find((s) => s.id === this.activeSceneId) ?? null
   }
 
+  /**
+   * The live overrides actually sent to the engine: the user's knobs/faders,
+   * plus the manual-trigger color+movement, plus Smart Mode's intensity
+   * shaping.
+   */
+  private effectiveOverrides(): LiveOverrides {
+    let o = this.overrides
+    if (this.manualColor) {
+      o = {
+        ...o,
+        colorOverride: o.colorOverride ?? this.manualColor,
+        panOffset: Math.max(-1, Math.min(1, o.panOffset + this.manualPan)),
+        tiltOffset: Math.max(-1, Math.min(1, o.tiltOffset + this.manualTilt))
+      }
+    }
+    if (this.smartEnabled && this.smartIntensity < 1) {
+      o = { ...o, masterDimmer: o.masterDimmer * this.smartIntensity }
+    }
+    return o
+  }
+
   private tick(): void {
     const nowMs = Date.now()
     const audioFresh = nowMs - this.lastAudioAtMs < 500
-    // Smart mode shapes intensity on top of the user's master fader.
-    const overrides =
-      this.smartEnabled && this.smartIntensity < 1
-        ? { ...this.overrides, masterDimmer: this.overrides.masterDimmer * this.smartIntensity }
-        : this.overrides
     const universes = renderTick({
       fixtures: this.resolveFixtures(),
       scene: this.currentScene(nowMs),
-      overrides,
+      overrides: this.effectiveOverrides(),
       beat: this.clock.positionAt(nowMs),
       audio: audioFresh ? this.audio : SILENT_FEATURES,
       nowMs
@@ -355,7 +407,7 @@ export class LightingHost {
   }
 
   /**
-   * Renders the current look on demand for the stage visualizer — computed
+   * Renders the current look on demand for the stage visualizer - computed
    * fresh rather than tapping the output loop, so the preview works
    * identically whether DMX output is running or stopped (programming
    * without lights connected).
@@ -366,7 +418,7 @@ export class LightingHost {
     const universes = renderTick({
       fixtures: this.resolveFixtures(),
       scene: this.currentScene(nowMs),
-      overrides: this.overrides,
+      overrides: this.effectiveOverrides(),
       beat: this.clock.positionAt(nowMs),
       audio: audioFresh ? this.audio : SILENT_FEATURES,
       nowMs
@@ -387,6 +439,34 @@ export class LightingHost {
   setOverrides(partial: Partial<LiveOverrides>): LiveOverrides {
     this.overrides = { ...this.overrides, ...partial }
     return this.overrides
+  }
+
+  /**
+   * Manual trigger: each call advances to the next vivid color and jumps
+   * every moving fixture to a fresh position. Driven by the DJ's own taps
+   * so the show can follow the melody, not just the beat grid.
+   */
+  manualPulse(): void {
+    this.manualIndex += 1
+    this.manualColor = MANUAL_PALETTE[this.manualIndex % MANUAL_PALETTE.length]
+    const hash = (salt: number): number => {
+      const v = Math.abs(Math.sin(this.manualIndex * 12.9898 + salt)) * 43758.5453
+      return (v - Math.floor(v)) * 1.6 - 0.8 // -0.8..0.8
+    }
+    this.manualPan = hash(1)
+    this.manualTilt = hash(7)
+  }
+
+  /** Release manual trigger and return to the automatic look. */
+  clearManual(): void {
+    this.manualIndex = 0
+    this.manualColor = null
+    this.manualPan = 0
+    this.manualTilt = 0
+  }
+
+  isManualActive(): boolean {
+    return this.manualColor !== null
   }
 
   tapTempo(): number {
@@ -437,7 +517,7 @@ export class LightingHost {
     }
     if (typeof features.flux === 'number') {
       this.bpmEstimator.addFrame(features.flux)
-      // Audio-derived tempo only steers the clock when OS2L isn't — the DJ
+      // Audio-derived tempo only steers the clock when OS2L isn't - the DJ
       // software's own grid is always more accurate than our estimation.
       if (this.bpmFollowsAudio && this.currentBeatSource(Date.now()) !== 'os2l') {
         const bpm = this.bpmEstimator.estimate()
@@ -471,7 +551,8 @@ export class LightingHost {
       os2lDiscovery: this.os2l?.getDiscoveryMode() ?? 'off',
       smartEnabled: this.smartEnabled,
       smartPhase: this.smartPhase,
-      smartBuildProgress: this.smartBuildProgress
+      smartBuildProgress: this.smartBuildProgress,
+      manualActive: this.manualColor !== null
     }
   }
 

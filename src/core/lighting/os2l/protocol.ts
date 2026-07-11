@@ -3,10 +3,10 @@
  * runs a TCP server advertised over DNS-SD as "_os2l._tcp"; the audio
  * software (VirtualDJ etc.) connects and streams short JSON messages.
  *
- * Key message — beat:
+ * Key message - beat:
  *   {"evt":"beat","change":false,"pos":42,"bpm":120.0,"strength":0.8}
  * `pos` is a running beat counter aligned so pos % 4 == 0 on measure
- * boundaries and pos % 32 == 0 on 8-bar phrase boundaries — which lets our
+ * boundaries and pos % 32 == 0 on 8-bar phrase boundaries - which lets our
  * bar/phrase-locked effects line up exactly with the DJ software's grid.
  *
  * Messages arrive as concatenated JSON objects over TCP with no guaranteed
@@ -103,7 +103,7 @@ export class Os2lStreamParser {
           }
           this.objectStart = -1
         } else if (this.depth < 0) {
-          this.depth = 0 // stray brace — resynchronize
+          this.depth = 0 // stray brace - resynchronize
         }
       }
     }

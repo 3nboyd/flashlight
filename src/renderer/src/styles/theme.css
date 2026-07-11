@@ -1,7 +1,7 @@
 /*
   Base dark palette. Accent tokens (--accent, --accent-hover, --accent-active,
   --accent-muted, --accent-text) are set at runtime on :root by ThemeProvider
-  from the user's chosen accent color — see utils/color.ts.
+  from the user's chosen accent color - see utils/color.ts.
 */
 :root {
   color-scheme: dark;

@@ -12,7 +12,7 @@ describe('splitArtistTitle', () => {
 
   it('splits on en/em dashes too', () => {
     expect(splitArtistTitle('Daft Punk – One More Time').artist).toBe('Daft Punk')
-    expect(splitArtistTitle('Daft Punk — One More Time').artist).toBe('Daft Punk')
+    expect(splitArtistTitle('Daft Punk - One More Time').artist).toBe('Daft Punk')
   })
 
   it('treats a title with no separator as title-only', () => {

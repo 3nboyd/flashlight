@@ -14,7 +14,7 @@ describe('SeratoTagIO (real MP3 file via node-id3)', () => {
   beforeEach(async () => {
     dir = await mkdtemp(join(tmpdir(), 'djapp-id3-'))
     filePath = join(dir, 'track.mp3')
-    // Minimal placeholder "audio" bytes — node-id3 doesn't validate MPEG frame sync.
+    // Minimal placeholder "audio" bytes - node-id3 doesn't validate MPEG frame sync.
     await writeFile(filePath, Buffer.from([0xff, 0xfb, 0x90, 0x00, ...new Array(64).fill(0)]))
     NodeID3.write(
       {

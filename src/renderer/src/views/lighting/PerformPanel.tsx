@@ -9,7 +9,49 @@ import {
   stopAudioListening
 } from './runtime'
 import { StageVisualizer } from './StageVisualizer'
-import type { Rgbw } from '@core/lighting/engine/types'
+import { Knob } from './Knob'
+import { padColumns } from './padGrid'
+import type { Rgbw, Scene } from '@core/lighting/engine/types'
+
+function PadAssignMenu({
+  scenes,
+  currentId,
+  onPick,
+  onClear,
+  onClose
+}: {
+  scenes: Scene[]
+  currentId?: string
+  onPick: (id: string) => void
+  onClear?: () => void
+  onClose: () => void
+}): JSX.Element {
+  return (
+    <>
+      <div className="pad-menu-backdrop" onClick={(e) => { e.stopPropagation(); onClose() }} />
+      <div className="pad-menu" onClick={(e) => e.stopPropagation()}>
+        <div className="pad-menu-title">Assign scene</div>
+        <div className="pad-menu-scroll">
+          {scenes.map((scene) => (
+            <button
+              key={scene.id}
+              className={`pad-menu-item${scene.id === currentId ? ' current' : ''}`}
+              onClick={() => onPick(scene.id)}
+            >
+              <span className="pad-menu-dot" style={{ background: scene.uiColor }} />
+              {scene.name}
+            </button>
+          ))}
+        </div>
+        {onClear && (
+          <button className="pad-menu-item danger" onClick={onClear}>
+            Clear pad
+          </button>
+        )}
+      </div>
+    </>
+  )
+}
 
 const OVERRIDE_COLORS: { name: string; color: Rgbw | null; css: string }[] = [
   { name: 'Off', color: null, css: 'transparent' },
@@ -30,10 +72,24 @@ export function PerformPanel(): JSX.Element {
   const [midiDevices, setMidiDevices] = useState<string[]>([])
   const [stageExpanded, setStageExpanded] = useState(false)
   const [audioRunning, setAudioRunning] = useState(audioAnalyzer.isRunning())
+  /** Pad index whose reassign menu is open (null = none). */
+  const [reassignPad, setReassignPad] = useState<number | null>(null)
   /** Scene to restore when a momentary (HOLD) pad is released. */
   const momentaryRestoreRef = useRef<string | null>(null)
 
   useEffect(() => onAudioStateChange(setAudioRunning), [])
+
+  const assignPad = useCallback(
+    (index: number, sceneId: string | null) => {
+      updateProject((p) => {
+        const padSceneIds = [...p.padSceneIds]
+        padSceneIds[index] = sceneId
+        return { ...p, padSceneIds }
+      })
+      setReassignPad(null)
+    },
+    [updateProject]
+  )
 
   const pressMomentary = useCallback(
     (sceneId: string) => {
@@ -102,6 +158,9 @@ export function PerformPanel(): JSX.Element {
             }))
           }
           break
+        case 'manual':
+          if (isNoteOn) window.djCompanion.lighting.manualPulse()
+          break
       }
     },
     [triggerScene, setOverrides, pressMomentary, releaseMomentary]
@@ -122,7 +181,7 @@ export function PerformPanel(): JSX.Element {
       <div className="perform-toprow">
         <div className="bpm-block">
           <div className={`bpm-value${beatFlash ? ' on-beat' : ''}`}>
-            {status ? status.bpm.toFixed(1) : '—'}
+            {status ? status.bpm.toFixed(1) : '-'}
           </div>
           <div className="bpm-label">BPM</div>
           <div
@@ -185,7 +244,7 @@ export function PerformPanel(): JSX.Element {
           </div>
         </div>
 
-        <div className="stage-mini" title="Live stage preview — click to expand">
+        <div className="stage-mini" title="Live stage preview - click to expand">
           <StageVisualizer height={172} onBackgroundClick={() => setStageExpanded(true)} />
           <span className="stage-mini-hint">click to expand</span>
         </div>
@@ -193,7 +252,7 @@ export function PerformPanel(): JSX.Element {
         <div className="autopilot-block">
           <button
             className={`smart-button${status?.smartEnabled ? ' on' : ''}`}
-            title="Smart Mode: automatic scene changes on phrases, builds, drops, and breakdowns — driven by OS2L + live audio"
+            title="Smart Mode: automatic scene changes on phrases, builds, drops, and breakdowns - driven by OS2L + live audio"
             onClick={() => window.djCompanion.lighting.setSmartMode(!status?.smartEnabled)}
           >
             ⚡ SMART
@@ -262,26 +321,125 @@ export function PerformPanel(): JSX.Element {
         </div>
       </div>
 
-      <div className="pad-grid">
+      <div className={`pad-grid cols-${padColumns(project.padCount)}`}>
         {project.padSceneIds.map((sceneId, index) => {
           const scene = sceneId ? project.scenes.find((s) => s.id === sceneId) : null
           const isActive = scene !== null && scene !== undefined && scene.id === activeSceneId
           const momentary = scene?.momentary === true
+          if (!scene) {
+            return (
+              <button
+                key={index}
+                className="pad empty"
+                title="Assign a scene"
+                onClick={() => setReassignPad(index)}
+              >
+                <span className="pad-plus">+</span>
+                {reassignPad === index && (
+                  <PadAssignMenu
+                    scenes={project.scenes}
+                    onPick={(id) => assignPad(index, id)}
+                    onClose={() => setReassignPad(null)}
+                  />
+                )}
+              </button>
+            )
+          }
           return (
-            <button
+            <div
               key={index}
-              className={`pad${isActive ? ' active' : ''}${scene ? '' : ' empty'}`}
-              style={scene ? ({ '--pad-color': scene.uiColor } as React.CSSProperties) : undefined}
-              onClick={momentary ? undefined : () => scene && triggerScene(isActive ? null : scene.id)}
-              onMouseDown={momentary && scene ? () => pressMomentary(scene.id) : undefined}
+              className={`pad${isActive ? ' active' : ''}`}
+              style={{ '--pad-color': scene.uiColor } as React.CSSProperties}
+              onClick={momentary ? undefined : () => triggerScene(isActive ? null : scene.id)}
+              onMouseDown={momentary ? () => pressMomentary(scene.id) : undefined}
               onMouseUp={momentary ? releaseMomentary : undefined}
               onMouseLeave={momentary && isActive ? releaseMomentary : undefined}
             >
-              {scene ? scene.name : ''}
+              <span className="pad-name">{scene.name}</span>
               {momentary && <span className="hold-tag pad-hold">HOLD</span>}
-            </button>
+              <button
+                className="pad-menu-btn"
+                title="Reassign this pad"
+                onClick={(e) => {
+                  e.stopPropagation()
+                  setReassignPad(reassignPad === index ? null : index)
+                }}
+              >
+                <span />
+                <span />
+                <span />
+              </button>
+              {reassignPad === index && (
+                <PadAssignMenu
+                  scenes={project.scenes}
+                  currentId={scene.id}
+                  onPick={(id) => assignPad(index, id)}
+                  onClear={() => assignPad(index, null)}
+                  onClose={() => setReassignPad(null)}
+                />
+              )}
+            </div>
           )
         })}
+      </div>
+
+      <div className="perform-knobs">
+        <Knob
+          label="Pan"
+          value={overrides.panOffset}
+          min={-1}
+          max={1}
+          resetValue={0}
+          format={(v) => (Math.abs(v) < 0.02 ? 'center' : `${v > 0 ? 'R' : 'L'} ${Math.round(Math.abs(v) * 100)}`)}
+          onChange={(v) => setOverrides({ panOffset: v })}
+        />
+        <Knob
+          label="Tilt"
+          value={overrides.tiltOffset}
+          min={-1}
+          max={1}
+          resetValue={0}
+          format={(v) => (Math.abs(v) < 0.02 ? 'center' : `${v > 0 ? '↑' : '↓'} ${Math.round(Math.abs(v) * 100)}`)}
+          onChange={(v) => setOverrides({ tiltOffset: v })}
+        />
+        <Knob
+          label="Speed"
+          value={overrides.movementSpeed}
+          min={0.25}
+          max={4}
+          resetValue={1}
+          format={(v) => `${v.toFixed(2)}x`}
+          onChange={(v) => setOverrides({ movementSpeed: v })}
+        />
+        <Knob
+          label="Sensitivity"
+          value={overrides.reactivity}
+          min={0}
+          max={2}
+          resetValue={1}
+          format={(v) => `${Math.round(v * 100)}%`}
+          onChange={(v) => setOverrides({ reactivity: v })}
+        />
+        <button
+          className={`manual-pad${status?.manualActive ? ' active' : ''}`}
+          title="Tap on the melody: each hit changes color and moves the beams. Long-press or the ✕ returns to the automatic look."
+          onClick={() => window.djCompanion.lighting.manualPulse().then(refreshStatus)}
+        >
+          <span className="manual-pad-title">MANUAL</span>
+          <span className="manual-pad-sub">tap to change</span>
+          {status?.manualActive && (
+            <button
+              className="manual-clear"
+              title="Return to automatic"
+              onClick={(e) => {
+                e.stopPropagation()
+                window.djCompanion.lighting.clearManual().then(refreshStatus)
+              }}
+            >
+              ✕
+            </button>
+          )}
+        </button>
       </div>
 
       <div className="perform-bottombar">
@@ -340,7 +498,7 @@ export function PerformPanel(): JSX.Element {
             <div className="stage-overlay-header">
               <h2>Stage</h2>
               <span className="settings-hint" style={{ margin: 0 }}>
-                Drag fixtures to arrange your rig — up to the truss, down to the floor.
+                Drag fixtures to arrange your rig - up to the truss, down to the floor.
               </span>
               <button className="secondary-button" onClick={() => setStageExpanded(false)}>
                 Close (Esc)

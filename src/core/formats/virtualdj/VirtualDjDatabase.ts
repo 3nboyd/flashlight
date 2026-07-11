@@ -5,7 +5,7 @@ import { parseAttrs, parseChildren, formatAttrs, escapeXml, type XmlAttrs, type 
  * preserved as an exact substring of the original file (including
  * whitespace between entries); only Song blocks we explicitly modify are
  * regenerated, using VirtualDJ's required one-space/two-space indentation
- * convention — a generic XML pretty-printer's output is rejected by VDJ as
+ * convention - a generic XML pretty-printer's output is rejected by VDJ as
  * a corrupted database.
  */
 
@@ -32,7 +32,7 @@ function isHotcuePoi(attrs: XmlAttrs): boolean {
 
 /**
  * Note: this deliberately does NOT prefix the opening `<Song>` line with its
- * one-space indent — that indent is part of the original file's raw
+ * one-space indent - that indent is part of the original file's raw
  * whitespace between entries, which the caller preserves untouched and
  * splices this block directly after.
  */
@@ -116,7 +116,7 @@ export class VirtualDjDatabase {
       .sort((a, b) => a.num - b.num)
   }
 
-  /** Replaces only hotcue Poi entries (Num set, no Type) — beatgrid/automix Poi entries are left untouched. */
+  /** Replaces only hotcue Poi entries (Num set, no Type) - beatgrid/automix Poi entries are left untouched. */
   setHotcues(filePath: string, cues: VdjCue[]): boolean {
     const match = this.songSegments().find((s) => s.song.attrs.FilePath === filePath)
     if (!match) return false

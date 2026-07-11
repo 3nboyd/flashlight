@@ -26,7 +26,8 @@ function App(): JSX.Element {
   const [nav, setNav] = useState<NavState>({
     section: 'music',
     musicView: 'library',
-    lightingView: 'perform'
+    lightingView: 'perform',
+    lightingSection: null
   })
   const { load, loaded } = useSettingsStore()
 
@@ -42,7 +43,9 @@ function App(): JSX.Element {
     <div className="app-shell">
       <Sidebar nav={nav} onChange={setNav} />
       {nav.section === 'music' && <MusicRouter view={nav.musicView} />}
-      {nav.section === 'lighting' && <LightingView mode={nav.lightingView} />}
+      {nav.section === 'lighting' && (
+        <LightingView mode={nav.lightingView} scrollSection={nav.lightingSection} />
+      )}
       {nav.section === 'settings' && <SettingsView />}
     </div>
   )

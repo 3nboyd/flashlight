@@ -116,3 +116,28 @@
 .sidebar-nav-item.active svg {
   color: var(--accent);
 }
+
+.nav-subitems {
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+  margin: 1px 0 4px 4px;
+  padding-left: 18px;
+  border-left: 1px solid var(--border-subtle);
+}
+
+.nav-subitem {
+  -webkit-app-region: no-drag;
+  text-align: left;
+  background: transparent;
+  border: none;
+  border-radius: var(--radius-sm);
+  padding: 5px 8px;
+  font-size: 12px;
+  color: var(--text-tertiary);
+}
+
+.nav-subitem:hover {
+  background: var(--bg-hover);
+  color: var(--text-secondary);
+}

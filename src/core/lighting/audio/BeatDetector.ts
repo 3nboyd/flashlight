@@ -1,7 +1,7 @@
 /**
  * Deterministic beat detection: spectral-flux onset detection with an
  * adaptive threshold, plus BPM estimation by autocorrelating the onset
- * envelope. Pure math over numeric arrays — no Web Audio types — so the
+ * envelope. Pure math over numeric arrays - no Web Audio types - so the
  * whole thing is unit-testable in Node; the renderer feeds it magnitude
  * spectra from an AnalyserNode at a steady frame rate.
  */

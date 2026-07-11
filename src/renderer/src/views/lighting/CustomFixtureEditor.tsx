@@ -4,7 +4,7 @@ import type { ChannelRole, ChannelSpec, FixtureDefinition, FixtureKind } from '@
 /**
  * Builds a fixture profile from a DMX channel chart: one row per channel,
  * pick what each channel does. Covers any fixture whose manual lists its
- * channel assignments — which is all of them.
+ * channel assignments - which is all of them.
  */
 
 const KIND_OPTIONS: { value: FixtureKind; label: string }[] = [
@@ -152,7 +152,7 @@ export function CustomFixtureEditor({ existing, onSave, onCancel }: CustomFixtur
                       type="number"
                       min={1}
                       max={32}
-                      placeholder="—"
+                      placeholder="-"
                       value={channel.segment !== undefined ? channel.segment + 1 : ''}
                       onChange={(e) =>
                         updateChannel(index, {
@@ -161,7 +161,7 @@ export function CustomFixtureEditor({ existing, onSave, onCancel }: CustomFixtur
                       }
                     />
                   ) : (
-                    '—'
+                    '-'
                   )}
                 </td>
               )}
@@ -186,7 +186,7 @@ export function CustomFixtureEditor({ existing, onSave, onCancel }: CustomFixtur
                     onChange={(e) => updateChannel(index, { onValue: Number(e.target.value) })}
                   />
                 ) : (
-                  '—'
+                  '-'
                 )}
               </td>
               <td>

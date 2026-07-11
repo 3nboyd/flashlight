@@ -1,5 +1,5 @@
 /**
- * Minimal, purpose-built XML helpers for VirtualDJ's database.xml — NOT a
+ * Minimal, purpose-built XML helpers for VirtualDJ's database.xml - NOT a
  * general XML engine. A generic parser/serializer round-trip (e.g. via
  * fast-xml-parser's builder) reformats whitespace, and VirtualDJ rejects a
  * database.xml that doesn't use its exact convention: one-space indent for

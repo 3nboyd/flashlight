@@ -33,15 +33,25 @@ function hueToRgb(hue: number): Rgbw {
  * Computes what one fixture in a target should output at a given musical
  * position. Pure per-tick math: every animated quantity derives from the
  * beat position, audio features, or wall-clock ms, never from mutable
- * accumulated state — so ticks are deterministic and testable.
+ * accumulated state - so ticks are deterministic and testable.
  */
+interface EffectModifiers {
+  /** Multiplies movement-effect speed (knob), 1 = as programmed. */
+  movementSpeed: number
+  /** Scales audio-reactive intensity (knob), 1 = as programmed. */
+  reactivity: number
+}
+
+const NO_MODIFIERS: EffectModifiers = { movementSpeed: 1, reactivity: 1 }
+
 function applyEffect(
   target: SceneTarget,
   effect: EffectSettings | undefined,
   fixtureIndex: number,
   fixtureCount: number,
   beat: BeatPosition,
-  audio: AudioFeatures
+  audio: AudioFeatures,
+  mod: EffectModifiers = NO_MODIFIERS
 ): FixtureOutput {
   const base: FixtureOutput = {
     color: target.color,
@@ -52,7 +62,9 @@ function applyEffect(
   }
   if (!effect || effect.type === 'static') return base
 
-  const beats = effect.beats ?? 4
+  // Movement effects sweep faster/slower with the speed knob; the divisor
+  // shrinks the beat window so the geometry cycles quicker.
+  const beats = (effect.beats ?? 4) / Math.max(0.05, mod.movementSpeed)
   const palette = effect.colors && effect.colors.length > 0 ? effect.colors : [target.color]
 
   switch (effect.type) {
@@ -62,7 +74,7 @@ function applyEffect(
       return { ...base, dimmer: target.dimmer * (0.15 + 0.85 * envelope) }
     }
     case 'breathe': {
-      // Slow sine swell across the cycle — never fully dark.
+      // Slow sine swell across the cycle - never fully dark.
       const swell = 0.5 - 0.5 * Math.cos((beat.beat / beats) * 2 * Math.PI)
       return { ...base, dimmer: target.dimmer * (0.25 + 0.75 * swell) }
     }
@@ -101,9 +113,9 @@ function applyEffect(
     case 'strobe':
       return { ...base, strobing: true, color: palette[0], dimmer: target.dimmer }
     case 'audioLevel':
-      return { ...base, dimmer: target.dimmer * Math.min(1, audio.rms * 1.4) }
+      return { ...base, dimmer: target.dimmer * Math.min(1, audio.rms * 1.4 * mod.reactivity) }
     case 'bassPulse':
-      return { ...base, dimmer: target.dimmer * Math.min(1, audio.bass * 1.3) }
+      return { ...base, dimmer: target.dimmer * Math.min(1, audio.bass * 1.3 * mod.reactivity) }
     case 'movementCircle': {
       const amplitude = (effect.amplitude ?? 0.5) * 127
       // Phase-offset across the group so multiple heads (or the segments of
@@ -127,7 +139,7 @@ function applyEffect(
       }
     }
     case 'movementFigure8': {
-      // Lissajous 2:1 — the classic infinity trace.
+      // Lissajous 2:1 - the classic infinity trace.
       const amplitude = (effect.amplitude ?? 0.5) * 127
       const spread = fixtureCount > 1 ? (fixtureIndex / fixtureCount) * Math.PI : 0
       const angle = (beat.beat / beats) * 2 * Math.PI + spread
@@ -146,7 +158,7 @@ function applyEffect(
     }
     case 'movementRandom': {
       // Ballyhoo: each head jumps to a new pseudo-random position every N
-      // beats — deterministic per (step, fixture) so ticks agree.
+      // beats - deterministic per (step, fixture) so ticks agree.
       const amplitude = (effect.amplitude ?? 0.5) * 127
       const step = Math.floor(beat.beat / beats)
       const hashOf = (salt: number): number => {
@@ -187,6 +199,12 @@ export function renderTick(options: {
   const { fixtures, scene, beat, nowMs } = options
   const overrides = options.overrides ?? DEFAULT_OVERRIDES
   const audio = options.audio ?? SILENT_FEATURES
+  const mod: EffectModifiers = {
+    movementSpeed: overrides.movementSpeed ?? 1,
+    reactivity: overrides.reactivity ?? 1
+  }
+  const panShift = (overrides.panOffset ?? 0) * 127
+  const tiltShift = (overrides.tiltOffset ?? 0) * 127
 
   const universes = new Map<number, Universe>()
   const universeFor = (n: number): Universe => {
@@ -219,7 +237,7 @@ export function renderTick(options: {
         const target = targets[targets.length - 1]
         const groupFixtures = fixtures.filter((f) => targetMatches(target, f))
         const indexInGroup = groupFixtures.findIndex((f) => f.patch.id === fixture.patch.id)
-        output = applyEffect(target, target.effect, indexInGroup, groupFixtures.length, beat, audio)
+        output = applyEffect(target, target.effect, indexInGroup, groupFixtures.length, beat, audio, mod)
 
         if (segments > 1) {
           let segmentBase = 0
@@ -229,7 +247,7 @@ export function renderTick(options: {
           const totalSegments = groupFixtures.reduce((sum, f) => sum + segmentCount(f.definition), 0)
           for (let s = 0; s < segments; s++) {
             segmentOutputs.push(
-              applyEffect(target, target.effect, segmentBase + s, totalSegments, beat, audio)
+              applyEffect(target, target.effect, segmentBase + s, totalSegments, beat, audio, mod)
             )
           }
         }
@@ -246,6 +264,14 @@ export function renderTick(options: {
       }
       if (overrides.colorOverride && !overrides.blackout && next.dimmer > 0) {
         next = { ...next, color: overrides.colorOverride }
+      }
+      // Knob pan/tilt shift moves every moving fixture together.
+      if (panShift !== 0 || tiltShift !== 0) {
+        next = {
+          ...next,
+          pan: Math.max(0, Math.min(255, next.pan + panShift)),
+          tilt: Math.max(0, Math.min(255, next.tilt + tiltShift))
+        }
       }
       return next
     }
@@ -291,7 +317,7 @@ function writeFixture(
     const segDimmer = Math.max(0, Math.min(1, segOut.dimmer)) * master
     // Fixtures without a dedicated dimmer channel bake intensity into color.
     // Segmented color channels additionally carry their own segment's
-    // intensity (relative — the master dimmer channel handles the rest), so
+    // intensity (relative - the master dimmer channel handles the rest), so
     // chases/pulses can differ per cell despite one shared dimmer.
     const colorScale =
       (channel.segment !== undefined

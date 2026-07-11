@@ -1,5 +1,5 @@
 /**
- * Deterministic filename/title cleaning rules — no AI involved, matching
+ * Deterministic filename/title cleaning rules - no AI involved, matching
  * how tools like Lexicon do "Smart Fixes". Each rule is intentionally
  * conservative (only strips well-known download-site junk) and reports
  * whether it changed anything, so the UI can show exactly what was applied
@@ -37,7 +37,7 @@ const MOJIBAKE_FIXES: Array<[string, string]> = [
   ['â€œ', '“'], // left double quote
   ['â€', '”'], // right double quote
   ['â€“', '–'], // en dash
-  ['â€”', '—'], // em dash
+  ['â€”', '-'], // em dash
   ['Ã©', 'é'], // é
   ['Ã¨', 'è'], // è
   ['Ã±', 'ñ'], // ñ
@@ -101,7 +101,7 @@ export const normalizeWhitespaceAndUnderscores: CleanerRule = {
   apply: (input) =>
     input
       .replace(/_/g, ' ')
-      .replace(/\s*[-–—]\s*[-–—]+\s*/g, ' - ')
+      .replace(/\s*[-–-]\s*[-–-]+\s*/g, ' - ')
       .replace(/\(\s*\)|\[\s*\]/g, '')
       .replace(/\s{2,}/g, ' ')
       .trim()

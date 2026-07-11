@@ -10,7 +10,7 @@ import { BinaryWriter } from '@core/binary/BinaryWriter'
  * We decode every record into a typed value when we recognize the shape,
  * but ALWAYS retain the original raw bytes too. Serialization prefers a
  * value we've explicitly modified, otherwise re-emits the original raw
- * bytes verbatim — so any tag we don't fully understand still round-trips
+ * bytes verbatim - so any tag we don't fully understand still round-trips
  * byte-for-byte instead of risking corruption.
  */
 

@@ -8,11 +8,19 @@ import { autoStartAudioIfConfigured } from './runtime'
 import './lighting.css'
 
 interface LightingViewProps {
-  /** Perform/Setup selection lives in the app sidebar. */
-  mode: 'perform' | 'setup'
+  /** Perform / Setup / Settings selection lives in the app sidebar. */
+  mode: 'perform' | 'setup' | 'settings'
+  /** Section anchor to scroll to (from a sidebar sub-nav click). */
+  scrollSection: string | null
 }
 
-export function LightingView({ mode }: LightingViewProps): JSX.Element {
+const TITLES: Record<LightingViewProps['mode'], string> = {
+  perform: 'Perform',
+  setup: 'Setup',
+  settings: 'Settings'
+}
+
+export function LightingView({ mode, scrollSection }: LightingViewProps): JSX.Element {
   const { load, loaded, status, startEngine, stopEngine, project } = useLightingStore()
   const [presetsOpen, setPresetsOpen] = useState(false)
 
@@ -24,6 +32,13 @@ export function LightingView({ mode }: LightingViewProps): JSX.Element {
     if (loaded) autoStartAudioIfConfigured(project.audio)
   }, [loaded, project.audio])
 
+  // Scroll to the requested section whenever the sidebar picks one.
+  useEffect(() => {
+    if (!scrollSection) return
+    const el = document.getElementById(`setup-sec-${scrollSection}`)
+    if (el) el.scrollIntoView({ behavior: 'smooth', block: 'start' })
+  }, [scrollSection, mode])
+
   if (!loaded) {
     return <div className="view" />
   }
@@ -33,14 +48,7 @@ export function LightingView({ mode }: LightingViewProps): JSX.Element {
   return (
     <div className="view lighting-view">
       <header className="view-header lighting-header">
-        <div>
-          <h1>{mode === 'perform' ? 'Perform' : 'Setup'}</h1>
-          <p className="view-subtitle">
-            {mode === 'perform'
-              ? 'Pads, live overrides, and the automatic show — synced to your decks.'
-              : 'Rig, stages, presets, connections, and automation.'}
-          </p>
-        </div>
+        <h1>{TITLES[mode]}</h1>
         <div className="lighting-header-controls">
           <button className="secondary-button" onClick={() => setPresetsOpen(true)}>
             Presets
@@ -56,12 +64,16 @@ export function LightingView({ mode }: LightingViewProps): JSX.Element {
 
       {status?.outputError && <Banner kind="error">DMX output error: {status.outputError}</Banner>}
       {running && project.patches.length === 0 && (
-        <Banner kind="info">Output is running but no fixtures are patched — add them in Setup.</Banner>
+        <Banner kind="info">Output is running but no fixtures are patched. Add them in Setup.</Banner>
       )}
 
-      {mode === 'perform' ? <PerformPanel /> : <SetupPanel />}
+      {mode === 'perform' && <PerformPanel />}
+      {mode === 'setup' && <SetupPanel view="setup" />}
+      {mode === 'settings' && <SetupPanel view="settings" />}
 
-      {presetsOpen && <PresetBrowser onClose={() => setPresetsOpen(false)} showStage={mode === 'setup'} />}
+      {presetsOpen && (
+        <PresetBrowser onClose={() => setPresetsOpen(false)} showStage={mode !== 'perform'} />
+      )}
     </div>
   )
 }

@@ -18,7 +18,7 @@ export interface SeratoTrackEntry {
  * Parses/serializes Serato's `database V2` file: a flat list of top-level
  * records (version header + one `otrk` container per track). We only need
  * to interpret enough of it to enumerate tracks by path and rewrite paths
- * when the user moves files via the app's file explorer — every other
+ * when the user moves files via the app's file explorer - every other
  * field on each otrk is preserved untouched via records.ts's raw fallback.
  */
 export class SeratoDatabase {

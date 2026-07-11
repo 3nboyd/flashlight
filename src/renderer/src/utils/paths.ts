@@ -14,7 +14,7 @@ export function dirName(path: string): string {
 }
 
 export function formatBytes(bytes: number): string {
-  if (bytes === 0) return '—'
+  if (bytes === 0) return '-'
   const units = ['B', 'KB', 'MB', 'GB']
   let value = bytes
   let unitIndex = 0

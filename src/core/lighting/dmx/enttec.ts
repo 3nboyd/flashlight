@@ -1,5 +1,5 @@
 /**
- * Enttec DMX USB Pro serial framing — the de-facto standard for USB-to-DMX
+ * Enttec DMX USB Pro serial framing - the de-facto standard for USB-to-DMX
  * interfaces (the genuine Pro and its many clones). Each API frame is:
  *
  *   0x7E                       start delimiter
@@ -9,7 +9,7 @@
  *   0xE7                       end delimiter
  *
  * NOTE: the original "Open DMX USB" (raw FTDI, no microcontroller) is NOT
- * supported — it requires bit-banged break timing that can't be done
+ * supported - it requires bit-banged break timing that can't be done
  * reliably from JavaScript. Pro-compatible interfaces handle timing on
  * their own MCU, which is exactly why they're the ones we target.
  */

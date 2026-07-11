@@ -70,7 +70,7 @@ export class BackupManager {
   }
 
   /**
-   * Deletes backups older than retentionDays, then — if still over budget —
+   * Deletes backups older than retentionDays, then - if still over budget -
    * deletes the oldest remaining backups until under maxTotalBytes. Always
    * keeps at least the single most recent backup per (category, originalPath)
    * pair so there is never zero recovery option for a tracked file.

@@ -185,7 +185,7 @@ export function readFixtureVisualState(
 /**
  * Default stage placement when a patch has no saved position: beam fixtures
  * (movers, strobes, lasers, wave bars, derbies, scanners) hang from the
- * truss; pars/washes/bars/UV/fog sit on the floor — the standard
+ * truss; pars/washes/bars/UV/fog sit on the floor - the standard
  * DJ/small-club arrangement. Each level spreads its fixtures evenly
  * left-to-right in patch order.
  */

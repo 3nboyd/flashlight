@@ -43,7 +43,7 @@ export class DmxSender {
       const ports = await SerialPort.list()
       return ports.map((p) => ({
         path: p.path,
-        label: [p.manufacturer, p.path].filter(Boolean).join(' — ')
+        label: [p.manufacturer, p.path].filter(Boolean).join(' - ')
       }))
     } catch {
       return []
@@ -162,7 +162,7 @@ export class DmxSender {
   /**
    * Deferred close: dgram sends are queued asynchronously, so closing the
    * socket synchronously right after sendUniverse() can drop the final
-   * datagram — which would leave fixtures frozen on the last look instead
+   * datagram - which would leave fixtures frozen on the last look instead
    * of receiving the blackout frame sent on shutdown.
    */
   close(delayMs = 150): void {

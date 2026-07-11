@@ -89,6 +89,8 @@ const api = {
       ipcRenderer.invoke('lighting:getUniverseSnapshot'),
     setSmartMode: (enabled: boolean): Promise<LightingStatus> =>
       ipcRenderer.invoke('lighting:setSmartMode', enabled),
+    manualPulse: (): Promise<LightingStatus> => ipcRenderer.invoke('lighting:manualPulse'),
+    clearManual: (): Promise<LightingStatus> => ipcRenderer.invoke('lighting:clearManual'),
     listStages: (): Promise<{ id: string; name: string; active: boolean }[]> =>
       ipcRenderer.invoke('lighting:listStages'),
     saveStageAs: (name: string): Promise<LightingProject> =>

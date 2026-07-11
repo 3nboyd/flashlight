@@ -27,7 +27,7 @@ function renderScene(fixtures: PatchedFixture[], scene: Scene): Uint8Array {
   return universes.get(1)!.toBuffer()
 }
 
-describe('readFixtureVisualState — engine write → visual read round-trip', () => {
+describe('readFixtureVisualState - engine write → visual read round-trip', () => {
   it('recovers color and intensity for a 3ch par (dimmer baked into color)', () => {
     const fixtures = [patched('p1', 'generic-rgb-3ch', 1)]
     const data = renderScene(fixtures, {
@@ -85,7 +85,7 @@ describe('readFixtureVisualState — engine write → visual read round-trip', (
     const data = new Uint8Array(512)
     data[0] = 255 // mode on → but mode isn't read as intensity...
     const state = readFixtureVisualState(data, laser[0])
-    // Laser without dimmer/rgb reads 0 intensity — verify no crash and green default logic:
+    // Laser without dimmer/rgb reads 0 intensity - verify no crash and green default logic:
     expect(state.kind).toBe('laser')
 
     const dimmerFixture = [patched('d1', 'generic-dimmer-1ch', 10)]

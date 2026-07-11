@@ -11,8 +11,8 @@ import type { PatchedFixture } from '@core/lighting/fixtures/types'
 import type { StageProp, StagePropType } from '@core/lighting/engine/types'
 
 /**
- * 2.5D live stage preview and rig playground. Draws the venue — top truss,
- * optional vertical trusses, speakers, DJ booth, risers — and renders every
+ * 2.5D live stage preview and rig playground. Draws the venue - top truss,
+ * optional vertical trusses, speakers, DJ booth, risers - and renders every
  * fixture's current output as additive light: beam cones, lens glows, floor
  * pools, strobe flicker, laser fans, derby clusters, per-cell bar beams.
  * Data comes from the engine's on-demand snapshot, so the preview is

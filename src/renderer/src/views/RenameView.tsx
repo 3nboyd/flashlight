@@ -89,7 +89,7 @@ export function RenameView(): JSX.Element {
       <header className="view-header">
         <h1>Rename</h1>
         <p className="view-subtitle">
-          Clean up download junk and fix artist/title order — nothing is renamed until you approve it.
+          Clean up download junk and fix artist/title order - nothing is renamed until you approve it.
         </p>
       </header>
 

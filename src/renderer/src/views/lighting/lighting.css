@@ -1230,22 +1230,37 @@
   flex: 1;
   display: grid;
   grid-template-columns: repeat(4, 1fr);
-  grid-template-rows: repeat(4, 1fr);
+  grid-auto-rows: 1fr;
   gap: 10px;
   min-height: 260px;
+}
+
+.pad-grid.cols-8 {
+  grid-template-columns: repeat(8, 1fr);
+  gap: 7px;
 }
 
 .pad {
   --pad-color: #444;
   position: relative;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  text-align: center;
   border: 1px solid var(--border-subtle);
   border-radius: var(--radius-lg);
   background: var(--bg-1);
   color: var(--text-primary);
   font-size: 14px;
   font-weight: 600;
-  overflow: hidden;
+  overflow: visible;
+  cursor: pointer;
   transition: transform 0.05s ease, box-shadow 0.1s ease;
+}
+
+.pad-grid.cols-8 .pad {
+  font-size: 11px;
+  border-radius: var(--radius-md);
 }
 
 .pad::before {
@@ -1254,6 +1269,14 @@
   inset: 0;
   background: var(--pad-color);
   opacity: 0.16;
+  border-radius: inherit;
+  pointer-events: none;
+}
+
+.pad-name {
+  position: relative;
+  padding: 4px;
+  z-index: 1;
 }
 
 .pad:not(.empty):hover {
@@ -1272,7 +1295,228 @@
 .pad.empty {
   background: transparent;
   border-style: dashed;
+  color: var(--text-tertiary);
+}
+
+.pad-plus {
+  font-size: 22px;
+  opacity: 0.5;
+}
+
+.pad.empty:hover .pad-plus {
+  opacity: 1;
+  color: var(--accent);
+}
+
+/* Three-dot reassign affordance, faint until hovered. */
+.pad-menu-btn {
+  position: absolute;
+  top: 6px;
+  right: 6px;
+  display: flex;
+  gap: 2px;
+  padding: 5px 4px;
+  background: transparent;
+  border: none;
+  border-radius: 5px;
+  opacity: 0.25;
+  transition: opacity 0.12s, background 0.12s;
+  z-index: 2;
+}
+
+.pad:hover .pad-menu-btn {
+  opacity: 0.7;
+}
+
+.pad-menu-btn:hover {
+  opacity: 1;
+  background: rgba(0, 0, 0, 0.4);
+}
+
+.pad-menu-btn span {
+  width: 3px;
+  height: 3px;
+  border-radius: 50%;
+  background: currentColor;
+}
+
+.pad-menu-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 30;
+}
+
+.pad-menu {
+  position: absolute;
+  top: 30px;
+  right: 6px;
+  z-index: 31;
+  width: 180px;
+  background: var(--bg-2);
+  border: 1px solid var(--border-strong);
+  border-radius: var(--radius-md);
+  box-shadow: var(--shadow-panel);
+  padding: 6px;
+  text-align: left;
   cursor: default;
+}
+
+.pad-menu-title {
+  font-size: 10px;
+  letter-spacing: 1px;
+  text-transform: uppercase;
+  color: var(--text-tertiary);
+  padding: 2px 6px 6px;
+}
+
+.pad-menu-scroll {
+  max-height: 220px;
+  overflow-y: auto;
+}
+
+.pad-menu-item {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+  padding: 6px 8px;
+  background: transparent;
+  border: none;
+  border-radius: var(--radius-sm);
+  color: var(--text-secondary);
+  font-size: 12px;
+  font-weight: 500;
+  text-align: left;
+}
+
+.pad-menu-item:hover {
+  background: var(--bg-hover);
+  color: var(--text-primary);
+}
+
+.pad-menu-item.current {
+  color: var(--accent);
+}
+
+.pad-menu-item.danger {
+  color: var(--danger);
+  margin-top: 4px;
+  border-top: 1px solid var(--border-subtle);
+}
+
+.pad-menu-dot {
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  flex-shrink: 0;
+}
+
+/* ---- Knobs row + manual pad ---- */
+
+.perform-knobs {
+  display: flex;
+  align-items: center;
+  gap: 22px;
+  padding: 12px 18px;
+  background: var(--bg-1);
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-lg);
+}
+
+.knob {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 2px;
+  user-select: none;
+}
+
+.knob-dial {
+  cursor: ns-resize;
+}
+
+.knob-track {
+  fill: none;
+  stroke: var(--bg-3);
+  stroke-width: 4;
+}
+
+.knob-fill {
+  fill: none;
+  stroke: var(--accent);
+  stroke-width: 4;
+  stroke-linecap: round;
+}
+
+.knob-pointer {
+  stroke: var(--text-primary);
+  stroke-width: 2.5;
+  stroke-linecap: round;
+}
+
+.knob-label {
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--text-secondary);
+}
+
+.knob-value {
+  font-size: 10px;
+  color: var(--text-tertiary);
+  font-variant-numeric: tabular-nums;
+}
+
+.manual-pad {
+  position: relative;
+  margin-left: auto;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 2px;
+  min-width: 120px;
+  height: 64px;
+  border-radius: var(--radius-lg);
+  border: 1px solid var(--border-strong);
+  background: var(--bg-2);
+  color: var(--text-primary);
+}
+
+.manual-pad:hover {
+  border-color: var(--accent);
+}
+
+.manual-pad.active {
+  background: var(--accent);
+  border-color: var(--accent);
+  color: var(--accent-text);
+  box-shadow: 0 0 18px color-mix(in srgb, var(--accent) 55%, transparent);
+}
+
+.manual-pad-title {
+  font-size: 14px;
+  font-weight: 800;
+  letter-spacing: 2px;
+}
+
+.manual-pad-sub {
+  font-size: 9px;
+  letter-spacing: 0.5px;
+  opacity: 0.7;
+}
+
+.manual-clear {
+  position: absolute;
+  top: 5px;
+  right: 6px;
+  width: 18px;
+  height: 18px;
+  border-radius: 50%;
+  border: none;
+  background: rgba(0, 0, 0, 0.35);
+  color: #fff;
+  font-size: 10px;
+  line-height: 1;
 }
 
 .perform-bottombar {
@@ -1395,15 +1639,11 @@
 }
 
 .setup-section h2 {
-  font-size: 12px;
+  font-size: 15px;
   font-weight: 700;
-  letter-spacing: 2.2px;
-  text-transform: uppercase;
+  letter-spacing: 0.4px;
   margin: 0;
-  background: linear-gradient(90deg, var(--text-primary), var(--text-secondary));
-  -webkit-background-clip: text;
-  background-clip: text;
-  color: transparent;
+  color: var(--text-primary);
 }
 
 .setup-chevron {
@@ -1532,6 +1772,145 @@
 
 .midi-modal {
   width: min(720px, calc(100vw - 80px));
+}
+
+.stages-preview-hint {
+  margin: 14px 0 8px;
+}
+
+/* ---- Segmented control + view toggle ---- */
+
+.segmented {
+  display: inline-flex;
+  background: var(--bg-2);
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-md);
+  overflow: hidden;
+}
+
+.segmented button {
+  background: transparent;
+  border: none;
+  padding: 6px 14px;
+  color: var(--text-secondary);
+  font-size: 12px;
+  font-weight: 600;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.segmented button:hover {
+  color: var(--text-primary);
+}
+
+.segmented button.active {
+  background: var(--accent-muted);
+  color: var(--accent);
+}
+
+.view-toggle button {
+  padding: 6px 10px;
+}
+
+.section-toolbar {
+  display: flex;
+  justify-content: flex-end;
+  margin-bottom: 10px;
+}
+
+/* ---- Scene tile grid ---- */
+
+.scene-tile-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(150px, 1fr));
+  gap: 10px;
+  margin-bottom: 12px;
+}
+
+.scene-tile {
+  --tile: #666;
+  position: relative;
+  aspect-ratio: 1 / 1;
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-lg);
+  overflow: hidden;
+  cursor: pointer;
+  display: flex;
+  align-items: flex-end;
+  padding: 12px;
+  transition: transform 0.1s ease, box-shadow 0.12s ease;
+}
+
+.scene-tile::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background: radial-gradient(circle at 50% 30%, var(--tile), color-mix(in srgb, var(--tile) 35%, #0b0b0d));
+  opacity: 0.85;
+}
+
+.scene-tile:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 6px 20px color-mix(in srgb, var(--tile) 40%, transparent);
+}
+
+.scene-tile-name {
+  position: relative;
+  font-size: 13px;
+  font-weight: 700;
+  color: #fff;
+  text-shadow: 0 1px 4px rgba(0, 0, 0, 0.6);
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.tile-hold {
+  font-size: 8px;
+  font-weight: 700;
+  letter-spacing: 1px;
+  padding: 1px 5px;
+  border-radius: 3px;
+  background: rgba(0, 0, 0, 0.4);
+}
+
+.scene-tile-actions {
+  position: absolute;
+  top: 8px;
+  right: 8px;
+  display: flex;
+  gap: 4px;
+  opacity: 0;
+  transition: opacity 0.12s;
+}
+
+.scene-tile:hover .scene-tile-actions {
+  opacity: 1;
+}
+
+.tile-icon-btn {
+  width: 24px;
+  height: 24px;
+  border-radius: 6px;
+  border: none;
+  background: rgba(0, 0, 0, 0.5);
+  color: #fff;
+  font-size: 12px;
+  backdrop-filter: blur(4px);
+}
+
+.tile-icon-btn:hover {
+  background: rgba(0, 0, 0, 0.75);
+}
+
+.tile-icon-btn.danger:hover {
+  background: var(--danger);
+}
+
+/* List mode for pool grids collapses to a single column. */
+.smart-pool-grid.list {
+  grid-template-columns: 1fr;
 }
 
 .setup-row {
@@ -1692,6 +2071,12 @@
   grid-template-columns: repeat(4, 1fr);
   gap: 8px;
   max-width: 640px;
+  margin-top: 12px;
+}
+
+.pad-assign-grid.cols-8 {
+  grid-template-columns: repeat(8, 1fr);
+  max-width: 100%;
 }
 
 .midi-learn-grid {
