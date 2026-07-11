@@ -5,6 +5,8 @@ import { findAddressOverlaps, fixtureFootprint } from '@core/lighting/fixtures/t
 import type { OutputProtocol } from '@core/lighting/engine/types'
 import { defaultSmartPools } from '@core/lighting/engine/presetScenes'
 import { SceneEditorModal } from './SceneEditorModal'
+import { SceneTile } from './SceneTile'
+import { groupScenesByCategory } from './sceneCategories'
 import { SetupSection, SetupViewContext, type SetupView } from './SetupSection'
 import { FixtureIcon } from './FixtureIcons'
 import { padColumns, resizePadArray } from './padGrid'
@@ -729,50 +731,54 @@ export function SetupPanel({ view }: { view: SetupView }): JSX.Element {
           />
         </div>
         {project.sceneViewMode === 'grid' ? (
-          <div className="scene-tile-grid">
-            {project.scenes.map((scene) => (
-              <div
-                key={scene.id}
-                className="scene-tile"
-                style={{ '--tile': scene.uiColor } as React.CSSProperties}
-                onClick={() => setEditingSceneId(scene.id)}
-              >
-                <div className="scene-tile-name">
-                  {scene.name}
-                  {scene.momentary && <span className="tile-hold">HOLD</span>}
-                </div>
-                <div className="scene-tile-actions" onClick={(e) => e.stopPropagation()}>
-                  <button
-                    className="tile-icon-btn"
-                    title="Duplicate"
-                    onClick={() =>
-                      updateProject((p) => {
-                        const copy = structuredClone(p.scenes.find((s) => s.id === scene.id)!)
-                        copy.id = `scene-${Date.now()}`
-                        copy.name = `${copy.name} Copy`
-                        return { ...p, scenes: [...p.scenes, copy] }
-                      })
-                    }
-                  >
-                    ⧉
-                  </button>
-                  <button
-                    className="tile-icon-btn danger"
-                    title="Delete"
-                    onClick={() =>
-                      updateProject((p) => ({
-                        ...p,
-                        scenes: p.scenes.filter((s) => s.id !== scene.id),
-                        padSceneIds: p.padSceneIds.map((id) => (id === scene.id ? null : id)),
-                        autopilot: {
-                          ...p.autopilot,
-                          sceneIds: p.autopilot.sceneIds.filter((id) => id !== scene.id)
-                        }
-                      }))
-                    }
-                  >
-                    ✕
-                  </button>
+          <div className="scene-groups">
+            {groupScenesByCategory(project.scenes).map((groupItem) => (
+              <div key={groupItem.key} className="scene-group">
+                <div className="scene-group-title">{groupItem.label}</div>
+                <div className="scene-tile-grid">
+                  {groupItem.scenes.map((scene) => (
+                    <SceneTile
+                      key={scene.id}
+                      scene={scene}
+                      title="Edit scene"
+                      onClick={() => setEditingSceneId(scene.id)}
+                      actions={
+                        <>
+                          <button
+                            className="tile-icon-btn"
+                            title="Duplicate"
+                            onClick={() =>
+                              updateProject((p) => {
+                                const copy = structuredClone(p.scenes.find((s) => s.id === scene.id)!)
+                                copy.id = `scene-${Date.now()}`
+                                copy.name = `${copy.name} Copy`
+                                return { ...p, scenes: [...p.scenes, copy] }
+                              })
+                            }
+                          >
+                            ⧉
+                          </button>
+                          <button
+                            className="tile-icon-btn danger"
+                            title="Delete"
+                            onClick={() =>
+                              updateProject((p) => ({
+                                ...p,
+                                scenes: p.scenes.filter((s) => s.id !== scene.id),
+                                padSceneIds: p.padSceneIds.map((id) => (id === scene.id ? null : id)),
+                                autopilot: {
+                                  ...p.autopilot,
+                                  sceneIds: p.autopilot.sceneIds.filter((id) => id !== scene.id)
+                                }
+                              }))
+                            }
+                          >
+                            ✕
+                          </button>
+                        </>
+                      }
+                    />
+                  ))}
                 </div>
               </div>
             ))}

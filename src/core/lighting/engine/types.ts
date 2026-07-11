@@ -15,12 +15,16 @@ export type EffectType =
   | 'static'
   | 'beatPulse' // dimmer decays from full on every beat
   | 'breathe' // slow sine swell of intensity
+  | 'eighthBuild' // 8th-note pulses that ramp brighter/tighter across the phrase
   | 'colorCycle' // step through colors every N beats
+  | 'randomColor' // jump to a random palette color every N beats and hold
   | 'alternate' // odd/even fixtures swap two colors on the beat
   | 'chase' // one fixture (or position) lit at a time, advancing on the beat
   | 'sparkle' // random fixtures/cells flash each beat subdivision
   | 'rainbow' // continuous hue rotation across fixtures
+  | 'rainbowStep' // rainbow that snaps to a new hue on each quarter note
   | 'strobe' // continuous strobing while the scene is active
+  | 'eighthStrobe' // sharp flash on every 8th note
   | 'audioLevel' // dimmer follows overall loudness
   | 'bassPulse' // dimmer follows bass energy (kick-reactive)
   | 'movementCircle' // pan/tilt trace a circle (moving heads)
@@ -58,11 +62,22 @@ export interface SceneTarget {
   tilt?: number
 }
 
+/**
+ * Coarse grouping used to organize scenes in the browser and pad picker:
+ *  - normal:  steady mood looks (the everyday palette)
+ *  - build:   rising tension that escalates into a drop
+ *  - flash:   strobes, blinders, and burst hits
+ *  - peak:    full-rig, rainbow-crazy, drop-time energy
+ */
+export type SceneCategory = 'normal' | 'build' | 'flash' | 'peak'
+
 export interface Scene {
   id: string
   name: string
   /** Accent color shown on the pad in the UI (hex). */
   uiColor: string
+  /** Bucket for browser/picker organization; custom scenes may omit it. */
+  category?: SceneCategory
   targets: SceneTarget[]
   /**
    * Momentary scenes fire while held (mouse down / MIDI note held) and

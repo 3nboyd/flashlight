@@ -9,7 +9,7 @@ import {
   type LiveOverrides,
   type Scene
 } from '@core/lighting/engine/types'
-import { PRESET_SCENES, defaultSmartPools } from '@core/lighting/engine/presetScenes'
+import { PRESET_SCENES, PRESET_CATEGORY_BY_ID, defaultSmartPools } from '@core/lighting/engine/presetScenes'
 import { SmartModeEngine, type SmartPhase } from '@core/lighting/engine/SmartMode'
 import { fixturesById } from '@core/lighting/fixtures/library'
 import type { PatchedFixture } from '@core/lighting/fixtures/types'
@@ -164,6 +164,11 @@ export class LightingHost {
     } as LightingProject
     // Keep the pad array sized to padCount (older stages saved 16).
     project.padSceneIds = resizePads(project.padSceneIds ?? [], project.padCount)
+    // Backfill scene categories for stages saved before the four-bucket split,
+    // so recognized preset scenes still group in the browser and pickers.
+    project.scenes = project.scenes.map((scene) =>
+      scene.category ? scene : { ...scene, category: PRESET_CATEGORY_BY_ID[scene.id] }
+    )
     return project
   }
 
@@ -260,7 +265,16 @@ export class LightingHost {
     // Classify each scene for texture-aware smart picks: scenes built on
     // audio/beat-driven effects read as 'reactive'; color/movement flows
     // read as 'flow'.
-    const reactiveEffects = new Set(['bassPulse', 'audioLevel', 'beatPulse', 'sparkle', 'strobe'])
+    const reactiveEffects = new Set([
+      'bassPulse',
+      'audioLevel',
+      'beatPulse',
+      'sparkle',
+      'strobe',
+      'eighthStrobe',
+      'eighthBuild',
+      'rainbowStep'
+    ])
     const sceneCharacter: Record<string, 'reactive' | 'flow'> = {}
     for (const scene of this.project.scenes) {
       sceneCharacter[scene.id] = scene.targets.some(

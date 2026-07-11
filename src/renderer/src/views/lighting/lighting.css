@@ -1116,6 +1116,35 @@
 }
 .fx-anim-random { animation: fx-random 2s steps(1) infinite; }
 
+/* 8th-note riser: bars flicker faster and taller toward the end of the loop. */
+@keyframes fx-build {
+  0% { transform: scaleY(0.25); opacity: 0.5; }
+  100% { transform: scaleY(1); opacity: 1; }
+}
+.fx-anim-build { animation: fx-build 0.9s steps(6) infinite; transform-origin: bottom; }
+
+/* Random color: snap to an out-of-order set of hues, holding each. */
+@keyframes fx-randomcolor {
+  0%, 24% { background: #22d3ee; }
+  25%, 49% { background: #f43f5e; }
+  50%, 74% { background: #a855f7; }
+  75%, 100% { background: #facc15; }
+}
+.fx-anim-randomcolor { animation: fx-randomcolor 1.8s steps(1) infinite; }
+
+/* Quarter-note rainbow: hue snaps rather than sweeps. */
+.fx-anim-rainbow-step {
+  background: conic-gradient(#ef4444, #eab308, #22c55e, #06b6d4, #3b82f6, #a855f7, #ef4444);
+  animation: fx-rainbow-spin 1.8s steps(6) infinite;
+}
+
+/* Faster, tighter flashes than the continuous strobe icon. */
+@keyframes fx-strobe-eighth {
+  0%, 18% { opacity: 1; }
+  19%, 100% { opacity: 0.1; }
+}
+.fx-anim-strobe-eighth { animation: fx-strobe-eighth 0.28s steps(1) infinite; }
+
 .channel-table select {
   background: var(--bg-2);
   border: 1px solid var(--border-subtle);
@@ -1224,6 +1253,12 @@
   overflow: hidden;
   text-overflow: ellipsis;
   max-width: 180px;
+}
+
+.pad-grid-toolbar {
+  display: flex;
+  justify-content: flex-end;
+  margin-bottom: 8px;
 }
 
 .pad-grid {
@@ -1340,75 +1375,84 @@
   background: currentColor;
 }
 
-.pad-menu-backdrop {
+/* --- Scene browser modal (pad assign + live switch) --- */
+.scene-browser-overlay {
   position: fixed;
   inset: 0;
-  z-index: 30;
+  z-index: 60;
+  background: rgba(0, 0, 0, 0.6);
+  backdrop-filter: blur(3px);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 24px;
 }
 
-.pad-menu {
-  position: absolute;
-  top: 30px;
-  right: 6px;
-  z-index: 31;
-  width: 180px;
-  background: var(--bg-2);
+.scene-browser {
+  width: min(1000px, 96vw);
+  max-height: 86vh;
+  display: flex;
+  flex-direction: column;
+  background: var(--bg-1);
   border: 1px solid var(--border-strong);
-  border-radius: var(--radius-md);
+  border-radius: var(--radius-lg);
   box-shadow: var(--shadow-panel);
-  padding: 6px;
-  text-align: left;
-  cursor: default;
+  overflow: hidden;
 }
 
-.pad-menu-title {
-  font-size: 10px;
-  letter-spacing: 1px;
-  text-transform: uppercase;
-  color: var(--text-tertiary);
-  padding: 2px 6px 6px;
+.scene-browser-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 14px 18px;
+  border-bottom: 1px solid var(--border-subtle);
 }
 
-.pad-menu-scroll {
-  max-height: 220px;
+.scene-browser-head h3 {
+  margin: 0;
+  font-size: 16px;
+}
+
+.scene-browser-head-actions {
+  display: flex;
+  gap: 8px;
+}
+
+.scene-browser-cols {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 16px;
+  padding: 16px 18px;
   overflow-y: auto;
 }
 
-.pad-menu-item {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  width: 100%;
-  padding: 6px 8px;
-  background: transparent;
-  border: none;
-  border-radius: var(--radius-sm);
-  color: var(--text-secondary);
-  font-size: 12px;
-  font-weight: 500;
-  text-align: left;
+.scene-browser-col {
+  flex: 1 1 200px;
+  min-width: 180px;
 }
 
-.pad-menu-item:hover {
-  background: var(--bg-hover);
-  color: var(--text-primary);
+.scene-browser-col-title {
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 1.5px;
+  text-transform: uppercase;
+  color: var(--text-tertiary);
+  margin-bottom: 8px;
 }
 
-.pad-menu-item.current {
-  color: var(--accent);
+.scene-browser-col-tiles {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 7px;
 }
 
-.pad-menu-item.danger {
-  color: var(--danger);
-  margin-top: 4px;
-  border-top: 1px solid var(--border-subtle);
+.scene-browser-col-tiles .scene-tile2 {
+  padding: 7px;
 }
 
-.pad-menu-dot {
-  width: 10px;
-  height: 10px;
-  border-radius: 50%;
-  flex-shrink: 0;
+.scene-browser-col-tiles .scene-tile2-label {
+  font-size: 11px;
 }
 
 /* ---- Knobs row + manual pad ---- */
@@ -1821,6 +1865,21 @@
 
 /* ---- Scene tile grid ---- */
 
+.scene-groups {
+  display: flex;
+  flex-direction: column;
+  gap: 18px;
+}
+
+.scene-group-title {
+  font-size: 12px;
+  font-weight: 700;
+  letter-spacing: 1.5px;
+  text-transform: uppercase;
+  color: var(--text-tertiary);
+  margin-bottom: 8px;
+}
+
 .scene-tile-grid {
   display: grid;
   grid-template-columns: repeat(auto-fill, minmax(150px, 1fr));
@@ -1887,6 +1946,153 @@
 
 .scene-tile:hover .scene-tile-actions {
   opacity: 1;
+}
+
+/* --- Animated scene tile (shared: Setup grid + scene browser) --- */
+.scene-tile2 {
+  --tile: #666;
+  --c1: #666;
+  --c2: #666;
+  --c3: #666;
+  position: relative;
+  aspect-ratio: 1 / 1;
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-lg);
+  overflow: hidden;
+  cursor: pointer;
+  display: flex;
+  align-items: flex-end;
+  padding: 10px;
+  transition: transform 0.1s ease, box-shadow 0.12s ease, border-color 0.12s ease;
+}
+
+.scene-tile2:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 6px 20px color-mix(in srgb, var(--tile) 45%, transparent);
+}
+
+.scene-tile2.selected {
+  border-color: var(--tile);
+}
+
+.scene-tile2.active {
+  border-color: var(--tile);
+  box-shadow:
+    0 0 0 2px color-mix(in srgb, var(--tile) 70%, transparent),
+    0 6px 22px color-mix(in srgb, var(--tile) 55%, transparent);
+}
+
+.tile-fx {
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  pointer-events: none;
+  background: var(--c1);
+}
+
+/* Half-opaque scrim so a wall of tiles stays calm; lifts on hover. */
+.tile-veil {
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  pointer-events: none;
+  background: linear-gradient(to top, rgba(0, 0, 0, 0.85) 0%, rgba(0, 0, 0, 0.5) 45%, rgba(0, 0, 0, 0.5) 100%);
+  transition: background 0.18s ease;
+}
+
+.scene-tile2:hover .tile-veil {
+  background: linear-gradient(to top, rgba(0, 0, 0, 0.8) 0%, rgba(0, 0, 0, 0.12) 42%, transparent 100%);
+}
+
+.scene-tile2-label {
+  position: relative;
+  z-index: 1;
+  font-size: 12.5px;
+  font-weight: 700;
+  color: #fff;
+  text-shadow: 0 1px 4px rgba(0, 0, 0, 0.75);
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.scene-tile2-actions {
+  position: absolute;
+  top: 7px;
+  right: 7px;
+  z-index: 2;
+  display: flex;
+  gap: 4px;
+  opacity: 0;
+  transition: opacity 0.12s;
+}
+
+.scene-tile2:hover .scene-tile2-actions {
+  opacity: 1;
+}
+
+.tile-fx-static {
+  background: var(--c1);
+}
+
+@keyframes tile-pulse {
+  0% { opacity: 0.35; }
+  12% { opacity: 1; }
+  100% { opacity: 0.35; }
+}
+.tile-fx-pulse {
+  background: var(--c1);
+  animation: tile-pulse 0.75s ease-out infinite;
+}
+
+@keyframes tile-strobe {
+  0%, 20% { opacity: 1; }
+  21%, 100% { opacity: 0.12; }
+}
+.tile-fx-strobe {
+  background: var(--c1);
+  animation: tile-strobe 0.32s steps(1) infinite;
+}
+
+@keyframes tile-cycle {
+  0%, 26% { background: var(--c1); }
+  33%, 59% { background: var(--c2); }
+  66%, 92% { background: var(--c3); }
+  100% { background: var(--c1); }
+}
+.tile-fx-cycle {
+  animation: tile-cycle 2.4s steps(1) infinite;
+}
+
+@keyframes tile-rainbow {
+  to { filter: hue-rotate(360deg); }
+}
+.tile-fx-rainbow {
+  background: conic-gradient(from 0deg, #ef4444, #eab308, #22c55e, #06b6d4, #3b82f6, #a855f7, #ef4444);
+  animation: tile-rainbow 3.2s linear infinite;
+}
+
+@keyframes tile-move {
+  0% { background-position: 0% 50%; }
+  50% { background-position: 100% 50%; }
+  100% { background-position: 0% 50%; }
+}
+.tile-fx-move {
+  background-color: color-mix(in srgb, var(--c1) 20%, #0b0b0d);
+  background-image: radial-gradient(circle at 50% 45%, var(--c1) 0%, transparent 40%);
+  background-repeat: no-repeat;
+  background-size: 200% 100%;
+  animation: tile-move 2.6s ease-in-out infinite;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .tile-fx-pulse,
+  .tile-fx-strobe,
+  .tile-fx-cycle,
+  .tile-fx-rainbow,
+  .tile-fx-move {
+    animation: none;
+  }
 }
 
 .tile-icon-btn {

@@ -10,48 +10,9 @@ import {
 } from './runtime'
 import { StageVisualizer } from './StageVisualizer'
 import { Knob } from './Knob'
+import { SceneBrowser } from './SceneBrowser'
 import { padColumns } from './padGrid'
-import type { Rgbw, Scene } from '@core/lighting/engine/types'
-
-function PadAssignMenu({
-  scenes,
-  currentId,
-  onPick,
-  onClear,
-  onClose
-}: {
-  scenes: Scene[]
-  currentId?: string
-  onPick: (id: string) => void
-  onClear?: () => void
-  onClose: () => void
-}): JSX.Element {
-  return (
-    <>
-      <div className="pad-menu-backdrop" onClick={(e) => { e.stopPropagation(); onClose() }} />
-      <div className="pad-menu" onClick={(e) => e.stopPropagation()}>
-        <div className="pad-menu-title">Assign scene</div>
-        <div className="pad-menu-scroll">
-          {scenes.map((scene) => (
-            <button
-              key={scene.id}
-              className={`pad-menu-item${scene.id === currentId ? ' current' : ''}`}
-              onClick={() => onPick(scene.id)}
-            >
-              <span className="pad-menu-dot" style={{ background: scene.uiColor }} />
-              {scene.name}
-            </button>
-          ))}
-        </div>
-        {onClear && (
-          <button className="pad-menu-item danger" onClick={onClear}>
-            Clear pad
-          </button>
-        )}
-      </div>
-    </>
-  )
-}
+import type { Rgbw } from '@core/lighting/engine/types'
 
 const OVERRIDE_COLORS: { name: string; color: Rgbw | null; css: string }[] = [
   { name: 'Off', color: null, css: 'transparent' },
@@ -72,8 +33,10 @@ export function PerformPanel(): JSX.Element {
   const [midiDevices, setMidiDevices] = useState<string[]>([])
   const [stageExpanded, setStageExpanded] = useState(false)
   const [audioRunning, setAudioRunning] = useState(audioAnalyzer.isRunning())
-  /** Pad index whose reassign menu is open (null = none). */
+  /** Pad index whose reassign browser is open (null = none). */
   const [reassignPad, setReassignPad] = useState<number | null>(null)
+  /** When true, the browser switches the live scene instead of assigning a pad. */
+  const [browseSwitch, setBrowseSwitch] = useState(false)
   /** Scene to restore when a momentary (HOLD) pad is released. */
   const momentaryRestoreRef = useRef<string | null>(null)
 
@@ -321,6 +284,16 @@ export function PerformPanel(): JSX.Element {
         </div>
       </div>
 
+      <div className="pad-grid-toolbar">
+        <button
+          className="secondary-button"
+          title="Browse every scene by category and switch the live look"
+          onClick={() => setBrowseSwitch(true)}
+        >
+          Browse scenes
+        </button>
+      </div>
+
       <div className={`pad-grid cols-${padColumns(project.padCount)}`}>
         {project.padSceneIds.map((sceneId, index) => {
           const scene = sceneId ? project.scenes.find((s) => s.id === sceneId) : null
@@ -335,13 +308,6 @@ export function PerformPanel(): JSX.Element {
                 onClick={() => setReassignPad(index)}
               >
                 <span className="pad-plus">+</span>
-                {reassignPad === index && (
-                  <PadAssignMenu
-                    scenes={project.scenes}
-                    onPick={(id) => assignPad(index, id)}
-                    onClose={() => setReassignPad(null)}
-                  />
-                )}
               </button>
             )
           }
@@ -362,26 +328,42 @@ export function PerformPanel(): JSX.Element {
                 title="Reassign this pad"
                 onClick={(e) => {
                   e.stopPropagation()
-                  setReassignPad(reassignPad === index ? null : index)
+                  setReassignPad(index)
                 }}
               >
                 <span />
                 <span />
                 <span />
               </button>
-              {reassignPad === index && (
-                <PadAssignMenu
-                  scenes={project.scenes}
-                  currentId={scene.id}
-                  onPick={(id) => assignPad(index, id)}
-                  onClear={() => assignPad(index, null)}
-                  onClose={() => setReassignPad(null)}
-                />
-              )}
             </div>
           )
         })}
       </div>
+
+      {reassignPad !== null && (
+        <SceneBrowser
+          scenes={project.scenes}
+          title={`Assign pad ${reassignPad + 1}`}
+          currentId={project.padSceneIds[reassignPad]}
+          onPick={(id) => assignPad(reassignPad, id)}
+          onClear={
+            project.padSceneIds[reassignPad] ? () => assignPad(reassignPad, null) : undefined
+          }
+          onClose={() => setReassignPad(null)}
+        />
+      )}
+      {browseSwitch && (
+        <SceneBrowser
+          scenes={project.scenes}
+          title="Switch scene"
+          currentId={activeSceneId}
+          onPick={(id) => {
+            triggerScene(id)
+            setBrowseSwitch(false)
+          }}
+          onClose={() => setBrowseSwitch(false)}
+        />
+      )}
 
       <div className="perform-knobs">
         <Knob
@@ -422,15 +404,17 @@ export function PerformPanel(): JSX.Element {
         />
         <button
           className={`manual-pad${status?.manualActive ? ' active' : ''}`}
-          title="Tap on the melody: each hit changes color and moves the beams. Long-press or the ✕ returns to the automatic look."
+          title="Tap along with the melody. Each tap throws a fresh color and repoints the beams, layered on top of whatever scene is running. Press the X to drop back to the scene."
           onClick={() => window.djCompanion.lighting.manualPulse().then(refreshStatus)}
         >
-          <span className="manual-pad-title">MANUAL</span>
-          <span className="manual-pad-sub">tap to change</span>
+          <span className="manual-pad-title">TAP FX</span>
+          <span className="manual-pad-sub">
+            {status?.manualActive ? 'tap = next look' : 'tap = new color + beams'}
+          </span>
           {status?.manualActive && (
             <button
               className="manual-clear"
-              title="Return to automatic"
+              title="Release: return to the running scene"
               onClick={(e) => {
                 e.stopPropagation()
                 window.djCompanion.lighting.clearManual().then(refreshStatus)

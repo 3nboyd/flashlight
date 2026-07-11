@@ -26,6 +26,17 @@ export function Knob({ label, value, min, max, resetValue, format, onChange }: K
   const fraction = (value - min) / (max - min)
   const angle = START_ANGLE + fraction * SWEEP
 
+  // Pull the value to the default when it lands within a small dead zone, so
+  // "center"/"1x" is easy to hit by feel instead of pixel-hunting.
+  const snap = useCallback(
+    (v: number): number => {
+      if (resetValue === undefined) return v
+      const deadZone = (max - min) * 0.04
+      return Math.abs(v - resetValue) <= deadZone ? resetValue : v
+    },
+    [min, max, resetValue]
+  )
+
   const handlePointerMove = useCallback(
     (e: PointerEvent) => {
       if (!dragRef.current) return
@@ -33,9 +44,9 @@ export function Knob({ label, value, min, max, resetValue, format, onChange }: K
       const range = max - min
       // Full range over ~180px of vertical travel.
       const next = Math.max(min, Math.min(max, dragRef.current.startValue + (dy / 180) * range))
-      onChange(next)
+      onChange(snap(next))
     },
-    [min, max, onChange]
+    [min, max, onChange, snap]
   )
 
   const handlePointerUp = useCallback(() => {
@@ -58,7 +69,7 @@ export function Knob({ label, value, min, max, resetValue, format, onChange }: K
         onDoubleClick={() => onChange(resetValue ?? min)}
         onWheel={(e) => {
           const step = (max - min) / 40
-          onChange(Math.max(min, Math.min(max, value - Math.sign(e.deltaY) * step)))
+          onChange(snap(Math.max(min, Math.min(max, value - Math.sign(e.deltaY) * step))))
         }}
         title="Drag up/down to adjust, double-click to reset"
       >

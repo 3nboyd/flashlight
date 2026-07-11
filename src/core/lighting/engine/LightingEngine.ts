@@ -78,9 +78,28 @@ function applyEffect(
       const swell = 0.5 - 0.5 * Math.cos((beat.beat / beats) * 2 * Math.PI)
       return { ...base, dimmer: target.dimmer * (0.25 + 0.75 * swell) }
     }
+    case 'eighthBuild': {
+      // 8th-note pulses whose brightness floor rises and whose decay sharpens
+      // across the phrase, so the rig audibly "builds" toward the drop.
+      const eighthPhase = (beat.beat * 2) % 1
+      const decay = 1.2 + 2.5 * beat.phrasePhase
+      const envelope = Math.pow(1 - eighthPhase, decay)
+      const floor = 0.12 + 0.35 * beat.phrasePhase
+      return { ...base, dimmer: target.dimmer * Math.min(1, floor + (1 - floor) * envelope) }
+    }
     case 'colorCycle': {
       const step = Math.floor(beat.beat / beats) % palette.length
       return { ...base, color: palette[step] }
+    }
+    case 'randomColor': {
+      // Jump to a pseudo-random palette color every `beats` and hold until the
+      // next step. Deterministic per step so every tick agrees.
+      const step = Math.floor(beat.beat / beats)
+      const hash = Math.abs(Math.sin(step * 91.17)) * 43758.5453
+      const frac = hash - Math.floor(hash)
+      const color =
+        palette.length > 1 ? palette[Math.floor(frac * palette.length) % palette.length] : hueToRgb(frac * 360)
+      return { ...base, color }
     }
     case 'alternate': {
       // Odd/even fixtures swap two palette colors every N beats.
@@ -110,8 +129,21 @@ function applyEffect(
       const hue = beat.phrasePhase * 360 * (effect.beats ? 32 / effect.beats : 1) + spread
       return { ...base, color: hueToRgb(hue) }
     }
+    case 'rainbowStep': {
+      // Rainbow that snaps to the next hue on each quarter note (beats:1) for
+      // hard, peak-time color changes rather than a smooth wash.
+      const step = Math.floor(beat.beat / beats)
+      const spread = fixtureCount > 1 ? (fixtureIndex / fixtureCount) * 360 : 0
+      return { ...base, color: hueToRgb(step * 60 + spread) }
+    }
     case 'strobe':
       return { ...base, strobing: true, color: palette[0], dimmer: target.dimmer }
+    case 'eighthStrobe': {
+      // Tempo-locked flash: full on for the front of each 8th note, dark
+      // between. Synced to the grid, unlike the free-running hardware strobe.
+      const eighthPhase = (beat.beat * 2) % 1
+      return { ...base, dimmer: eighthPhase < 0.45 ? target.dimmer : 0 }
+    }
     case 'audioLevel':
       return { ...base, dimmer: target.dimmer * Math.min(1, audio.rms * 1.4 * mod.reactivity) }
     case 'bassPulse':
@@ -158,15 +190,25 @@ function applyEffect(
     }
     case 'movementRandom': {
       // Ballyhoo: each head jumps to a new pseudo-random position every N
-      // beats - deterministic per (step, fixture) so ticks agree.
+      // beats - deterministic per (step, fixture) so ticks agree. When a
+      // palette is supplied, the whole group also snaps to one shared random
+      // color per step (same hash as 'randomColor'), so movers stay in sync
+      // with a rig-wide random-color wash.
       const amplitude = (effect.amplitude ?? 0.5) * 127
       const step = Math.floor(beat.beat / beats)
       const hashOf = (salt: number): number => {
         const v = Math.abs(Math.sin(step * 12.9898 + fixtureIndex * 78.233 + salt)) * 43758.5453
         return (v - Math.floor(v)) * 2 - 1 // -1..1
       }
+      let color = base.color
+      if (effect.colors && effect.colors.length > 0) {
+        const h = Math.abs(Math.sin(step * 91.17)) * 43758.5453
+        const frac = h - Math.floor(h)
+        color = effect.colors[Math.floor(frac * effect.colors.length) % effect.colors.length]
+      }
       return {
         ...base,
+        color,
         pan: (target.pan ?? 128) + hashOf(1) * amplitude,
         tilt: (target.tilt ?? 128) + hashOf(7) * amplitude * 0.6
       }

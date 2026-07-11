@@ -3,7 +3,7 @@ import { renderTick } from './LightingEngine'
 import { BeatClock } from './BeatClock'
 import { builtinFixturesById } from '../fixtures/library'
 import type { PatchedFixture } from '../fixtures/types'
-import type { Scene, EffectSettings } from './types'
+import type { Scene, EffectSettings, Rgbw } from './types'
 import { readFixtureVisualState } from '../visualizer/fixtureVisualState'
 
 const defs = builtinFixturesById()
@@ -112,5 +112,72 @@ describe('new movement effects', () => {
     const nextStep = panTiltAt(eff, 600) // beat 1
     expect(early).toEqual(sameStep)
     expect(early.pan !== nextStep.pan || early.tilt !== nextStep.tilt).toBe(true)
+  })
+})
+
+describe('build / strobe / peak effects', () => {
+  // generic-rgb-4ch is [dimmer, r, g, b]; channel 1 is the master dimmer.
+  const dimAt = (effect: EffectSettings, ms: number): number =>
+    renderTick({
+      fixtures: [patched('p', 'generic-rgb-4ch', 1)],
+      scene: sceneWith(effect),
+      beat: beatAt(ms),
+      nowMs: ms
+    })
+      .get(1)!
+      .getChannel(1)
+
+  it('eighthStrobe flashes at the top of each 8th note and is dark in the gap', () => {
+    // 120 BPM: beat = 500ms, 8th note = 250ms.
+    expect(dimAt({ type: 'eighthStrobe' }, 0)).toBeGreaterThan(200)
+    expect(dimAt({ type: 'eighthStrobe' }, 150)).toBe(0) // 0.6 into the 8th
+  })
+
+  it('eighthBuild lifts its brightness floor deeper into the phrase', () => {
+    // Sample the dim tail of an 8th (eighthPhase ~0.96) early vs late; both
+    // beats share the same 8th-note phase, so only the phrase ramp differs.
+    const early = dimAt({ type: 'eighthBuild' }, 240) // beat 0.48
+    const late = dimAt({ type: 'eighthBuild' }, 15240) // beat 30.48, same phase
+    expect(late).toBeGreaterThan(early)
+  })
+
+  it('rainbowStep holds a hue within a beat and snaps to the next on the beat', () => {
+    // generic-rgb-3ch is [r, g, b]; read green to separate red from yellow.
+    const green = (ms: number): number =>
+      renderTick({
+        fixtures: [patched('p', 'generic-rgb-3ch', 1)],
+        scene: sceneWith({ type: 'rainbowStep', beats: 1 }),
+        beat: beatAt(ms),
+        nowMs: ms
+      })
+        .get(1)!
+        .getChannel(2)
+    expect(green(100)).toBe(green(400)) // same beat 0 hue
+    expect(green(600)).not.toBe(green(100)) // beat 1 hue differs
+  })
+
+  it('randomColor holds a palette color across its step', () => {
+    const palette: Rgbw[] = [
+      { r: 255, g: 0, b: 0 },
+      { r: 0, g: 255, b: 0 },
+      { r: 0, g: 0, b: 255 },
+      { r: 255, g: 255, b: 0 }
+    ]
+    const effect: EffectSettings = { type: 'randomColor', beats: 3, colors: palette }
+    const rgb = (ms: number): [number, number, number] => {
+      const u = renderTick({
+        fixtures: [patched('p', 'generic-rgb-3ch', 1)],
+        scene: sceneWith(effect),
+        beat: beatAt(ms),
+        nowMs: ms
+      }).get(1)!
+      return [u.getChannel(1), u.getChannel(2), u.getChannel(3)]
+    }
+    // Step = 3 beats = 1500ms: same step holds, and every pick is in-palette.
+    expect(rgb(1000)).toEqual(rgb(500))
+    for (const ms of [500, 2000, 3500, 5000]) {
+      const [r, g, b] = rgb(ms)
+      expect(palette.some((c) => c.r === r && c.g === g && c.b === b)).toBe(true)
+    }
   })
 })
