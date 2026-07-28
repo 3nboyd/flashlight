@@ -7,7 +7,7 @@ import {
   type FixtureVisualState,
   type StagePosition
 } from '@core/lighting/visualizer/fixtureVisualState'
-import type { PatchedFixture } from '@core/lighting/fixtures/types'
+import { segmentCount, type PatchedFixture } from '@core/lighting/fixtures/types'
 import type { StageProp, StagePropType } from '@core/lighting/engine/types'
 
 /**
@@ -656,6 +656,10 @@ function drawProp(
 }
 
 function emptyState(fixture: PatchedFixture): FixtureVisualState {
+  // Keep the segment shape from the definition so a pixel bar still draws as a
+  // row of cells when it is dark (no snapshot yet / output stopped) instead of
+  // collapsing to a single generic icon.
+  const segCount = segmentCount(fixture.definition)
   return {
     patchId: fixture.patch.id,
     label: fixture.patch.label,
@@ -667,7 +671,10 @@ function emptyState(fixture: PatchedFixture): FixtureVisualState {
     strobing: false,
     pan: null,
     tilt: null,
-    segments: null
+    segments:
+      segCount > 1
+        ? Array.from({ length: segCount }, () => ({ r: 0, g: 0, b: 0, intensity: 0, tilt: null }))
+        : null
   }
 }
 
@@ -770,9 +777,9 @@ function drawBeam(
   }
 }
 
-/** Width of a multi-cell bar fixture on screen. */
+/** Width of a multi-cell bar fixture on screen (wide enough to read as N lights). */
 function barWidth(segCount: number, height: number): number {
-  return Math.min(segCount * Math.max(10, height * 0.05), height * 0.9)
+  return Math.min(segCount * Math.max(14, height * 0.06), height * 1.7)
 }
 
 function drawSegmentBar(
@@ -976,16 +983,27 @@ function drawFixtureBody(
     const total = barWidth(state.segments.length, height)
     const cellSpan = total / state.segments.length
     const vertical = level === 'side'
+    const thick = Math.max(s * 0.95, cellSpan * 0.8)
+    // Housing rail.
+    ctx.fillStyle = '#1c1c24'
     ctx.beginPath()
-    if (vertical) ctx.roundRect(fx - s * 0.45, fy - total / 2, s * 0.9, total, 2)
-    else ctx.roundRect(fx - total / 2, fy - s * 0.45, total, s * 0.9, 2)
+    if (vertical) ctx.roundRect(fx - thick / 2, fy - total / 2, thick, total, 3)
+    else ctx.roundRect(fx - total / 2, fy - thick / 2, total, thick, 3)
     ctx.fill()
     ctx.stroke()
-    state.segments.forEach((_, i) => {
+    // One lens per pixel, tinted by its live color so the 10 cells are
+    // individually visible (dark cells read as empty lenses).
+    state.segments.forEach((seg, i) => {
       const cx = vertical ? fx : fx - total / 2 + cellSpan * (i + 0.5)
       const cy = vertical ? fy - total / 2 + cellSpan * (i + 0.5) : fy
+      const r = Math.min(cellSpan * 0.38, thick * 0.42)
+      const lit = seg.intensity > 0.02
       ctx.beginPath()
-      ctx.arc(cx, cy, Math.min(cellSpan * 0.3, s * 0.32), 0, Math.PI * 2)
+      ctx.arc(cx, cy, r, 0, Math.PI * 2)
+      ctx.fillStyle = lit
+        ? `rgb(${Math.round(seg.r * 255)},${Math.round(seg.g * 255)},${Math.round(seg.b * 255)})`
+        : '#0b0b0f'
+      ctx.fill()
       ctx.stroke()
     })
   } else if (state.kind === 'derby') {
