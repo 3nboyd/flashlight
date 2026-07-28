@@ -227,6 +227,90 @@ function targetMatches(target: SceneTarget, fixture: PatchedFixture): boolean {
 }
 
 /**
+ * Spatial ordering for group-spread effects (chase, rainbow, sparkle,
+ * movement). Instead of spreading by patch order, we lay every lit "cell" out
+ * along the physical X axis of the stage so a sweep flows left to right across
+ * the whole rig - a strobe on the left, then each pixel of a bar in the
+ * middle, then a strobe on the right, as one continuous motion.
+ *
+ * Two orderings come out of this:
+ *  - cell order: single fixtures and every individual pixel of a segmented
+ *    fixture, ranked by X. Drives color-spread effects so a bar's pixels join
+ *    the same chase as the pars beside it.
+ *  - fixture order: whole fixtures ranked by X. Drives the non-segmented
+ *    output (pan/tilt) so a multi-pixel bar swings as one unit rather than
+ *    rippling per pixel.
+ */
+interface GroupOrder {
+  cellRank: Map<string, number[]>
+  cellTotal: Map<string, number>
+  fixtureRank: Map<string, number>
+  fixtureTotal: Map<string, number>
+}
+
+function computeGroupOrder(
+  fixtures: PatchedFixture[],
+  scene: Scene,
+  positions?: Map<string, number>
+): GroupOrder {
+  const cellRank = new Map<string, number[]>()
+  const cellTotal = new Map<string, number>()
+  const fixtureRank = new Map<string, number>()
+  const fixtureTotal = new Map<string, number>()
+
+  const patchOrder = new Map<string, number>()
+  fixtures.forEach((f, i) => patchOrder.set(f.patch.id, i))
+
+  // Group fixtures by their effective target (last matching wins).
+  const groups = new Map<SceneTarget, PatchedFixture[]>()
+  for (const fixture of fixtures) {
+    const matching = scene.targets.filter((t) => targetMatches(t, fixture))
+    if (matching.length === 0) continue
+    const target = matching[matching.length - 1]
+    const arr = groups.get(target)
+    if (arr) arr.push(fixture)
+    else groups.set(target, [fixture])
+  }
+
+  // X in 0..1: the fixture's saved/auto stage position when known, else spread
+  // evenly by patch order so behaviour is deterministic without a stage.
+  const xOf = (fixture: PatchedFixture, group: PatchedFixture[]): number => {
+    const known = positions?.get(fixture.patch.id)
+    if (known !== undefined) return known
+    return group.length > 1 ? group.indexOf(fixture) / (group.length - 1) : 0.5
+  }
+
+  for (const group of groups.values()) {
+    const byFixture = [...group].sort(
+      (a, b) => xOf(a, group) - xOf(b, group) || patchOrder.get(a.patch.id)! - patchOrder.get(b.patch.id)!
+    )
+    byFixture.forEach((fixture, rank) => {
+      fixtureRank.set(fixture.patch.id, rank)
+      fixtureTotal.set(fixture.patch.id, group.length)
+    })
+
+    // One cell per single fixture, one per pixel of a segmented fixture.
+    const cells: { id: string; seg: number; x: number; order: number }[] = []
+    for (const fixture of group) {
+      const count = Math.max(1, segmentCount(fixture.definition))
+      const x = xOf(fixture, group)
+      const order = patchOrder.get(fixture.patch.id)!
+      for (let s = 0; s < count; s++) cells.push({ id: fixture.patch.id, seg: s, x, order })
+    }
+    // Order by X; a fixture's own pixels stay contiguous and in pixel order.
+    cells.sort((a, b) => a.x - b.x || a.order - b.order || a.seg - b.seg)
+    cells.forEach((cell, rank) => {
+      const arr = cellRank.get(cell.id) ?? []
+      arr[cell.seg] = rank
+      cellRank.set(cell.id, arr)
+      cellTotal.set(cell.id, cells.length)
+    })
+  }
+
+  return { cellRank, cellTotal, fixtureRank, fixtureTotal }
+}
+
+/**
  * Renders one engine tick: active scene + live overrides + beat position +
  * audio features → fresh Universe buffers keyed by universe number.
  */
@@ -237,10 +321,13 @@ export function renderTick(options: {
   beat: BeatPosition
   audio?: AudioFeatures
   nowMs: number
+  /** Fixture id -> normalized stage X (0..1), so effects spread by position. */
+  positions?: Map<string, number>
 }): Map<number, Universe> {
   const { fixtures, scene, beat, nowMs } = options
   const overrides = options.overrides ?? DEFAULT_OVERRIDES
   const audio = options.audio ?? SILENT_FEATURES
+  const order = scene && !overrides.blackout ? computeGroupOrder(fixtures, scene, options.positions) : null
   const mod: EffectModifiers = {
     movementSpeed: overrides.movementSpeed ?? 1,
     reactivity: overrides.reactivity ?? 1
@@ -272,24 +359,25 @@ export function renderTick(options: {
     // pixel bar's cells and movement effects wave across a bar's heads.
     let segmentOutputs: FixtureOutput[] = []
 
-    if (scene && !overrides.blackout) {
+    if (scene && order && !overrides.blackout) {
       // Last matching target wins; fixtures in no target stay dark.
       const targets = scene.targets.filter((t) => targetMatches(t, fixture))
       if (targets.length > 0) {
         const target = targets[targets.length - 1]
-        const groupFixtures = fixtures.filter((f) => targetMatches(target, f))
-        const indexInGroup = groupFixtures.findIndex((f) => f.patch.id === fixture.patch.id)
-        output = applyEffect(target, target.effect, indexInGroup, groupFixtures.length, beat, audio, mod)
+        const cellRanks = order.cellRank.get(fixture.patch.id) ?? [0]
+        const totalCells = order.cellTotal.get(fixture.patch.id) ?? 1
+        // Non-segmented output: a multi-pixel bar moves as one unit (fixture
+        // order, so pan/tilt does not ripple per pixel); a single-head fixture
+        // takes its own cell rank so its color joins the rig-wide sweep.
+        const wholeIndex =
+          segments > 1 ? (order.fixtureRank.get(fixture.patch.id) ?? 0) : (cellRanks[0] ?? 0)
+        const wholeCount = segments > 1 ? (order.fixtureTotal.get(fixture.patch.id) ?? 1) : totalCells
+        output = applyEffect(target, target.effect, wholeIndex, wholeCount, beat, audio, mod)
 
         if (segments > 1) {
-          let segmentBase = 0
-          for (let i = 0; i < indexInGroup; i++) {
-            segmentBase += segmentCount(groupFixtures[i].definition)
-          }
-          const totalSegments = groupFixtures.reduce((sum, f) => sum + segmentCount(f.definition), 0)
           for (let s = 0; s < segments; s++) {
             segmentOutputs.push(
-              applyEffect(target, target.effect, segmentBase + s, totalSegments, beat, audio, mod)
+              applyEffect(target, target.effect, cellRanks[s] ?? s, totalCells, beat, audio, mod)
             )
           }
         }

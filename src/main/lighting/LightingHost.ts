@@ -14,6 +14,7 @@ import {
 import { PRESET_SCENES, PRESET_CATEGORY_BY_ID, defaultSmartPools } from '@core/lighting/engine/presetScenes'
 import { SmartModeEngine, type SmartPhase } from '@core/lighting/engine/SmartMode'
 import { fixturesById } from '@core/lighting/fixtures/library'
+import { resolveStagePositions } from '@core/lighting/visualizer/fixtureVisualState'
 import type { PatchedFixture } from '@core/lighting/fixtures/types'
 import type { AudioFeatures } from '@core/lighting/audio/features'
 import { SILENT_FEATURES } from '@core/lighting/audio/features'
@@ -391,6 +392,19 @@ export class LightingHost {
       .filter((f): f is PatchedFixture => f !== null)
   }
 
+  /**
+   * Fixture id -> normalized stage X, so position-aware effects (chase,
+   * rainbow, sweeps) flow across the rig left to right using each fixture's
+   * placement on the stage (saved position, or auto-layout when unplaced).
+   */
+  private stageXPositions(): Map<string, number> {
+    const defs = fixturesById(this.project.customFixtures)
+    const layout = resolveStagePositions(this.project.patches, defs)
+    const positions = new Map<string, number>()
+    for (const [id, pos] of layout) positions.set(id, pos.x)
+    return positions
+  }
+
   private currentScene(nowMs: number): Scene | null {
     // Smart mode owns scene selection while enabled (it sets activeSceneId
     // directly), so autopilot rotation is suspended.
@@ -468,6 +482,7 @@ export class LightingHost {
       overrides: this.effectiveOverrides(),
       beat: this.clock.positionAt(nowMs),
       audio: audioFresh ? this.audio : SILENT_FEATURES,
+      positions: this.stageXPositions(),
       nowMs
     })
     this.applyIdentify(universes, nowMs)
@@ -502,6 +517,7 @@ export class LightingHost {
       overrides: this.effectiveOverrides(),
       beat: this.clock.positionAt(nowMs),
       audio: audioFresh ? this.audio : SILENT_FEATURES,
+      positions: this.stageXPositions(),
       nowMs
     })
     this.applyIdentify(universes, nowMs)
