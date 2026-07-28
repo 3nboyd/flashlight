@@ -91,6 +91,25 @@ export const BUILTIN_FIXTURES: FixtureDefinition[] = [
     kind: 'strobe',
     channels: [{ role: 'dimmer' }, ...rgb(), { role: 'strobe', strobeOpen: 0, strobeRange: { min: 10, max: 255 } }]
   },
+  {
+    // RGBW strobe panel driven in its 11ch "manual" mode: channels 1-6 are the
+    // live dimmer/color/strobe the engine controls; channels 7-11 are the
+    // fixture's own effect-macro selectors, pinned to 0 so it obeys DMX rather
+    // than running an internal auto/sound program (CH7 0-5 = manual RGBW).
+    id: 'rgbw-strobe-panel-11ch',
+    name: 'RGB Strobe Panel (11ch: D/R/G/B/W/Strobe, manual mode)',
+    kind: 'strobe',
+    channels: [
+      { role: 'dimmer' },
+      ...rgbw(),
+      { role: 'strobe', strobeOpen: 0, strobeRange: { min: 8, max: 255 } },
+      { role: 'static', staticValue: 0 }, // Ch7 Effect Mode: hold in manual RGBW
+      { role: 'static', staticValue: 0 }, // Ch8 Effect Select (unused in manual)
+      { role: 'static', staticValue: 0 }, // Ch9 Effect Speed
+      { role: 'static', staticValue: 0 }, // Ch10 White Auto Effect: disabled
+      { role: 'static', staticValue: 0 } // Ch11 White Effect Speed
+    ]
+  },
 
   // ---- Moving heads ----
   {
@@ -190,6 +209,23 @@ export const BUILTIN_FIXTURES: FixtureDefinition[] = [
       ...rgbw(2),
       ...rgbw(3),
       ...rgbw(4)
+    ]
+  },
+  {
+    // 10 individually addressable RGBW pixels plus a single whole-bar tilt.
+    // The app drives every pixel directly (chase / rainbow / running-light
+    // effects run across the 10 cells, beat-synced), so it stays in the rich
+    // 43ch mode rather than the fixture's fixed 7/13ch macro modes. Tilt speed
+    // is pinned to 0 (instant) so the engine owns the movement; the reset
+    // channel is pinned to 0 so a factory reset can never fire from a scene.
+    id: 'rgbw-beam-bar-10px-43ch',
+    name: '10-Pixel RGBW Beam Bar (43ch: Tilt/Speed + 10×RGBW + Reset)',
+    kind: 'movingBar',
+    channels: [
+      { role: 'tilt' },
+      { role: 'speed', staticValue: 0 },
+      ...Array.from({ length: 10 }, (_, i) => rgbw(i)).flat(),
+      { role: 'static', staticValue: 0 }
     ]
   },
   {
