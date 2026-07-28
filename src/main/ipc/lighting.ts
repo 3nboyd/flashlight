@@ -64,6 +64,12 @@ export function registerLightingHandlers(): void {
     lighting.clearManual()
     return lighting.getStatus()
   })
+  ipcMain.handle('lighting:getOutputDiagnostics', async () => lighting.getOutputDiagnostics())
+  ipcMain.handle('lighting:scanArtNet', async () => lighting.scanArtNet())
+  ipcMain.handle('lighting:identifyFixture', async (_e, patchId: string | null) => {
+    lighting.identifyFixture(patchId)
+    return lighting.getIdentifyId()
+  })
 
   // High-frequency fire-and-forget stream (no reply needed).
   ipcMain.on('lighting:audioFeatures', (_e, features: AudioFeatures & { flux?: number }) => {

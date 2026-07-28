@@ -21,6 +21,8 @@ export const ARTNET_PORT = 6454
 
 const ARTNET_ID = Buffer.from('Art-Net\0', 'ascii')
 const OP_DMX = 0x5000
+const OP_POLL = 0x2000
+const OP_POLL_REPLY = 0x2100
 const PROTOCOL_VERSION = 14
 
 export interface ArtDmxOptions {
@@ -51,4 +53,55 @@ export function encodeArtDmx({ universe, sequence = 0, data }: ArtDmxOptions): B
   packet.writeUInt16BE(payload.length, 16)
   payload.copy(packet, 18)
   return packet
+}
+
+/**
+ * ArtPoll (OpCode 0x2000): the discovery ping. Broadcast to port 6454 and
+ * every Art-Net node on the wire answers with an ArtPollReply, which is how
+ * we prove the network path to a node is alive. 14 bytes, no options set
+ * (TalkToMe 0 = reply to this poll only, no unsolicited spam).
+ */
+export function encodeArtPoll(): Buffer {
+  const packet = Buffer.alloc(14)
+  ARTNET_ID.copy(packet, 0)
+  packet.writeUInt16LE(OP_POLL, 8)
+  packet.writeUInt16BE(PROTOCOL_VERSION, 10)
+  packet.writeUInt8(0, 12) // TalkToMe
+  packet.writeUInt8(0, 13) // Priority
+  return packet
+}
+
+export interface ArtNetNodeInfo {
+  /** Node IP as dotted-quad, from the reply body (its own claimed address). */
+  ip: string
+  /** UDP port the node listens on (almost always 6454). */
+  port: number
+  shortName: string
+  longName: string
+  /** DMX ports the node exposes (0-4 per reply). */
+  numPorts: number
+}
+
+function readCString(buf: Buffer, start: number, maxLen: number): string {
+  const end = Math.min(start + maxLen, buf.length)
+  let stop = start
+  while (stop < end && buf[stop] !== 0) stop += 1
+  return buf.toString('ascii', start, stop)
+}
+
+/**
+ * Parses an ArtPollReply (OpCode 0x2100). Returns null if the datagram is not
+ * a valid reply (wrong id/opcode or too short), so a stray packet on 6454
+ * never crashes discovery. Field offsets follow the Art-Net 4 spec.
+ */
+export function parseArtPollReply(buf: Buffer): ArtNetNodeInfo | null {
+  if (buf.length < 26) return null
+  if (!buf.subarray(0, 8).equals(ARTNET_ID)) return null
+  if (buf.readUInt16LE(8) !== OP_POLL_REPLY) return null
+  const ip = `${buf[10]}.${buf[11]}.${buf[12]}.${buf[13]}`
+  const port = buf.readUInt16LE(14)
+  const shortName = readCString(buf, 26, 18)
+  const longName = buf.length >= 45 ? readCString(buf, 44, 64) : ''
+  const numPorts = buf.length >= 174 ? buf.readUInt16BE(172) : 0
+  return { ip, port, shortName, longName, numPorts }
 }

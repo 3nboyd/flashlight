@@ -5,6 +5,7 @@ import { findAddressOverlaps, fixtureFootprint } from '@core/lighting/fixtures/t
 import type { OutputProtocol } from '@core/lighting/engine/types'
 import { defaultSmartPools } from '@core/lighting/engine/presetScenes'
 import { SceneEditorModal } from './SceneEditorModal'
+import { OutputDiagnostics } from './OutputDiagnostics'
 import { SceneTile } from './SceneTile'
 import { groupScenesByCategory } from './sceneCategories'
 import { SetupSection, SetupViewContext, type SetupView } from './SetupSection'
@@ -436,6 +437,8 @@ export function SetupPanel({ view }: { view: SetupView }): JSX.Element {
             ? 'Works with the Enttec DMX USB Pro and Pro-compatible clones (framed serial protocol). The original "Open DMX USB" (raw FTDI) is not supported - it can\'t be timed reliably from software.'
             : 'Works with any Art-Net/sACN node or interface. Note: sACN universes start at 1.'}
         </p>
+        <div className="diag-heading">Connection &amp; troubleshooting</div>
+        <OutputDiagnostics />
       </SetupSection>
 
       <SetupSection id="os2l" views={['settings']} title="OS2L, DJ software beat link">

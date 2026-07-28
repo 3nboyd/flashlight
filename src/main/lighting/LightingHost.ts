@@ -1,6 +1,8 @@
 import { readFile, writeFile, mkdir, rm } from 'fs/promises'
 import { join } from 'path'
+import { networkInterfaces } from 'os'
 import { renderTick } from '@core/lighting/engine/LightingEngine'
+import type { Universe } from '@core/lighting/dmx/Universe'
 import { BeatClock } from '@core/lighting/engine/BeatClock'
 import {
   defaultLightingProject,
@@ -18,8 +20,43 @@ import { SILENT_FEATURES } from '@core/lighting/audio/features'
 import { BpmEstimator } from '@core/lighting/audio/BeatDetector'
 import { DmxSender } from './DmxSender'
 import { Os2lServer, type DiscoveryMode } from './Os2lServer'
+import { ArtNetDiscovery, type DiscoveredNode } from './ArtNetDiscovery'
 
 export type BeatSource = 'os2l' | 'audio' | 'manual'
+
+/** Snapshot of the output path for the Setup diagnostics panel. */
+export interface OutputDiagnostics {
+  protocol: 'artnet' | 'sacn' | 'enttec'
+  /** Where frames are going (IP for Art-Net, multicast note for sACN, serial path for USB). */
+  target: string
+  /** True while the render/send loop is running. */
+  running: boolean
+  /** Monotonic frames sent since launch (renderer derives a rate from deltas). */
+  packetsSent: number
+  /** Wall-clock ms of the last frame sent, or 0 if none yet. */
+  lastSendMs: number
+  lastError: string | null
+  /** This machine's non-loopback IPv4 addresses, for subnet-matching a node. */
+  interfaces: { name: string; address: string }[]
+}
+
+/** Full-on white on every fixture channel, used by the Identify test. */
+const IDENTIFY_SCENE: Scene = {
+  id: '__identify',
+  name: 'Identify',
+  uiColor: '#ffffff',
+  targets: [{ group: 'all', color: { r: 255, g: 255, b: 255, w: 255 }, dimmer: 1 }]
+}
+
+function localIpv4Interfaces(): { name: string; address: string }[] {
+  const out: { name: string; address: string }[] = []
+  for (const [name, infos] of Object.entries(networkInterfaces())) {
+    for (const info of infos ?? []) {
+      if (info.family === 'IPv4' && !info.internal) out.push({ name, address: info.address })
+    }
+  }
+  return out
+}
 
 /** Grows/shrinks the pad-scene array to exactly `count`, preserving assignments. */
 export function resizePads(pads: (string | null)[], count: number): (string | null)[] {
@@ -102,6 +139,11 @@ export class LightingHost {
   private manualColor: { r: number; g: number; b: number } | null = null
   private manualPan = 0
   private manualTilt = 0
+  private readonly discovery = new ArtNetDiscovery()
+  // Identify test: force one fixture full-on so a DJ can trace the signal
+  // chain to a specific light. Auto-clears so it never gets left on.
+  private identifyId: string | null = null
+  private identifyTimer: NodeJS.Timeout | null = null
 
   constructor(userDataDir: string) {
     this.legacyProjectPath = join(userDataDir, 'lighting-project.json')
@@ -393,6 +435,30 @@ export class LightingHost {
     return o
   }
 
+  /**
+   * Overwrites the identified fixture's channels with a full-on white look,
+   * layered on top of whatever the scene produced, so it stands out on stage
+   * for the Identify test.
+   */
+  private applyIdentify(universes: Map<number, Universe>, nowMs: number): void {
+    if (!this.identifyId) return
+    const fixture = this.resolveFixtures().find((f) => f.patch.id === this.identifyId)
+    if (!fixture) return
+    const dst = universes.get(fixture.patch.universe)
+    if (!dst) return
+    const src = renderTick({
+      fixtures: [fixture],
+      scene: IDENTIFY_SCENE,
+      beat: this.clock.positionAt(nowMs),
+      nowMs
+    }).get(fixture.patch.universe)
+    if (!src) return
+    for (let i = 0; i < fixture.definition.channels.length; i++) {
+      const address = fixture.patch.address + i
+      dst.setChannel(address, src.getChannel(address))
+    }
+  }
+
   private tick(): void {
     const nowMs = Date.now()
     const audioFresh = nowMs - this.lastAudioAtMs < 500
@@ -404,6 +470,7 @@ export class LightingHost {
       audio: audioFresh ? this.audio : SILENT_FEATURES,
       nowMs
     })
+    this.applyIdentify(universes, nowMs)
     for (const [universe, data] of universes) {
       // A USB interface is a single DMX line: emit only its configured universe.
       if (this.project.output.protocol === 'enttec' && universe !== this.project.output.usbUniverse) {
@@ -437,6 +504,7 @@ export class LightingHost {
       audio: audioFresh ? this.audio : SILENT_FEATURES,
       nowMs
     })
+    this.applyIdentify(universes, nowMs)
     const snapshot: Record<number, number[]> = {}
     for (const [universe, data] of universes) {
       snapshot[universe] = Array.from(data.toBuffer())
@@ -574,8 +642,60 @@ export class LightingHost {
     return this.sender.getLastError()
   }
 
+  // ---- output diagnostics (Setup panel) ----
+
+  /** Live output-path status for the diagnostics panel. */
+  getOutputDiagnostics(): OutputDiagnostics {
+    const { packetsSent, lastSendMs } = this.sender.getSendStats()
+    const output = this.project.output
+    const target =
+      output.protocol === 'artnet'
+        ? output.artnetHost
+        : output.protocol === 'sacn'
+          ? 'sACN multicast (auto)'
+          : (output.serialPath ?? 'no serial port selected')
+    return {
+      protocol: output.protocol,
+      target,
+      running: this.timer !== null,
+      packetsSent,
+      lastSendMs,
+      lastError: this.senderError(),
+      interfaces: localIpv4Interfaces()
+    }
+  }
+
+  /** One-shot Art-Net node discovery: broadcast a poll, gather the replies. */
+  scanArtNet(): Promise<DiscoveredNode[]> {
+    return this.discovery.scan('255.255.255.255')
+  }
+
+  /** Force one fixture full-on (or clear with null) to trace the signal chain. */
+  identifyFixture(patchId: string | null): void {
+    if (this.identifyTimer) {
+      clearTimeout(this.identifyTimer)
+      this.identifyTimer = null
+    }
+    this.identifyId = patchId
+    if (patchId) {
+      this.identifyTimer = setTimeout(() => {
+        this.identifyId = null
+        this.identifyTimer = null
+      }, 30000)
+    }
+  }
+
+  getIdentifyId(): string | null {
+    return this.identifyId
+  }
+
   dispose(): void {
     this.stop()
+    if (this.identifyTimer) {
+      clearTimeout(this.identifyTimer)
+      this.identifyTimer = null
+    }
+    this.discovery.close()
     this.os2l?.stop()
     this.os2l = null
     this.sender.close()

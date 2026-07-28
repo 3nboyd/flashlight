@@ -32,9 +32,17 @@ export class DmxSender {
   private readonly sequences = new Map<number, number>()
   private readonly cid = randomBytes(16)
   private lastError: string | null = null
+  /** Monotonic count of universe frames handed to the transport. */
+  private packetsSent = 0
+  private lastSendMs = 0
 
   constructor(config: DmxSenderConfig) {
     this.config = config
+  }
+
+  /** Total frames sent since launch and when the last one went out. */
+  getSendStats(): { packetsSent: number; lastSendMs: number } {
+    return { packetsSent: this.packetsSent, lastSendMs: this.lastSendMs }
   }
 
   static async listSerialPorts(): Promise<{ path: string; label: string }[]> {
@@ -123,6 +131,11 @@ export class DmxSender {
     return this.lastError
   }
 
+  private countSend(): void {
+    this.packetsSent += 1
+    this.lastSendMs = Date.now()
+  }
+
   private nextSequence(universe: number): number {
     const next = ((this.sequences.get(universe) ?? 0) % 255) + 1
     this.sequences.set(universe, next)
@@ -134,6 +147,7 @@ export class DmxSender {
       case 'artnet': {
         const packet = encodeArtDmx({ universe, sequence: this.nextSequence(universe), data })
         this.ensureSocket().send(packet, ARTNET_PORT, this.config.artnetHost)
+        this.countSend()
         return
       }
       case 'sacn': {
@@ -146,11 +160,13 @@ export class DmxSender {
           data
         })
         this.ensureSocket().send(packet, SACN_PORT, sacnMulticastAddress(u))
+        this.countSend()
         return
       }
       case 'enttec': {
         if (this.serial?.isOpen) {
           this.serial.write(encodeEnttecProDmx(data))
+          this.countSend()
         } else {
           void this.ensureSerial()
         }

@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest'
 import { Universe } from './Universe'
-import { encodeArtDmx, ARTNET_PORT } from './artnet'
+import { encodeArtDmx, encodeArtPoll, parseArtPollReply, ARTNET_PORT } from './artnet'
 import { encodeSacnData, sacnMulticastAddress, SACN_PORT } from './sacn'
 
 describe('Universe', () => {
@@ -72,6 +72,45 @@ describe('ArtDmx encoder', () => {
 
   it('exports the standard Art-Net port', () => {
     expect(ARTNET_PORT).toBe(6454)
+  })
+})
+
+describe('Art-Net discovery (ArtPoll / ArtPollReply)', () => {
+  it('encodes a 14-byte ArtPoll with the right id and opcode', () => {
+    const poll = encodeArtPoll()
+    expect(poll.length).toBe(14)
+    expect(poll.toString('ascii', 0, 8)).toBe('Art-Net\0')
+    expect(poll.readUInt16LE(8)).toBe(0x2000) // OpPoll
+    expect(poll.readUInt16BE(10)).toBe(14) // protocol version
+  })
+
+  function fakeReply(ip: number[], shortName: string, longName: string, numPorts: number): Buffer {
+    const buf = Buffer.alloc(239)
+    Buffer.from('Art-Net\0', 'ascii').copy(buf, 0)
+    buf.writeUInt16LE(0x2100, 8) // OpPollReply
+    ip.forEach((b, i) => (buf[10 + i] = b))
+    buf.writeUInt16LE(6454, 14)
+    buf.write(shortName, 26, 'ascii')
+    buf.write(longName, 44, 'ascii')
+    buf.writeUInt16BE(numPorts, 172)
+    return buf
+  }
+
+  it('parses a well-formed reply into node info', () => {
+    const node = parseArtPollReply(fakeReply([2, 0, 0, 10], 'DMX King', 'eDMX1 Pro Node', 1))
+    expect(node).not.toBeNull()
+    expect(node!.ip).toBe('2.0.0.10')
+    expect(node!.port).toBe(6454)
+    expect(node!.shortName).toBe('DMX King')
+    expect(node!.longName).toBe('eDMX1 Pro Node')
+    expect(node!.numPorts).toBe(1)
+  })
+
+  it('rejects non-reply and truncated datagrams instead of throwing', () => {
+    expect(parseArtPollReply(encodeArtPoll())).toBeNull() // an ArtPoll, not a reply
+    expect(parseArtPollReply(Buffer.from('Art-Net\0hello', 'ascii'))).toBeNull()
+    expect(parseArtPollReply(Buffer.from('not artnet at all', 'ascii'))).toBeNull()
+    expect(parseArtPollReply(Buffer.alloc(4))).toBeNull()
   })
 })
 
