@@ -43,7 +43,7 @@ describe('readFixtureVisualState - engine write → visual read round-trip', () 
     expect(state.strobing).toBe(false)
   })
 
-  it('recovers dimmer, full color, and strobe state for an 8ch RGBW par', () => {
+  it('recovers full color and strobe state for an 8ch RGBW par (strobe is full brightness)', () => {
     const fixtures = [patched('p1', 'generic-rgbw-8ch', 1)]
     const data = renderScene(fixtures, {
       id: 's',
@@ -59,7 +59,8 @@ describe('readFixtureVisualState - engine write → visual read round-trip', () 
       ]
     })
     const state = readFixtureVisualState(data, fixtures[0])
-    expect(state.intensity).toBeCloseTo(0.8, 1)
+    // Strobe punches at full brightness regardless of the scene's dimmer.
+    expect(state.intensity).toBeCloseTo(1, 1)
     expect(state.b).toBe(1)
     expect(state.strobing).toBe(true)
   })

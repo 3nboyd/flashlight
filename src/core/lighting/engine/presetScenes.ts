@@ -170,8 +170,14 @@ export const PRESET_LIBRARY: PresetCategory[] = [
         group: 'kind:movingBar',
         color: { r: 0, g: 160, b: 255 },
         dimmer: 1,
-        effect: { type: 'movementSweep', beats: 4, amplitude: 0.9 }
+        // Slow, full-range sweep - a grand arc, not a jiggle.
+        effect: { type: 'movementSweep', beats: 8, amplitude: 1 }
       }
+    ]),
+    // Eerie/sparse: one light at a time, switching to a different one every
+    // couple seconds - the rest stay dark.
+    scene('preset-lone-beam', 'Lone Beam', '#b91c1c', [
+      { group: 'all', color: { r: 200, g: 0, b: 0 }, dimmer: 1, effect: { type: 'solo', beats: 4 } }
     ])
   ]),
 
@@ -185,7 +191,7 @@ export const PRESET_LIBRARY: PresetCategory[] = [
         group: 'kind:movingHead',
         color: { r: 0, g: 200, b: 255 },
         dimmer: 1,
-        effect: { type: 'movementNod', beats: 2, amplitude: 0.7 }
+        effect: { type: 'movementNod', beats: 4, amplitude: 0.8 }
       }
     ]),
     scene('preset-filter-swell', 'Filter Swell', '#a78bfa', [
@@ -197,7 +203,7 @@ export const PRESET_LIBRARY: PresetCategory[] = [
         group: 'kind:movingHead',
         color: { r: 255, g: 40, b: 60 },
         dimmer: 1,
-        effect: { type: 'movementSweep', beats: 2, amplitude: 0.8 }
+        effect: { type: 'movementSweep', beats: 5, amplitude: 1 }
       }
     ])
   ]),
@@ -280,7 +286,7 @@ export const PRESET_LIBRARY: PresetCategory[] = [
         group: 'kind:movingHead',
         color: { r: 255, g: 120, b: 0 },
         dimmer: 1,
-        effect: { type: 'movementCircle', beats: 2, amplitude: 0.9 }
+        effect: { type: 'movementCircle', beats: 6, amplitude: 0.9 }
       },
       { group: 'kind:laser', color: { r: 0, g: 255, b: 0 }, dimmer: 1 },
       { group: 'kind:derby', color: { r: 255, g: 60, b: 0 }, dimmer: 1 }
@@ -300,15 +306,11 @@ export const PRESET_LIBRARY: PresetCategory[] = [
       { group: 'kind:uv', color: WHITE, dimmer: 1 },
       { group: 'kind:par', color: { r: 150, g: 0, b: 255 }, dimmer: 0.8, effect: { type: 'beatPulse' } }
     ]),
-    // Full-send rainbow: hue snaps every 8th note and the bar swings fast.
+    // Full-send rainbow: hue snaps every 8th note and spreads across the rig,
+    // so every pixel of a bar shows a different color (no movement - a fast
+    // tilt jiggle is a waste of a beam array).
     scene('preset-rainbow-overdrive', 'Rainbow Overdrive', '#f0abfc', [
-      { group: 'all', color: { r: 255, g: 0, b: 0 }, dimmer: 1, effect: { type: 'rainbowStep', beats: 0.5 } },
-      {
-        group: 'kind:movingBar',
-        color: { r: 255, g: 0, b: 0 },
-        dimmer: 1,
-        effect: { type: 'movementSweep', beats: 1, amplitude: 1 }
-      }
+      { group: 'all', color: { r: 255, g: 0, b: 0 }, dimmer: 1, effect: { type: 'rainbowStep', beats: 0.5 } }
     ]),
     // An occasional red beam that shoots out every couple beats and holds.
     scene('preset-red-strikes', 'Red Strikes', '#ef4444', [

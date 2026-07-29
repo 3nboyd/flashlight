@@ -27,6 +27,7 @@ const KIND_OF: Record<EffectType, PreviewKind> = {
   randomColor: 'cycle',
   alternate: 'cycle',
   chase: 'cycle',
+  solo: 'cycle',
   sparkle: 'cycle',
   rainbow: 'rainbow',
   rainbowStep: 'rainbow',

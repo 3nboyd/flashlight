@@ -144,12 +144,14 @@ function applyEffect(
       return { ...base, color: hueToRgb(step * 60 + spread) }
     }
     case 'strobe':
-      return { ...base, strobing: true, color: palette[0], dimmer: target.dimmer }
+      // Strobe naturally punches at full brightness (master dimmer / a
+      // fixture's brightness cap still apply downstream).
+      return { ...base, strobing: true, color: palette[0], dimmer: 1 }
     case 'eighthStrobe': {
       // Tempo-locked flash: full on for the front of each 8th note, dark
       // between. Synced to the grid, unlike the free-running hardware strobe.
       const eighthPhase = (beat.beat * 2) % 1
-      return { ...base, dimmer: eighthPhase < 0.45 ? target.dimmer : 0 }
+      return { ...base, dimmer: eighthPhase < 0.45 ? 1 : 0 }
     }
     case 'audioLevel':
       return { ...base, dimmer: target.dimmer * Math.min(1, audio.rms * 1.4 * mod.reactivity) }
@@ -168,17 +170,19 @@ function applyEffect(
       return {
         ...base,
         pan: (target.pan ?? 128) + Math.sin(angle) * amplitude,
-        tilt: (target.tilt ?? 128) + Math.cos(angle) * amplitude * 0.6
+        tilt: (target.tilt ?? 128) + Math.cos(angle) * amplitude
       }
     }
     case 'movementSweep': {
       const amplitude = (effect.amplitude ?? 0.5) * 127
       const spread = fixtureCount > 1 ? (fixtureIndex / fixtureCount) * Math.PI : 0
       const angle = (beat.beat / beats) * 2 * Math.PI + spread
+      // Full-range swing on both axes so a tilt-only bar uses its whole travel
+      // (and its whole limit window), not a damped middle slice.
       return {
         ...base,
         pan: (target.pan ?? 128) + Math.sin(angle) * amplitude,
-        tilt: (target.tilt ?? 128) + Math.sin(angle) * amplitude * 0.5
+        tilt: (target.tilt ?? 128) + Math.sin(angle) * amplitude
       }
     }
     case 'movementFigure8': {
@@ -189,7 +193,7 @@ function applyEffect(
       return {
         ...base,
         pan: (target.pan ?? 128) + Math.sin(angle) * amplitude,
-        tilt: (target.tilt ?? 128) + Math.sin(angle * 2) * amplitude * 0.55
+        tilt: (target.tilt ?? 128) + Math.sin(angle * 2) * amplitude * 0.9
       }
     }
     case 'movementNod': {
@@ -197,7 +201,7 @@ function applyEffect(
       const amplitude = (effect.amplitude ?? 0.5) * 127
       const spread = fixtureCount > 1 ? (fixtureIndex / fixtureCount) * Math.PI : 0
       const angle = (beat.beat / beats) * 2 * Math.PI + spread
-      return { ...base, tilt: (target.tilt ?? 128) + Math.sin(angle) * amplitude * 0.7 }
+      return { ...base, tilt: (target.tilt ?? 128) + Math.sin(angle) * amplitude }
     }
     case 'movementRandom': {
       // Ballyhoo: each head jumps to a new pseudo-random position every N
@@ -221,7 +225,27 @@ function applyEffect(
         ...base,
         color,
         pan: (target.pan ?? 128) + hashOf(1) * amplitude,
-        tilt: (target.tilt ?? 128) + hashOf(7) * amplitude * 0.6
+        tilt: (target.tilt ?? 128) + hashOf(7) * amplitude
+      }
+    }
+    case 'solo': {
+      // Eerie sparse look: exactly one cell lit at a time, switching to a
+      // different random one every `beats`. Beam fixtures with a palette also
+      // re-aim per switch so a single beam points somewhere new each time.
+      const step = Math.floor(beat.beat / beats)
+      const hash = Math.abs(Math.sin(step * 53.17 + 11.7)) * 43758.5453
+      const chosen = Math.floor((hash - Math.floor(hash)) * Math.max(1, fixtureCount))
+      const lit = fixtureIndex === chosen
+      const aim = (salt: number): number => {
+        const v = Math.abs(Math.sin(step * 12.9898 + salt)) * 43758.5453
+        return (v - Math.floor(v)) * 2 - 1
+      }
+      const amplitude = (effect.amplitude ?? 1) * 127
+      return {
+        ...base,
+        dimmer: lit ? target.dimmer : 0,
+        pan: (target.pan ?? 128) + aim(1) * amplitude,
+        tilt: (target.tilt ?? 128) + aim(7) * amplitude
       }
     }
     default:

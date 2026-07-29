@@ -21,6 +21,7 @@ export type EffectType =
   | 'randomColor' // jump to a random palette color every N beats and hold
   | 'alternate' // odd/even fixtures swap two colors on the beat
   | 'chase' // one fixture (or position) lit at a time, advancing on the beat
+  | 'solo' // one random cell lit at a time, switching every N beats (eerie/sparse)
   | 'sparkle' // random fixtures/cells flash each beat subdivision
   | 'rainbow' // continuous hue rotation across fixtures
   | 'rainbowStep' // rainbow that snaps to a new hue on each quarter note

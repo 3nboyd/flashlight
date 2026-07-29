@@ -187,4 +187,36 @@ describe('build / strobe / peak effects', () => {
       expect(palette.some((c) => c.r === r && c.g === g && c.b === b)).toBe(true)
     }
   })
+
+  it('strobe drives full brightness even when the scene dimmer is low', () => {
+    const fixtures = [patched('p', 'generic-rgb-4ch', 1)]
+    const scene: Scene = {
+      id: 's',
+      name: 's',
+      uiColor: '#fff',
+      targets: [{ group: 'all', color: { r: 255, g: 255, b: 255 }, dimmer: 0.3, effect: { type: 'strobe' } }]
+    }
+    // nowMs 0 => simulated strobe gate open, so the dimmer channel reads full.
+    expect(renderTick({ fixtures, scene, beat: beatAt(0), nowMs: 0 }).get(1)!.getChannel(1)).toBeGreaterThan(240)
+  })
+})
+
+describe('solo (eerie / sparse)', () => {
+  it('lights exactly one cell at a time and switches between steps', () => {
+    const fixtures = Array.from({ length: 4 }, (_, i) => patched(`p${i}`, 'generic-rgb-4ch', 1 + i * 4))
+    const scene: Scene = {
+      id: 's',
+      name: 's',
+      uiColor: '#fff',
+      targets: [{ group: 'all', color: { r: 255, g: 255, b: 255 }, dimmer: 1, effect: { type: 'solo', beats: 1 } }]
+    }
+    const litIndex = (ms: number): number => {
+      const u = renderTick({ fixtures, scene, beat: beatAt(ms), nowMs: ms }).get(1)!
+      const lit = fixtures.filter((f) => u.getChannel(f.patch.address) > 10)
+      expect(lit.length).toBe(1) // exactly one cell at a time
+      return fixtures.findIndex((f) => u.getChannel(f.patch.address) > 10)
+    }
+    const chosen = [20, 520, 1020, 1520, 2020, 2520].map(litIndex)
+    expect(new Set(chosen).size).toBeGreaterThan(1) // switches around over steps
+  })
 })

@@ -28,6 +28,7 @@ export const EFFECT_CATALOG: EffectInfo[] = [
   { type: 'randomColor', label: 'Random Color', hint: 'Random color holds', usesPalette: true, isMovement: false },
   { type: 'alternate', label: 'Alternate', hint: 'Odd/even swap', usesPalette: true, isMovement: false },
   { type: 'chase', label: 'Chase', hint: 'One light runs along', usesPalette: true, isMovement: false },
+  { type: 'solo', label: 'Solo', hint: 'One light, switches (eerie)', usesPalette: false, isMovement: false },
   { type: 'sparkle', label: 'Sparkle', hint: 'Random twinkle', usesPalette: false, isMovement: false },
   { type: 'rainbow', label: 'Rainbow', hint: 'Hue flow across rig', usesPalette: false, isMovement: false },
   { type: 'rainbowStep', label: 'Rainbow Peak', hint: 'Hue snaps per beat', usesPalette: false, isMovement: false },
@@ -110,6 +111,14 @@ export function EffectIcon({ type }: { type: EffectType }): JSX.Element {
         <div className="fx-icon fx-grid">
           {[0.1, 0.7, 0.4, 0.9, 0.2, 0.55].map((d, i) => (
             <div key={i} className="fx-cell small fx-anim-sparkle" style={{ animationDelay: `${d}s` }} />
+          ))}
+        </div>
+      )
+    case 'solo':
+      return (
+        <div className="fx-icon fx-row">
+          {[0, 1, 2, 3].map((i) => (
+            <div key={i} className="fx-cell fx-anim-solo" style={{ animationDelay: `${i * 0.5}s` }} />
           ))}
         </div>
       )

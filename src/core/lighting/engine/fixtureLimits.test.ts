@@ -55,6 +55,19 @@ describe('per-fixture movement limits', () => {
     expect(max).toBeLessThanOrEqual(161)
   })
 
+  it('a full-amplitude sweep fills the whole tilt window (not just the middle)', () => {
+    const fixture = mover({ tiltMin: 96, tiltMax: 160 })
+    let min = 255
+    let max = 0
+    for (let ms = 0; ms <= 2000; ms += 40) {
+      const tilt = renderTick({ fixtures: [fixture], scene: sweep, beat: beatAt(ms), nowMs: ms }).get(1)!.getChannel(2)
+      min = Math.min(min, tilt)
+      max = Math.max(max, tilt)
+    }
+    expect(min).toBeLessThan(102) // reaches near the bottom of the window
+    expect(max).toBeGreaterThan(154) // and near the top
+  })
+
   it('caps brightness with dimmerMax', () => {
     const scene: Scene = { id: 's', name: 's', uiColor: '#fff', targets: [{ group: 'all', color: { r: 0, g: 0, b: 0, w: 255 }, dimmer: 1 }] }
     const capped = mover({ dimmerMax: 0.5 })

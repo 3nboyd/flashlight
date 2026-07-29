@@ -2,13 +2,15 @@ import { useCallback, useEffect, useMemo, useRef, useState, type JSX } from 'rea
 import { useLightingStore } from '../../state/lightingStore'
 import { BUILTIN_FIXTURES, fixturesById } from '@core/lighting/fixtures/library'
 import { findAddressOverlaps, fixtureFootprint } from '@core/lighting/fixtures/types'
-import type { OutputProtocol } from '@core/lighting/engine/types'
+import type { OutputProtocol, Scene } from '@core/lighting/engine/types'
 import { defaultSmartPools } from '@core/lighting/engine/presetScenes'
 import { SceneEditorModal } from './SceneEditorModal'
 import { FixtureLimitsModal } from './FixtureLimitsModal'
 import { OutputDiagnostics } from './OutputDiagnostics'
 import { SceneTile } from './SceneTile'
 import { groupScenesByCategory } from './sceneCategories'
+import { describeScene } from './sceneDescribe'
+import { rigProfile, sceneCompatible } from './sceneCompat'
 import { SetupSection, SetupViewContext, type SetupView } from './SetupSection'
 import { FixtureIcon } from './FixtureIcons'
 import { padColumns, resizePadArray } from './padGrid'
@@ -179,6 +181,73 @@ export function SetupPanel({ view }: { view: SetupView }): JSX.Element {
   const overlappingIds = useMemo(
     () => new Set(overlaps.flatMap((o) => [o.a.id, o.b.id])),
     [overlaps]
+  )
+  const sceneRig = useMemo(() => rigProfile(project.patches, defs), [project.patches, defs])
+  const compatibleScenes = useMemo(
+    () => project.scenes.filter((s) => sceneCompatible(s, sceneRig)),
+    [project.scenes, sceneRig]
+  )
+  const incompatibleScenes = useMemo(
+    () => project.scenes.filter((s) => !sceneCompatible(s, sceneRig)),
+    [project.scenes, sceneRig]
+  )
+
+  const duplicateScene = useCallback(
+    (id: string) =>
+      updateProject((p) => {
+        const copy = structuredClone(p.scenes.find((s) => s.id === id)!)
+        copy.id = `scene-${Date.now()}`
+        copy.name = `${copy.name} Copy`
+        return { ...p, scenes: [...p.scenes, copy] }
+      }),
+    [updateProject]
+  )
+  const deleteScene = useCallback(
+    (id: string) =>
+      updateProject((p) => ({
+        ...p,
+        scenes: p.scenes.filter((s) => s.id !== id),
+        padSceneIds: p.padSceneIds.map((x) => (x === id ? null : x)),
+        autopilot: { ...p.autopilot, sceneIds: p.autopilot.sceneIds.filter((x) => x !== id) }
+      })),
+    [updateProject]
+  )
+
+  const sceneTile = (scene: Scene): JSX.Element => (
+    <SceneTile
+      key={scene.id}
+      scene={scene}
+      title={describeScene(scene)}
+      onClick={() => setEditingSceneId(scene.id)}
+      actions={
+        <>
+          <button className="tile-icon-btn" title="Duplicate" onClick={() => duplicateScene(scene.id)}>
+            ⧉
+          </button>
+          <button className="tile-icon-btn danger" title="Delete" onClick={() => deleteScene(scene.id)}>
+            ✕
+          </button>
+        </>
+      }
+    />
+  )
+  const sceneListItem = (scene: Scene): JSX.Element => (
+    <div key={scene.id} className="scene-list-item">
+      <span className="scene-dot" style={{ background: scene.uiColor }} />
+      <div className="scene-list-main">
+        <span className="scene-name">{scene.name}</span>
+        <span className="scene-desc">{describeScene(scene)}</span>
+      </div>
+      <button className="text-button" onClick={() => setEditingSceneId(scene.id)}>
+        Edit
+      </button>
+      <button className="text-button" onClick={() => duplicateScene(scene.id)}>
+        Duplicate
+      </button>
+      <button className="text-button danger" onClick={() => deleteScene(scene.id)}>
+        Delete
+      </button>
+    </div>
   )
 
   function addFixtures(): void {
@@ -763,97 +832,32 @@ export function SetupPanel({ view }: { view: SetupView }): JSX.Element {
         </div>
         {project.sceneViewMode === 'grid' ? (
           <div className="scene-groups">
-            {groupScenesByCategory(project.scenes).map((groupItem) => (
+            {groupScenesByCategory(compatibleScenes).map((groupItem) => (
               <div key={groupItem.key} className="scene-group">
                 <div className="scene-group-title">{groupItem.label}</div>
-                <div className="scene-tile-grid">
-                  {groupItem.scenes.map((scene) => (
-                    <SceneTile
-                      key={scene.id}
-                      scene={scene}
-                      title="Edit scene"
-                      onClick={() => setEditingSceneId(scene.id)}
-                      actions={
-                        <>
-                          <button
-                            className="tile-icon-btn"
-                            title="Duplicate"
-                            onClick={() =>
-                              updateProject((p) => {
-                                const copy = structuredClone(p.scenes.find((s) => s.id === scene.id)!)
-                                copy.id = `scene-${Date.now()}`
-                                copy.name = `${copy.name} Copy`
-                                return { ...p, scenes: [...p.scenes, copy] }
-                              })
-                            }
-                          >
-                            ⧉
-                          </button>
-                          <button
-                            className="tile-icon-btn danger"
-                            title="Delete"
-                            onClick={() =>
-                              updateProject((p) => ({
-                                ...p,
-                                scenes: p.scenes.filter((s) => s.id !== scene.id),
-                                padSceneIds: p.padSceneIds.map((id) => (id === scene.id ? null : id)),
-                                autopilot: {
-                                  ...p.autopilot,
-                                  sceneIds: p.autopilot.sceneIds.filter((id) => id !== scene.id)
-                                }
-                              }))
-                            }
-                          >
-                            ✕
-                          </button>
-                        </>
-                      }
-                    />
-                  ))}
-                </div>
+                <div className="scene-tile-grid">{groupItem.scenes.map(sceneTile)}</div>
               </div>
             ))}
+            {incompatibleScenes.length > 0 && (
+              <div className="scene-group">
+                <div className="scene-group-title">Not compatible with your rig</div>
+                <p className="settings-hint">
+                  These drive fixture types you have not patched (lasers, movers, fog...), so they
+                  output nothing on your current setup. Hover any tile for what it does.
+                </p>
+                <div className="scene-tile-grid incompatible">{incompatibleScenes.map(sceneTile)}</div>
+              </div>
+            )}
           </div>
         ) : (
           <div className="scene-list">
-            {project.scenes.map((scene) => (
-              <div key={scene.id} className="scene-list-item">
-                <span className="scene-dot" style={{ background: scene.uiColor }} />
-                <span className="scene-name">{scene.name}</span>
-                <button className="text-button" onClick={() => setEditingSceneId(scene.id)}>
-                  Edit
-                </button>
-                <button
-                  className="text-button"
-                  onClick={() =>
-                    updateProject((p) => {
-                      const copy = structuredClone(p.scenes.find((s) => s.id === scene.id)!)
-                      copy.id = `scene-${Date.now()}`
-                      copy.name = `${copy.name} Copy`
-                      return { ...p, scenes: [...p.scenes, copy] }
-                    })
-                  }
-                >
-                  Duplicate
-                </button>
-                <button
-                  className="text-button danger"
-                  onClick={() =>
-                    updateProject((p) => ({
-                      ...p,
-                      scenes: p.scenes.filter((s) => s.id !== scene.id),
-                      padSceneIds: p.padSceneIds.map((id) => (id === scene.id ? null : id)),
-                      autopilot: {
-                        ...p.autopilot,
-                        sceneIds: p.autopilot.sceneIds.filter((id) => id !== scene.id)
-                      }
-                    }))
-                  }
-                >
-                  Delete
-                </button>
-              </div>
-            ))}
+            {compatibleScenes.map(sceneListItem)}
+            {incompatibleScenes.length > 0 && (
+              <>
+                <div className="scene-group-title scene-list-divider">Not compatible with your rig</div>
+                <div className="scene-list incompatible">{incompatibleScenes.map(sceneListItem)}</div>
+              </>
+            )}
           </div>
         )}
         <button

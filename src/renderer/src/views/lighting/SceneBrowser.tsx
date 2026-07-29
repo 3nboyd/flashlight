@@ -1,7 +1,11 @@
-import { useEffect, type JSX } from 'react'
+import { useEffect, useMemo, type JSX } from 'react'
 import type { Scene } from '@core/lighting/engine/types'
+import { fixturesById } from '@core/lighting/fixtures/library'
+import { useLightingStore } from '../../state/lightingStore'
 import { SceneTile } from './SceneTile'
 import { groupScenesByCategory } from './sceneCategories'
+import { describeScene } from './sceneDescribe'
+import { rigProfile, sceneCompatible } from './sceneCompat'
 
 /**
  * Centered modal that shows every scene as an animated tile, laid out in
@@ -29,6 +33,7 @@ export function SceneBrowser({
   onClear,
   onClose
 }: SceneBrowserProps): JSX.Element {
+  const { project } = useLightingStore()
   useEffect(() => {
     const onKey = (e: KeyboardEvent): void => {
       if (e.key === 'Escape') onClose()
@@ -37,7 +42,13 @@ export function SceneBrowser({
     return () => window.removeEventListener('keydown', onKey)
   }, [onClose])
 
-  const groups = groupScenesByCategory(scenes)
+  const rig = useMemo(
+    () => rigProfile(project.patches, fixturesById(project.customFixtures)),
+    [project.patches, project.customFixtures]
+  )
+  const compatible = scenes.filter((s) => sceneCompatible(s, rig))
+  const incompatible = scenes.filter((s) => !sceneCompatible(s, rig))
+  const groups = groupScenesByCategory(compatible)
 
   return (
     <div className="scene-browser-overlay" onClick={onClose}>
@@ -65,13 +76,29 @@ export function SceneBrowser({
                     key={scene.id}
                     scene={scene}
                     selected={scene.id === currentId}
-                    title={scene.name}
+                    title={describeScene(scene)}
                     onClick={() => onPick(scene.id)}
                   />
                 ))}
               </div>
             </div>
           ))}
+          {incompatible.length > 0 && (
+            <div className="scene-browser-col">
+              <div className="scene-browser-col-title">Not compatible</div>
+              <div className="scene-browser-col-tiles incompatible">
+                {incompatible.map((scene) => (
+                  <SceneTile
+                    key={scene.id}
+                    scene={scene}
+                    selected={scene.id === currentId}
+                    title={`${describeScene(scene)} (nothing in your rig matches this)`}
+                    onClick={() => onPick(scene.id)}
+                  />
+                ))}
+              </div>
+            </div>
+          )}
         </div>
       </div>
     </div>

@@ -6,6 +6,7 @@ import { useLightingStore } from '../../state/lightingStore'
 import { StageVisualizer } from './StageVisualizer'
 import { FixtureIcon, KIND_LABELS } from './FixtureIcons'
 import { EFFECT_CATALOG, EffectIcon } from './EffectIcons'
+import { describeScene } from './sceneDescribe'
 
 /**
  * Full-screen scene editor. The live stage renders on the left with the
@@ -133,6 +134,8 @@ export function SceneEditorModal({ scene, onChange, onClose }: SceneEditorModalP
               Done
             </button>
           </div>
+
+          <div className="scene-modal-desc">{describeScene(scene)}</div>
 
           <div className="scene-modal-scroll">
             {scene.targets.map((target, index) => {
