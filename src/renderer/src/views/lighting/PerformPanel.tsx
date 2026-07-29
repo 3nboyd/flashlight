@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useRef, useState, type JSX } from 'react'
 import { useLightingStore } from '../../state/lightingStore'
-import type { PadAction } from '../../midi/MidiPads'
+import type { ControlAction, PadAction } from '../../midi/MidiPads'
 import {
   audioAnalyzer,
   midiPads as midi,
@@ -129,12 +129,37 @@ export function PerformPanel(): JSX.Element {
     [triggerScene, setOverrides, pressMomentary, releaseMomentary]
   )
 
+  const handleMidiControl = useCallback(
+    (action: ControlAction, value: number) => {
+      const v = value / 127 // 0..1
+      switch (action.kind) {
+        case 'masterDimmer':
+          setOverrides({ masterDimmer: v })
+          break
+        case 'pan':
+          setOverrides({ panOffset: v * 2 - 1 })
+          break
+        case 'tilt':
+          setOverrides({ tiltOffset: v * 2 - 1 })
+          break
+        case 'speed':
+          setOverrides({ movementSpeed: 0.25 + v * 3.75 })
+          break
+        case 'reactivity':
+          setOverrides({ reactivity: v * 2 })
+          break
+      }
+    },
+    [setOverrides]
+  )
+
   useEffect(() => {
     midi.start({
       onAction: handleMidiAction,
+      onControl: handleMidiControl,
       onDevicesChanged: setMidiDevices
     })
-  }, [handleMidiAction])
+  }, [handleMidiAction, handleMidiControl])
 
   const activeSceneId = status?.activeSceneId ?? null
   const beatFlash = status ? status.beatPhase < 0.15 : false

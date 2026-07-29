@@ -2353,6 +2353,15 @@
   margin-bottom: 10px;
 }
 
+.midi-section-title {
+  font-size: 13px;
+  font-weight: 700;
+  color: var(--text-primary);
+  margin: 16px 0 2px;
+  border-top: 1px solid var(--border-subtle);
+  padding-top: 14px;
+}
+
 .midi-learn-row {
   display: flex;
   align-items: center;

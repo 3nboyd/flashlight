@@ -140,6 +140,10 @@ export class LightingHost {
   private manualColor: { r: number; g: number; b: number } | null = null
   private manualPan = 0
   private manualTilt = 0
+  // When the rig is blacked out, freeze the animation clock after a moment so
+  // moving fixtures stop driving their motors instead of sweeping in the dark.
+  private darkSinceMs: number | null = null
+  private frozenBeatAtMs: number | null = null
   private readonly discovery = new ArtNetDiscovery()
   // Identify test: force one fixture full-on so a DJ can trace the signal
   // chain to a specific light. Auto-clears so it never gets left on.
@@ -474,14 +478,33 @@ export class LightingHost {
     }
   }
 
+  /**
+   * Beat time used to drive animation. While the rig is dark (master at zero
+   * or blackout) for more than ~2s, this freezes so pan/tilt stop changing and
+   * moving fixtures park their motors; it resumes the instant light returns.
+   */
+  private movementClockMs(nowMs: number, overrides: LiveOverrides): number {
+    const master = overrides.blackout ? 0 : overrides.masterDimmer
+    if (master > 0.002) {
+      this.darkSinceMs = null
+      this.frozenBeatAtMs = null
+      return nowMs
+    }
+    if (this.darkSinceMs === null) this.darkSinceMs = nowMs
+    if (nowMs - this.darkSinceMs <= 2000) return nowMs
+    if (this.frozenBeatAtMs === null) this.frozenBeatAtMs = nowMs
+    return this.frozenBeatAtMs
+  }
+
   private tick(): void {
     const nowMs = Date.now()
     const audioFresh = nowMs - this.lastAudioAtMs < 500
+    const overrides = this.effectiveOverrides()
     const universes = renderTick({
       fixtures: this.resolveFixtures(),
       scene: this.currentScene(nowMs),
-      overrides: this.effectiveOverrides(),
-      beat: this.clock.positionAt(nowMs),
+      overrides,
+      beat: this.clock.positionAt(this.movementClockMs(nowMs, overrides)),
       audio: audioFresh ? this.audio : SILENT_FEATURES,
       positions: this.stageXPositions(),
       nowMs

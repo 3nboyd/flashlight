@@ -25,7 +25,7 @@ import {
   startAudioListening,
   stopAudioListening
 } from './runtime'
-import type { PadAction } from '../../midi/MidiPads'
+import type { ControlAction, ControlKind, PadAction } from '../../midi/MidiPads'
 
 const LEARNABLE_ACTIONS: { label: string; action: PadAction }[] = [
   ...Array.from({ length: 16 }, (_, i) => ({
@@ -38,6 +38,15 @@ const LEARNABLE_ACTIONS: { label: string; action: PadAction }[] = [
   { label: 'Resync beat 1', action: { kind: 'resync' } },
   { label: 'Autopilot on/off', action: { kind: 'autopilot' } },
   { label: 'Manual trigger', action: { kind: 'manual' } }
+]
+
+/** Continuous controls a MIDI knob or fader can drive. */
+const LEARNABLE_CONTROLS: { label: string; action: ControlAction }[] = [
+  { label: 'Master brightness', action: { kind: 'masterDimmer' } },
+  { label: 'Pan (left/right)', action: { kind: 'pan' } },
+  { label: 'Tilt (up/down)', action: { kind: 'tilt' } },
+  { label: 'Movement speed', action: { kind: 'speed' } },
+  { label: 'Light sensitivity', action: { kind: 'reactivity' } }
 ]
 
 function describeAction(action: PadAction): string {
@@ -106,6 +115,7 @@ export function SetupPanel({ view }: { view: SetupView }): JSX.Element {
   const [editingSceneId, setEditingSceneId] = useState<string | null>(null)
   const [limitsForPatch, setLimitsForPatch] = useState<string | null>(null)
   const [learningAction, setLearningAction] = useState<PadAction | null>(null)
+  const [learningControl, setLearningControl] = useState<ControlKind | null>(null)
   const [midiMapVersion, setMidiMapVersion] = useState(0)
   const [serialPorts, setSerialPorts] = useState<{ path: string; label: string }[]>([])
   const [audioDevices, setAudioDevices] = useState<MediaDeviceInfo[]>([])
@@ -1052,11 +1062,12 @@ export function SetupPanel({ view }: { view: SetupView }): JSX.Element {
         </div>
       </SetupSection>
 
-      <SetupSection id="midi" views={['settings']} title="MIDI controller" help={<>Bind pads on any MIDI controller to scenes and live controls. Click a Learn button, hit a
-          pad, done - click again to cancel a learn.</>}>
+      <SetupSection id="midi" views={['settings']} title="MIDI controller" help={<>Bind pads to scenes/buttons and knobs or faders to live controls (master brightness, pan,
+          tilt, speed, sensitivity). Click a Learn button, then hit the pad or move the knob - click
+          again to cancel.</>}>
         <div className="setup-row">
           <button className="secondary-button" onClick={() => setMidiModalOpen(true)}>
-            Assign MIDI Pads…
+            Assign MIDI…
           </button>
           <span className="settings-hint" style={{ margin: 0 }}>
             {midiPads.deviceNames().length > 0
@@ -1071,6 +1082,7 @@ export function SetupPanel({ view }: { view: SetupView }): JSX.Element {
             onClick={() => {
               midiPads.cancelLearn()
               setLearningAction(null)
+              setLearningControl(null)
               setMidiModalOpen(false)
             }}
           >
@@ -1085,6 +1097,7 @@ export function SetupPanel({ view }: { view: SetupView }): JSX.Element {
                   onClick={() => {
                     midiPads.cancelLearn()
                     setLearningAction(null)
+                    setLearningControl(null)
                     setMidiModalOpen(false)
                   }}
                 >
@@ -1111,6 +1124,8 @@ export function SetupPanel({ view }: { view: SetupView }): JSX.Element {
                             setLearningAction(null)
                             return
                           }
+                          midiPads.cancelLearn()
+                          setLearningControl(null)
                           setLearningAction(entry.action)
                           midiPads.learnOnce((note) => {
                             midiPads.bind(note, entry.action)
@@ -1125,6 +1140,51 @@ export function SetupPanel({ view }: { view: SetupView }): JSX.Element {
                   )
                 })}
               </div>
+
+              <div className="midi-section-title">Knobs & Faders</div>
+              <span className="settings-hint" style={{ margin: '0 0 8px' }}>
+                Click Learn, then move a knob or fader on your controller.
+              </span>
+              <div className="midi-learn-grid" data-version={midiMapVersion}>
+                {LEARNABLE_CONTROLS.map((entry) => {
+                  const boundCc = Object.entries(midiPads.getMapping().controls).find(
+                    ([, action]) => action.kind === entry.action.kind
+                  )?.[0]
+                  const isLearning = learningControl === entry.action.kind
+                  return (
+                    <div key={entry.action.kind} className="midi-learn-row">
+                      <span>{entry.label}</span>
+                      <span className="midi-note">{boundCc ? `CC ${boundCc}` : '-'}</span>
+                      <button
+                        className={isLearning ? 'primary-button' : 'secondary-button'}
+                        onClick={() => {
+                          if (isLearning) {
+                            midiPads.cancelLearn()
+                            setLearningControl(null)
+                            return
+                          }
+                          midiPads.cancelLearn()
+                          setLearningAction(null)
+                          setLearningControl(entry.action.kind)
+                          midiPads.learnControlOnce((cc) => {
+                            // One CC per control: drop any prior binding first.
+                            const prev = Object.entries(midiPads.getMapping().controls).find(
+                              ([, action]) => action.kind === entry.action.kind
+                            )?.[0]
+                            if (prev) midiPads.unbindControl(Number(prev))
+                            midiPads.bindControl(cc, entry.action)
+                            setLearningControl(null)
+                            setMidiMapVersion((v) => v + 1)
+                          })
+                        }}
+                      >
+                        {isLearning ? 'Cancel' : 'Learn'}
+                      </button>
+                    </div>
+                  )
+                })}
+              </div>
+
               <button
                 className="text-button danger"
                 onClick={() => {
