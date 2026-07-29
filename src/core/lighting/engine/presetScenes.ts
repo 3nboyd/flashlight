@@ -155,6 +155,23 @@ export const PRESET_LIBRARY: PresetCategory[] = [
     ]),
     scene('preset-candlelight', 'Candlelight', '#fdba74', [
       { group: 'all', color: { r: 255, g: 140, b: 40 }, dimmer: 0.35, effect: { type: 'audioLevel' } }
+    ]),
+    // Single-color looks: the color is the point, so it is easy to recolor in
+    // the scene editor or with the live color override.
+    scene('preset-solid-color', 'Solid Color', '#0064ff', [
+      { group: 'all', color: { r: 0, g: 100, b: 255 }, dimmer: 0.9 }
+    ]),
+    scene('preset-color-pulse', 'Color Pulse', '#00b4ff', [
+      { group: 'all', color: { r: 0, g: 140, b: 255 }, dimmer: 1, effect: { type: 'beatPulse' } }
+    ]),
+    scene('preset-color-beam', 'Color Beam', '#22d3ee', [
+      { group: 'all', color: { r: 0, g: 160, b: 255 }, dimmer: 0.85 },
+      {
+        group: 'kind:movingBar',
+        color: { r: 0, g: 160, b: 255 },
+        dimmer: 1,
+        effect: { type: 'movementSweep', beats: 4, amplitude: 0.9 }
+      }
     ])
   ]),
 
@@ -282,6 +299,27 @@ export const PRESET_LIBRARY: PresetCategory[] = [
     scene('preset-uv-rave', 'UV Rave', '#a855f7', [
       { group: 'kind:uv', color: WHITE, dimmer: 1 },
       { group: 'kind:par', color: { r: 150, g: 0, b: 255 }, dimmer: 0.8, effect: { type: 'beatPulse' } }
+    ]),
+    // Full-send rainbow: hue snaps every 8th note and the bar swings fast.
+    scene('preset-rainbow-overdrive', 'Rainbow Overdrive', '#f0abfc', [
+      { group: 'all', color: { r: 255, g: 0, b: 0 }, dimmer: 1, effect: { type: 'rainbowStep', beats: 0.5 } },
+      {
+        group: 'kind:movingBar',
+        color: { r: 255, g: 0, b: 0 },
+        dimmer: 1,
+        effect: { type: 'movementSweep', beats: 1, amplitude: 1 }
+      }
+    ]),
+    // An occasional red beam that shoots out every couple beats and holds.
+    scene('preset-red-strikes', 'Red Strikes', '#ef4444', [
+      { group: 'all', color: { r: 255, g: 0, b: 0 }, dimmer: 1, effect: { type: 'strike', beats: 2 } },
+      {
+        group: 'kind:movingBar',
+        color: { r: 255, g: 0, b: 0 },
+        dimmer: 1,
+        tilt: 210,
+        effect: { type: 'strike', beats: 2 }
+      }
     ])
   ])
 ]

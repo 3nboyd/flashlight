@@ -316,7 +316,8 @@ export class LightingHost {
       'strobe',
       'eighthStrobe',
       'eighthBuild',
-      'rainbowStep'
+      'rainbowStep',
+      'strike'
     ])
     const sceneCharacter: Record<string, 'reactive' | 'flow'> = {}
     for (const scene of this.project.scenes) {

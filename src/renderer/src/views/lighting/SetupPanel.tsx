@@ -5,6 +5,7 @@ import { findAddressOverlaps, fixtureFootprint } from '@core/lighting/fixtures/t
 import type { OutputProtocol } from '@core/lighting/engine/types'
 import { defaultSmartPools } from '@core/lighting/engine/presetScenes'
 import { SceneEditorModal } from './SceneEditorModal'
+import { FixtureLimitsModal } from './FixtureLimitsModal'
 import { OutputDiagnostics } from './OutputDiagnostics'
 import { SceneTile } from './SceneTile'
 import { groupScenesByCategory } from './sceneCategories'
@@ -101,6 +102,7 @@ export function SetupPanel({ view }: { view: SetupView }): JSX.Element {
     group: ''
   })
   const [editingSceneId, setEditingSceneId] = useState<string | null>(null)
+  const [limitsForPatch, setLimitsForPatch] = useState<string | null>(null)
   const [learningAction, setLearningAction] = useState<PadAction | null>(null)
   const [midiMapVersion, setMidiMapVersion] = useState(0)
   const [serialPorts, setSerialPorts] = useState<{ path: string; label: string }[]>([])
@@ -591,7 +593,14 @@ export function SetupPanel({ view }: { view: SetupView }): JSX.Element {
                     />
                   </td>
                   <td>{def ? fixtureFootprint(def) : '?'}</td>
-                  <td>
+                  <td className="fixture-actions-cell">
+                    <button
+                      className={`text-button${patch.limits ? ' active' : ''}`}
+                      title="Limit movement range, invert an axis, cap brightness"
+                      onClick={() => setLimitsForPatch(patch.id)}
+                    >
+                      Limits{patch.limits ? ' ●' : ''}
+                    </button>
                     <button
                       className="text-button"
                       onClick={() =>
@@ -616,6 +625,25 @@ export function SetupPanel({ view }: { view: SetupView }): JSX.Element {
             )}
           </tbody>
         </table>
+
+        {limitsForPatch &&
+          (() => {
+            const patch = project.patches.find((x) => x.id === limitsForPatch)
+            if (!patch) return null
+            return (
+              <FixtureLimitsModal
+                patch={patch}
+                definition={defs.get(patch.definitionId)}
+                onChange={(limits) =>
+                  updateProject((p) => ({
+                    ...p,
+                    patches: p.patches.map((x) => (x.id === patch.id ? { ...x, limits } : x))
+                  }))
+                }
+                onClose={() => setLimitsForPatch(null)}
+              />
+            )
+          })()}
 
         <div className="add-fixture-row">
           <select

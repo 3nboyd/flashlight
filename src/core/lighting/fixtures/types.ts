@@ -75,6 +75,26 @@ export interface FixtureDefinition {
   channels: ChannelSpec[]
 }
 
+/**
+ * Per-fixture physical constraints the DJ sets in Setup: keep a moving beam
+ * inside a safe arc, flip a reversed pan/tilt, or cap brightness. Applied to
+ * the engine's output after effects, so scenes stay generic while a specific
+ * fixture obeys its own limits.
+ */
+export interface FixtureLimits {
+  /** Pan travel window, 0-255 (defaults 0..255 = full range). */
+  panMin?: number
+  panMax?: number
+  /** Tilt travel window, 0-255. */
+  tiltMin?: number
+  tiltMax?: number
+  /** Mirror pan/tilt for fixtures mounted or wired backwards. */
+  invertPan?: boolean
+  invertTilt?: boolean
+  /** Ceiling on this fixture's brightness, 0-1 (1 = no cap). */
+  dimmerMax?: number
+}
+
 export interface FixturePatch {
   id: string
   definitionId: string
@@ -86,6 +106,8 @@ export interface FixturePatch {
   group?: string
   /** Saved position on the visualizer stage; auto-layout applies when unset. */
   stage?: { x: number; level: 'truss' | 'floor' | 'side'; y?: number }
+  /** Physical constraints (movement arc, invert, brightness cap). */
+  limits?: FixtureLimits
 }
 
 export interface PatchedFixture {

@@ -156,6 +156,13 @@ describe('build / strobe / peak effects', () => {
     expect(green(600)).not.toBe(green(100)) // beat 1 hue differs
   })
 
+  it('strike hits full every N beats then fades and re-hits', () => {
+    const g = (ms: number): number => dimAt({ type: 'strike', beats: 2 }, ms)
+    expect(g(0)).toBeGreaterThan(240) // hit on the strike
+    expect(g(760)).toBeLessThan(g(0)) // faded ~0.76 beats later
+    expect(g(1000)).toBeGreaterThan(240) // strikes again 2 beats on
+  })
+
   it('randomColor holds a palette color across its step', () => {
     const palette: Rgbw[] = [
       { r: 255, g: 0, b: 0 },

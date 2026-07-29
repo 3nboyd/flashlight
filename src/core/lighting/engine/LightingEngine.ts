@@ -1,5 +1,5 @@
 import { Universe } from '../dmx/Universe'
-import { segmentCount, type PatchedFixture } from '../fixtures/types'
+import { segmentCount, type FixtureLimits, type PatchedFixture } from '../fixtures/types'
 import type { AudioFeatures } from '../audio/features'
 import { SILENT_FEATURES } from '../audio/features'
 import type { BeatPosition } from './BeatClock'
@@ -69,9 +69,10 @@ function applyEffect(
 
   switch (effect.type) {
     case 'beatPulse': {
-      // Full brightness on the beat, exponential-ish decay into the next.
-      const envelope = Math.pow(1 - beat.beatPhase, 2)
-      return { ...base, dimmer: target.dimmer * (0.15 + 0.85 * envelope) }
+      // Hard hit on the beat, near-black between: a steeper curve and a very
+      // low floor make the pulse read big (bright highs, deep lows).
+      const envelope = Math.pow(1 - beat.beatPhase, 2.6)
+      return { ...base, dimmer: target.dimmer * (0.04 + 0.96 * envelope) }
     }
     case 'breathe': {
       // Slow sine swell across the cycle - never fully dark.
@@ -86,6 +87,12 @@ function applyEffect(
       const envelope = Math.pow(1 - eighthPhase, decay)
       const floor = 0.12 + 0.35 * beat.phrasePhase
       return { ...base, dimmer: target.dimmer * Math.min(1, floor + (1 - floor) * envelope) }
+    }
+    case 'strike': {
+      // A hard hit every `beats`, then a hold-and-fade until the next: an
+      // occasional beam that shoots out and lingers rather than pulsing.
+      const phase = (beat.beat / beats) % 1
+      return { ...base, dimmer: target.dimmer * Math.pow(1 - phase, 1.3) }
     }
     case 'colorCycle': {
       const step = Math.floor(beat.beat / beats) % palette.length
@@ -147,7 +154,11 @@ function applyEffect(
     case 'audioLevel':
       return { ...base, dimmer: target.dimmer * Math.min(1, audio.rms * 1.4 * mod.reactivity) }
     case 'bassPulse':
-      return { ...base, dimmer: target.dimmer * Math.min(1, audio.bass * 1.3 * mod.reactivity) }
+      // Gate out low rumble and amplify the kick so hits punch and gaps go dark.
+      return {
+        ...base,
+        dimmer: target.dimmer * Math.min(1, Math.max(0, audio.bass - 0.08) * 1.7 * mod.reactivity)
+      }
     case 'movementCircle': {
       const amplitude = (effect.amplitude ?? 0.5) * 127
       // Phase-offset across the group so multiple heads (or the segments of
@@ -216,6 +227,24 @@ function applyEffect(
     default:
       return base
   }
+}
+
+/**
+ * Remaps a fixture's output through its physical limits: optionally mirror
+ * pan/tilt, compress the full 0-255 sweep into the allowed [min,max] window
+ * (so effects keep their motion but stay inside a safe arc), and cap dimmer.
+ */
+function applyLimits(out: FixtureOutput, limits: FixtureLimits): FixtureOutput {
+  let pan = limits.invertPan ? 255 - out.pan : out.pan
+  let tilt = limits.invertTilt ? 255 - out.tilt : out.tilt
+  const panMin = limits.panMin ?? 0
+  const panMax = limits.panMax ?? 255
+  const tiltMin = limits.tiltMin ?? 0
+  const tiltMax = limits.tiltMax ?? 255
+  pan = panMin + (Math.max(0, Math.min(255, pan)) / 255) * (panMax - panMin)
+  tilt = tiltMin + (Math.max(0, Math.min(255, tilt)) / 255) * (tiltMax - tiltMin)
+  const dimmer = limits.dimmerMax !== undefined ? Math.min(out.dimmer, limits.dimmerMax) : out.dimmer
+  return { ...out, pan, tilt, dimmer }
 }
 
 function targetMatches(target: SceneTarget, fixture: PatchedFixture): boolean {
@@ -407,6 +436,14 @@ export function renderTick(options: {
     }
     output = applyOverrides(output)
     segmentOutputs = segmentOutputs.map(applyOverrides)
+
+    // Per-fixture physical limits (movement arc, invert, brightness cap) are
+    // applied last, so scenes stay generic and this fixture obeys its own rig.
+    const limits = fixture.patch.limits
+    if (limits) {
+      output = applyLimits(output, limits)
+      segmentOutputs = segmentOutputs.map((o) => applyLimits(o, limits))
+    }
 
     const master = overrides.blackout ? 0 : overrides.masterDimmer
     const dimmer = Math.max(0, Math.min(1, output.dimmer)) * master

@@ -20,6 +20,7 @@ const KIND_OF: Record<EffectType, PreviewKind> = {
   beatPulse: 'pulse',
   breathe: 'pulse',
   eighthBuild: 'pulse',
+  strike: 'pulse',
   audioLevel: 'pulse',
   bassPulse: 'pulse',
   colorCycle: 'cycle',

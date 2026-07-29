@@ -16,6 +16,7 @@ export type EffectType =
   | 'beatPulse' // dimmer decays from full on every beat
   | 'breathe' // slow sine swell of intensity
   | 'eighthBuild' // 8th-note pulses that ramp brighter/tighter across the phrase
+  | 'strike' // a hard hit every N beats that holds and fades (occasional beam)
   | 'colorCycle' // step through colors every N beats
   | 'randomColor' // jump to a random palette color every N beats and hold
   | 'alternate' // odd/even fixtures swap two colors on the beat

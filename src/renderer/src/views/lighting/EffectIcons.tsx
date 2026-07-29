@@ -23,6 +23,7 @@ export const EFFECT_CATALOG: EffectInfo[] = [
   { type: 'beatPulse', label: 'Beat Pulse', hint: 'Punch on every beat', usesPalette: false, isMovement: false },
   { type: 'breathe', label: 'Breathe', hint: 'Slow swell', usesPalette: false, isMovement: false },
   { type: 'eighthBuild', label: 'Eighth Build', hint: '8th-note riser', usesPalette: false, isMovement: false },
+  { type: 'strike', label: 'Strike', hint: 'Occasional hit + hold', usesPalette: false, isMovement: false },
   { type: 'colorCycle', label: 'Color Cycle', hint: 'Step through colors', usesPalette: true, isMovement: false },
   { type: 'randomColor', label: 'Random Color', hint: 'Random color holds', usesPalette: true, isMovement: false },
   { type: 'alternate', label: 'Alternate', hint: 'Odd/even swap', usesPalette: true, isMovement: false },
@@ -67,6 +68,12 @@ export function EffectIcon({ type }: { type: EffectType }): JSX.Element {
           {[0, 0.12, 0.24, 0.36].map((d, i) => (
             <div key={i} className="fx-bar fx-anim-build" style={{ animationDelay: `${d}s` }} />
           ))}
+        </div>
+      )
+    case 'strike':
+      return (
+        <div className="fx-icon">
+          <div className="fx-dot big fx-anim-bass" />
         </div>
       )
     case 'colorCycle':
