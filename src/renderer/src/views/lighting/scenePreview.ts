@@ -21,6 +21,7 @@ const KIND_OF: Record<EffectType, PreviewKind> = {
   breathe: 'pulse',
   eighthBuild: 'pulse',
   strike: 'pulse',
+  tapPulse: 'strobe',
   audioLevel: 'pulse',
   bassPulse: 'pulse',
   colorCycle: 'cycle',

@@ -26,7 +26,7 @@ export const PAD_FUNCTIONS: PadFunctionInfo[] = [
   { kind: 'blackout', label: 'Blackout', hint: 'Toggle all lights off', uiColor: '#0b1220', momentary: false },
   { kind: 'strobe', label: 'Strobe', hint: 'Strobe everything while held', uiColor: '#e5e7eb', momentary: true },
   { kind: 'blinder', label: 'Blinder', hint: 'Full white while held', uiColor: '#fde68a', momentary: true },
-  { kind: 'manual', label: 'Tap FX', hint: 'New color + beams each tap', uiColor: '#f472b6', momentary: false },
+  { kind: 'manual', label: 'Tap Pulse', hint: 'Tap to flash a Tap Pulse scene (cycles color)', uiColor: '#f472b6', momentary: false },
   { kind: 'tap', label: 'Tap Tempo', hint: 'Tap along to set BPM', uiColor: '#38bdf8', momentary: false },
   { kind: 'resync', label: 'Sync 1', hint: 'Snap the downbeat to now', uiColor: '#22d3ee', momentary: false },
   { kind: 'autopilot', label: 'Autopilot', hint: 'Toggle automatic scene changes', uiColor: '#a78bfa', momentary: false }

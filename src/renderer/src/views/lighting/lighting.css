@@ -2822,3 +2822,105 @@
   border: 1px solid color-mix(in srgb, #f59e0b 45%, transparent);
   color: #fbbf24;
 }
+
+/* --- Perform pad corner menu (Edit / Reassign / Clear) --- */
+.pad-corner-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 40;
+}
+
+.pad-corner-menu {
+  position: fixed;
+  transform: translateX(-100%);
+  z-index: 41;
+  min-width: 132px;
+  background: var(--bg-2);
+  border: 1px solid var(--border-strong);
+  border-radius: var(--radius-md);
+  box-shadow: var(--shadow-panel);
+  padding: 5px;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.pad-corner-menu button {
+  text-align: left;
+  background: transparent;
+  border: none;
+  color: var(--text-secondary);
+  font-size: 13px;
+  padding: 7px 10px;
+  border-radius: var(--radius-sm);
+  cursor: pointer;
+}
+
+.pad-corner-menu button:hover {
+  background: var(--bg-hover);
+  color: var(--text-primary);
+}
+
+.pad-corner-menu button.danger {
+  color: var(--danger);
+}
+
+/* --- Scenes trash bin --- */
+.trash-button {
+  margin-left: auto;
+}
+
+.trash-modal {
+  width: min(480px, 94vw);
+  max-height: 80vh;
+  overflow-y: auto;
+  background: var(--bg-1);
+  border: 1px solid var(--border-strong);
+  border-radius: var(--radius-lg);
+  box-shadow: var(--shadow-panel);
+  padding: 16px 18px;
+}
+
+.trash-list {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  margin-top: 10px;
+}
+
+.trash-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 7px 10px;
+  background: var(--bg-2);
+  border-radius: var(--radius-sm);
+}
+
+.trash-row .scene-name {
+  flex: 1;
+}
+
+/* --- Blackout persist toggle --- */
+.blackout-group {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  align-items: stretch;
+}
+
+.blackout-mode {
+  font-size: 10px;
+  padding: 2px 6px;
+  background: transparent;
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-sm);
+  color: var(--text-tertiary);
+  cursor: pointer;
+  white-space: nowrap;
+}
+
+.blackout-mode:hover {
+  color: var(--text-secondary);
+  border-color: var(--border-strong);
+}

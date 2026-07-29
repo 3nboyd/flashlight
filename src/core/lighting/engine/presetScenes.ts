@@ -248,7 +248,13 @@ export const PRESET_LIBRARY: PresetCategory[] = [
           { group: 'kind:par', color: { r: 120, g: 130, b: 160 }, dimmer: 0.5 }
         ],
         true
-      )
+      ),
+      // Barely-visible colored base; each manual tap punches to full with a
+      // white strobe peak and cycles the color. Tap it (a pad set to Tap Pulse,
+      // or a MIDI pad) along to the melody.
+      scene('preset-tap-pulse', 'Tap Pulse', '#f472b6', [
+        { group: 'all', color: { r: 255, g: 0, b: 90 }, dimmer: 1, effect: { type: 'tapPulse', colors: PARTY } }
+      ])
     ]
   ),
 

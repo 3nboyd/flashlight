@@ -115,6 +115,7 @@ export function SetupPanel({ view }: { view: SetupView }): JSX.Element {
   })
   const [editingSceneId, setEditingSceneId] = useState<string | null>(null)
   const [limitsForPatch, setLimitsForPatch] = useState<string | null>(null)
+  const [trashOpen, setTrashOpen] = useState(false)
   const [learningAction, setLearningAction] = useState<PadAction | null>(null)
   const [learningControl, setLearningControl] = useState<ControlKind | null>(null)
   const [midiMapVersion, setMidiMapVersion] = useState(0)
@@ -215,12 +216,32 @@ export function SetupPanel({ view }: { view: SetupView }): JSX.Element {
   )
   const deleteScene = useCallback(
     (id: string) =>
-      updateProject((p) => ({
-        ...p,
-        scenes: p.scenes.filter((s) => s.id !== id),
-        padSceneIds: p.padSceneIds.map((x) => (x === id ? null : x)),
-        autopilot: { ...p.autopilot, sceneIds: p.autopilot.sceneIds.filter((x) => x !== id) }
-      })),
+      updateProject((p) => {
+        const removed = p.scenes.find((s) => s.id === id)
+        return {
+          ...p,
+          scenes: p.scenes.filter((s) => s.id !== id),
+          // Keep the last 24 deletions recoverable from the trash bin.
+          trashScenes: removed ? [removed, ...(p.trashScenes ?? [])].slice(0, 24) : p.trashScenes ?? [],
+          padSceneIds: p.padSceneIds.map((x) => (x === id ? null : x)),
+          autopilot: { ...p.autopilot, sceneIds: p.autopilot.sceneIds.filter((x) => x !== id) }
+        }
+      }),
+    [updateProject]
+  )
+  const recoverScene = useCallback(
+    (id: string) =>
+      updateProject((p) => {
+        const scene = (p.trashScenes ?? []).find((s) => s.id === id)
+        if (!scene) return p
+        const clash = p.scenes.some((s) => s.id === scene.id)
+        const restored = clash ? { ...scene, id: `scene-${Date.now()}` } : scene
+        return {
+          ...p,
+          scenes: [...p.scenes, restored],
+          trashScenes: (p.trashScenes ?? []).filter((s) => s.id !== id)
+        }
+      }),
     [updateProject]
   )
 
@@ -865,7 +886,65 @@ export function SetupPanel({ view }: { view: SetupView }): JSX.Element {
             mode={project.sceneViewMode}
             onChange={(m) => updateProject((p) => ({ ...p, sceneViewMode: m }))}
           />
+          <button
+            className="secondary-button trash-button"
+            title="Recover deleted scenes"
+            disabled={!(project.trashScenes && project.trashScenes.length > 0)}
+            onClick={() => setTrashOpen(true)}
+          >
+            🗑 Trash{project.trashScenes && project.trashScenes.length > 0 ? ` (${project.trashScenes.length})` : ''}
+          </button>
         </div>
+
+        {trashOpen && (
+          <div className="scene-browser-overlay" onClick={() => setTrashOpen(false)}>
+            <div className="trash-modal" onClick={(e) => e.stopPropagation()}>
+              <div className="scene-browser-head">
+                <h3>Deleted scenes</h3>
+                <div className="scene-browser-head-actions">
+                  {project.trashScenes && project.trashScenes.length > 0 && (
+                    <button
+                      className="text-button danger"
+                      onClick={() => updateProject((p) => ({ ...p, trashScenes: [] }))}
+                    >
+                      Empty trash
+                    </button>
+                  )}
+                  <button className="secondary-button" onClick={() => setTrashOpen(false)}>
+                    Close
+                  </button>
+                </div>
+              </div>
+              {project.trashScenes && project.trashScenes.length > 0 ? (
+                <div className="trash-list">
+                  {project.trashScenes.map((scene) => (
+                    <div key={scene.id} className="trash-row">
+                      <span className="scene-dot" style={{ background: scene.uiColor }} />
+                      <span className="scene-name">{scene.name}</span>
+                      <button className="secondary-button" onClick={() => recoverScene(scene.id)}>
+                        Recover
+                      </button>
+                      <button
+                        className="text-button danger"
+                        title="Delete forever"
+                        onClick={() =>
+                          updateProject((p) => ({
+                            ...p,
+                            trashScenes: (p.trashScenes ?? []).filter((s) => s.id !== scene.id)
+                          }))
+                        }
+                      >
+                        ✕
+                      </button>
+                    </div>
+                  ))}
+                </div>
+              ) : (
+                <p className="settings-hint">Trash is empty. Deleted scenes appear here.</p>
+              )}
+            </div>
+          </div>
+        )}
         {project.sceneViewMode === 'grid' ? (
           <div className="scene-groups">
             {groupScenesByCategory(compatibleScenes).map((groupItem) => (

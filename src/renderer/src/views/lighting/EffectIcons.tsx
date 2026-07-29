@@ -24,6 +24,7 @@ export const EFFECT_CATALOG: EffectInfo[] = [
   { type: 'breathe', label: 'Breathe', hint: 'Slow swell', usesPalette: false, isMovement: false },
   { type: 'eighthBuild', label: 'Eighth Build', hint: '8th-note riser', usesPalette: false, isMovement: false },
   { type: 'strike', label: 'Strike', hint: 'Occasional hit + hold', usesPalette: false, isMovement: false },
+  { type: 'tapPulse', label: 'Tap Pulse', hint: 'Dim base; flashes each tap', usesPalette: true, isMovement: false },
   { type: 'colorCycle', label: 'Color Cycle', hint: 'Step through colors', usesPalette: true, isMovement: false },
   { type: 'randomColor', label: 'Random Color', hint: 'Random color holds', usesPalette: true, isMovement: false },
   { type: 'alternate', label: 'Alternate', hint: 'Odd/even swap', usesPalette: true, isMovement: false },
@@ -75,6 +76,12 @@ export function EffectIcon({ type }: { type: EffectType }): JSX.Element {
       return (
         <div className="fx-icon">
           <div className="fx-dot big fx-anim-bass" />
+        </div>
+      )
+    case 'tapPulse':
+      return (
+        <div className="fx-icon">
+          <div className="fx-dot fx-anim-strobe" />
         </div>
       )
     case 'colorCycle':

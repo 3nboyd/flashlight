@@ -11,6 +11,7 @@ import {
 import { StageVisualizer } from './StageVisualizer'
 import { Knob } from './Knob'
 import { SceneBrowser } from './SceneBrowser'
+import { SceneEditorModal } from './SceneEditorModal'
 import { padColumns } from './padGrid'
 import { parsePadFunction, padFunctionInfo, type PadFunctionKind } from './padFunctions'
 import type { Rgbw } from '@core/lighting/engine/types'
@@ -38,6 +39,10 @@ export function PerformPanel(): JSX.Element {
   const [reassignPad, setReassignPad] = useState<number | null>(null)
   /** When true, the browser switches the live scene instead of assigning a pad. */
   const [browseSwitch, setBrowseSwitch] = useState(false)
+  /** The pad whose corner (three-dot) menu is open, anchored at x/y. */
+  const [padMenu, setPadMenu] = useState<{ index: number; x: number; y: number } | null>(null)
+  /** Scene being edited from a pad's menu (opens the full scene editor). */
+  const [editingSceneId, setEditingSceneId] = useState<string | null>(null)
   /** Scene to restore when a momentary (HOLD) pad is released. */
   const momentaryRestoreRef = useRef<string | null>(null)
 
@@ -430,7 +435,8 @@ export function PerformPanel(): JSX.Element {
                 title="Reassign this pad"
                 onClick={(e) => {
                   e.stopPropagation()
-                  setReassignPad(index)
+                  const r = (e.currentTarget as HTMLElement).getBoundingClientRect()
+                  setPadMenu({ index, x: r.right, y: r.bottom })
                 }}
               >
                 <span />
@@ -467,6 +473,67 @@ export function PerformPanel(): JSX.Element {
           onClose={() => setBrowseSwitch(false)}
         />
       )}
+
+      {padMenu &&
+        (() => {
+          const value = project.padSceneIds[padMenu.index]
+          const isFn = parsePadFunction(value) !== null
+          const scene = !isFn && value ? project.scenes.find((s) => s.id === value) : null
+          return (
+            <>
+              <div className="pad-corner-backdrop" onClick={() => setPadMenu(null)} />
+              <div className="pad-corner-menu" style={{ left: padMenu.x, top: padMenu.y }}>
+                {scene && (
+                  <button
+                    onClick={() => {
+                      setEditingSceneId(scene.id)
+                      setPadMenu(null)
+                    }}
+                  >
+                    Edit scene
+                  </button>
+                )}
+                <button
+                  onClick={() => {
+                    setReassignPad(padMenu.index)
+                    setPadMenu(null)
+                  }}
+                >
+                  Reassign…
+                </button>
+                {value && (
+                  <button
+                    className="danger"
+                    onClick={() => {
+                      assignPad(padMenu.index, null)
+                      setPadMenu(null)
+                    }}
+                  >
+                    Clear pad
+                  </button>
+                )}
+              </div>
+            </>
+          )
+        })()}
+
+      {editingSceneId &&
+        (() => {
+          const scene = project.scenes.find((s) => s.id === editingSceneId)
+          if (!scene) return null
+          return (
+            <SceneEditorModal
+              scene={scene}
+              onChange={(updated) =>
+                updateProject((p) => ({
+                  ...p,
+                  scenes: p.scenes.map((s) => (s.id === updated.id ? updated : s))
+                }))
+              }
+              onClose={() => setEditingSceneId(null)}
+            />
+          )
+        })()}
 
       <div className="perform-knobs">
         <Knob
@@ -505,28 +572,6 @@ export function PerformPanel(): JSX.Element {
           format={(v) => `${Math.round(v * 100)}%`}
           onChange={(v) => setOverrides({ reactivity: v })}
         />
-        <button
-          className={`manual-pad${status?.manualActive ? ' active' : ''}`}
-          title="Tap along with the melody. Each tap throws a fresh color and repoints the beams, layered on top of whatever scene is running. Press the X to drop back to the scene."
-          onClick={() => window.djCompanion.lighting.manualPulse().then(refreshStatus)}
-        >
-          <span className="manual-pad-title">TAP FX</span>
-          <span className="manual-pad-sub">
-            {status?.manualActive ? 'tap = next look' : 'tap = new color + beams'}
-          </span>
-          {status?.manualActive && (
-            <button
-              className="manual-clear"
-              title="Release: return to the running scene"
-              onClick={(e) => {
-                e.stopPropagation()
-                window.djCompanion.lighting.clearManual().then(refreshStatus)
-              }}
-            >
-              ✕
-            </button>
-          )}
-        </button>
       </div>
 
       <div className="perform-bottombar">
@@ -571,12 +616,27 @@ export function PerformPanel(): JSX.Element {
         >
           STROBE
         </button>
-        <button
-          className={`blackout-button${overrides.blackout ? ' engaged' : ''}`}
-          onClick={() => setOverrides({ blackout: !overrides.blackout })}
-        >
-          BLACKOUT
-        </button>
+        <div className="blackout-group">
+          <button
+            className={`blackout-button${overrides.blackout ? ' engaged' : ''}`}
+            onClick={() => setOverrides({ blackout: !overrides.blackout })}
+          >
+            BLACKOUT
+          </button>
+          <button
+            className="blackout-mode"
+            title={
+              project.blackoutHolds === false
+                ? 'Blackout clears when you pick a scene. Click to make it stay on instead.'
+                : 'Blackout stays on when you pick a scene. Click to make scenes clear it.'
+            }
+            onClick={() =>
+              updateProject((p) => ({ ...p, blackoutHolds: p.blackoutHolds === false }))
+            }
+          >
+            {project.blackoutHolds === false ? 'clears on scene' : 'stays on'}
+          </button>
+        </div>
       </div>
 
       {stageExpanded && (

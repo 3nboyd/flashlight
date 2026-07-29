@@ -17,6 +17,7 @@ export type EffectType =
   | 'breathe' // slow sine swell of intensity
   | 'eighthBuild' // 8th-note pulses that ramp brighter/tighter across the phrase
   | 'strike' // a hard hit every N beats that holds and fades (occasional beam)
+  | 'tapPulse' // dim colored base; each manual tap flashes bright (white peak) and cycles color
   | 'colorCycle' // step through colors every N beats
   | 'randomColor' // jump to a random palette color every N beats and hold
   | 'alternate' // odd/even fixtures swap two colors on the beat
@@ -179,6 +180,11 @@ export interface SmartSettings {
 export interface LightingProject {
   patches: import('../fixtures/types').FixturePatch[]
   scenes: Scene[]
+  /** Recently deleted scenes, recoverable from the Scenes trash bin. */
+  trashScenes?: Scene[]
+  /** When true (default), Blackout stays engaged after switching scenes; when
+   *  false, triggering a scene clears blackout like any other look. */
+  blackoutHolds?: boolean
   /** Set dressing on the visualizer stage (trusses, speakers, booth…). */
   stageProps: StageProp[]
   /** User-defined fixture profiles, merged over the built-in library. */
@@ -200,6 +206,8 @@ export function defaultLightingProject(): LightingProject {
   return {
     patches: [],
     scenes: [],
+    trashScenes: [],
+    blackoutHolds: true,
     stageProps: [{ id: 'booth-default', type: 'booth', x: 0.5 }],
     customFixtures: [],
     padSceneIds: new Array(16).fill(null),

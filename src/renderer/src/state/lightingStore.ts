@@ -59,8 +59,15 @@ export const useLightingStore = create<LightingState>((set, get) => ({
   },
 
   triggerScene: async (sceneId) => {
+    const { project, overrides } = get()
     const status = await window.djCompanion.lighting.triggerScene(sceneId)
     set({ status })
+    // When the user has opted out of persistent blackout, picking a scene
+    // clears blackout like switching to any other look.
+    if (sceneId && project.blackoutHolds === false && overrides.blackout) {
+      const next = await window.djCompanion.lighting.setOverrides({ blackout: false })
+      set({ overrides: next })
+    }
   },
 
   setOverrides: async (partial) => {

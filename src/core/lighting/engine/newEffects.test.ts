@@ -201,6 +201,43 @@ describe('build / strobe / peak effects', () => {
   })
 })
 
+describe('tapPulse', () => {
+  const scene = (colors: Rgbw[]): Scene => ({
+    id: 's',
+    name: 's',
+    uiColor: '#fff',
+    targets: [{ group: 'all', color: { r: 255, g: 0, b: 90 }, dimmer: 1, effect: { type: 'tapPulse', colors } }]
+  })
+
+  it('is barely lit with no tap and full-bright white on a fresh tap', () => {
+    const fixtures = [patched('p', 'generic-rgb-4ch', 1)] // ch1 dimmer, 2/3/4 = r/g/b
+    const colors: Rgbw[] = [
+      { r: 255, g: 0, b: 0 },
+      { r: 0, g: 255, b: 0 }
+    ]
+    const dark = renderTick({ fixtures, scene: scene(colors), tap: { env: 0, index: 0 }, beat: beatAt(0), nowMs: 0 }).get(1)!
+    expect(dark.getChannel(1)).toBeLessThan(30) // barely-visible base
+    const flash = renderTick({ fixtures, scene: scene(colors), tap: { env: 1, index: 0 }, beat: beatAt(0), nowMs: 0 }).get(1)!
+    expect(flash.getChannel(1)).toBeGreaterThan(240) // full brightness
+    expect(flash.getChannel(2)).toBeGreaterThan(240) // peak is white...
+    expect(flash.getChannel(3)).toBeGreaterThan(240)
+    expect(flash.getChannel(4)).toBeGreaterThan(240)
+  })
+
+  it('cycles the settled color with the tap index', () => {
+    const fixtures = [patched('p', 'generic-rgb-3ch', 1)] // ch1/2/3 = r/g/b
+    const colors: Rgbw[] = [
+      { r: 255, g: 0, b: 0 },
+      { r: 0, g: 255, b: 0 }
+    ]
+    // env below the 0.55 white threshold, so the color is the plain swatch.
+    const t0 = renderTick({ fixtures, scene: scene(colors), tap: { env: 0.4, index: 0 }, beat: beatAt(0), nowMs: 0 }).get(1)!
+    const t1 = renderTick({ fixtures, scene: scene(colors), tap: { env: 0.4, index: 1 }, beat: beatAt(0), nowMs: 0 }).get(1)!
+    expect(t0.getChannel(1)).toBeGreaterThan(t0.getChannel(2)) // index 0 = red
+    expect(t1.getChannel(2)).toBeGreaterThan(t1.getChannel(1)) // index 1 = green
+  })
+})
+
 describe('solo (eerie / sparse)', () => {
   it('lights exactly one cell at a time and switches between steps', () => {
     const fixtures = Array.from({ length: 4 }, (_, i) => patched(`p${i}`, 'generic-rgb-4ch', 1 + i * 4))

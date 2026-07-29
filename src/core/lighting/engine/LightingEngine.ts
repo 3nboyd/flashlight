@@ -44,6 +44,16 @@ interface EffectModifiers {
 
 const NO_MODIFIERS: EffectModifiers = { movementSpeed: 1, reactivity: 1 }
 
+/** Manual tap flash state for the tapPulse effect. */
+export interface TapState {
+  /** 0-1 flash envelope: 1 right after a tap, decaying to 0 between taps. */
+  env: number
+  /** Number of taps so far, used to cycle the color. */
+  index: number
+}
+
+const NO_TAP: TapState = { env: 0, index: 0 }
+
 function applyEffect(
   target: SceneTarget,
   effect: EffectSettings | undefined,
@@ -51,7 +61,8 @@ function applyEffect(
   fixtureCount: number,
   beat: BeatPosition,
   audio: AudioFeatures,
-  mod: EffectModifiers = NO_MODIFIERS
+  mod: EffectModifiers = NO_MODIFIERS,
+  tap: TapState = NO_TAP
 ): FixtureOutput {
   const base: FixtureOutput = {
     color: target.color,
@@ -93,6 +104,21 @@ function applyEffect(
       // occasional beam that shoots out and lingers rather than pulsing.
       const phase = (beat.beat / beats) % 1
       return { ...base, dimmer: target.dimmer * Math.pow(1 - phase, 1.3) }
+    }
+    case 'tapPulse': {
+      // Manual-tap flash: a barely-visible colored base most of the time, and
+      // each tap punches to full. The strobe peak is white, settling into the
+      // current color; the color cycles every tap while white stays white.
+      const swatch = palette[tap.index % palette.length]
+      const whiteMix = Math.max(0, (tap.env - 0.55) / 0.45) // white only at the peak
+      const color: Rgbw = {
+        r: Math.round(swatch.r + (255 - swatch.r) * whiteMix),
+        g: Math.round(swatch.g + (255 - swatch.g) * whiteMix),
+        b: Math.round(swatch.b + (255 - swatch.b) * whiteMix),
+        w: Math.round(255 * whiteMix)
+      }
+      const floor = 0.09 // barely visible between taps
+      return { ...base, color, dimmer: target.dimmer * (floor + (1 - floor) * tap.env) }
     }
     case 'colorCycle': {
       const step = Math.floor(beat.beat / beats) % palette.length
@@ -376,10 +402,13 @@ export function renderTick(options: {
   nowMs: number
   /** Fixture id -> normalized stage X (0..1), so effects spread by position. */
   positions?: Map<string, number>
+  /** Manual tap flash state for tapPulse scenes. */
+  tap?: TapState
 }): Map<number, Universe> {
   const { fixtures, scene, beat, nowMs } = options
   const overrides = options.overrides ?? DEFAULT_OVERRIDES
   const audio = options.audio ?? SILENT_FEATURES
+  const tap = options.tap ?? NO_TAP
   const order = scene && !overrides.blackout ? computeGroupOrder(fixtures, scene, options.positions) : null
   const mod: EffectModifiers = {
     movementSpeed: overrides.movementSpeed ?? 1,
@@ -425,12 +454,12 @@ export function renderTick(options: {
         const wholeIndex =
           segments > 1 ? (order.fixtureRank.get(fixture.patch.id) ?? 0) : (cellRanks[0] ?? 0)
         const wholeCount = segments > 1 ? (order.fixtureTotal.get(fixture.patch.id) ?? 1) : totalCells
-        output = applyEffect(target, target.effect, wholeIndex, wholeCount, beat, audio, mod)
+        output = applyEffect(target, target.effect, wholeIndex, wholeCount, beat, audio, mod, tap)
 
         if (segments > 1) {
           for (let s = 0; s < segments; s++) {
             segmentOutputs.push(
-              applyEffect(target, target.effect, cellRanks[s] ?? s, totalCells, beat, audio, mod)
+              applyEffect(target, target.effect, cellRanks[s] ?? s, totalCells, beat, audio, mod, tap)
             )
           }
         }

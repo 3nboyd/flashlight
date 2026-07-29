@@ -66,18 +66,6 @@ export function resizePads(pads: (string | null)[], count: number): (string | nu
   return next
 }
 
-/** Vivid, well-separated colors the manual trigger steps through. */
-const MANUAL_PALETTE: { r: number; g: number; b: number }[] = [
-  { r: 255, g: 0, b: 0 },
-  { r: 0, g: 100, b: 255 },
-  { r: 0, g: 255, b: 60 },
-  { r: 255, g: 0, b: 200 },
-  { r: 255, g: 160, b: 0 },
-  { r: 150, g: 0, b: 255 },
-  { r: 0, g: 230, b: 255 },
-  { r: 255, g: 255, b: 255 }
-]
-
 export interface LightingStatus {
   running: boolean
   activeSceneId: string | null
@@ -134,12 +122,10 @@ export class LightingHost {
   private smartIntensity = 1
   private smartPhase: SmartPhase = 'steady'
   private smartBuildProgress = 0
-  // Manual trigger pad: each tap cycles a color and jumps movers, so the DJ
-  // can drive changes by hand (following the melody), then clear to revert.
-  private manualIndex = 0
-  private manualColor: { r: number; g: number; b: number } | null = null
-  private manualPan = 0
-  private manualTilt = 0
+  // Manual tap: drives tapPulse scenes. Each tap advances the color index and
+  // restarts a decaying flash; the base look stays barely-visible between taps.
+  private tapIndex = 0
+  private lastTapMs = 0
   // When the rig is blacked out, freeze the animation clock after a moment so
   // moving fixtures stop driving their motors instead of sweeping in the dark.
   private darkSinceMs: number | null = null
@@ -440,14 +426,6 @@ export class LightingHost {
    */
   private effectiveOverrides(): LiveOverrides {
     let o = this.overrides
-    if (this.manualColor) {
-      o = {
-        ...o,
-        colorOverride: o.colorOverride ?? this.manualColor,
-        panOffset: Math.max(-1, Math.min(1, o.panOffset + this.manualPan)),
-        tiltOffset: Math.max(-1, Math.min(1, o.tiltOffset + this.manualTilt))
-      }
-    }
     if (this.smartEnabled && this.smartIntensity < 1) {
       o = { ...o, masterDimmer: o.masterDimmer * this.smartIntensity }
     }
@@ -496,6 +474,14 @@ export class LightingHost {
     return this.frozenBeatAtMs
   }
 
+  /** Decaying tap-flash envelope (1 right after a tap) + the tap counter. */
+  private tapState(nowMs: number): { env: number; index: number } {
+    if (this.lastTapMs === 0) return { env: 0, index: this.tapIndex }
+    const decayMs = 320
+    const env = Math.max(0, Math.pow(1 - Math.min(1, (nowMs - this.lastTapMs) / decayMs), 1.6))
+    return { env, index: this.tapIndex }
+  }
+
   private tick(): void {
     const nowMs = Date.now()
     const audioFresh = nowMs - this.lastAudioAtMs < 500
@@ -507,6 +493,7 @@ export class LightingHost {
       beat: this.clock.positionAt(this.movementClockMs(nowMs, overrides)),
       audio: audioFresh ? this.audio : SILENT_FEATURES,
       positions: this.stageXPositions(),
+      tap: this.tapState(nowMs),
       nowMs
     })
     this.applyIdentify(universes, nowMs)
@@ -542,6 +529,7 @@ export class LightingHost {
       beat: this.clock.positionAt(nowMs),
       audio: audioFresh ? this.audio : SILENT_FEATURES,
       positions: this.stageXPositions(),
+      tap: this.tapState(nowMs),
       nowMs
     })
     this.applyIdentify(universes, nowMs)
@@ -564,31 +552,23 @@ export class LightingHost {
   }
 
   /**
-   * Manual trigger: each call advances to the next vivid color and jumps
-   * every moving fixture to a fresh position. Driven by the DJ's own taps
-   * so the show can follow the melody, not just the beat grid.
+   * Manual tap: advances the tap color and restarts the flash. A tapPulse
+   * scene reads this to punch bright (white peak) on each tap over its dim
+   * base, so the DJ can drive flashes by hand following the melody.
    */
   manualPulse(): void {
-    this.manualIndex += 1
-    this.manualColor = MANUAL_PALETTE[this.manualIndex % MANUAL_PALETTE.length]
-    const hash = (salt: number): number => {
-      const v = Math.abs(Math.sin(this.manualIndex * 12.9898 + salt)) * 43758.5453
-      return (v - Math.floor(v)) * 1.6 - 0.8 // -0.8..0.8
-    }
-    this.manualPan = hash(1)
-    this.manualTilt = hash(7)
+    this.tapIndex += 1
+    this.lastTapMs = Date.now()
   }
 
-  /** Release manual trigger and return to the automatic look. */
+  /** Reset the tap color/flash. */
   clearManual(): void {
-    this.manualIndex = 0
-    this.manualColor = null
-    this.manualPan = 0
-    this.manualTilt = 0
+    this.tapIndex = 0
+    this.lastTapMs = 0
   }
 
   isManualActive(): boolean {
-    return this.manualColor !== null
+    return this.lastTapMs > 0 && Date.now() - this.lastTapMs < 400
   }
 
   tapTempo(): number {
@@ -674,7 +654,7 @@ export class LightingHost {
       smartEnabled: this.smartEnabled,
       smartPhase: this.smartPhase,
       smartBuildProgress: this.smartBuildProgress,
-      manualActive: this.manualColor !== null
+      manualActive: this.isManualActive()
     }
   }
 
