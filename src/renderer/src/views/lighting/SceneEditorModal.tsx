@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, type JSX } from 'react'
+import { useEffect, useMemo, useRef, useState, type JSX } from 'react'
 import type { Scene, SceneTarget, EffectType, Rgbw } from '@core/lighting/engine/types'
 import type { FixtureKind } from '@core/lighting/fixtures/types'
 import { fixturesById } from '@core/lighting/fixtures/library'
@@ -6,7 +6,7 @@ import { useLightingStore } from '../../state/lightingStore'
 import { StageVisualizer } from './StageVisualizer'
 import { FixtureIcon, KIND_LABELS } from './FixtureIcons'
 import { EFFECT_CATALOG, EffectIcon } from './EffectIcons'
-import { describeScene } from './sceneDescribe'
+import { describeScene, groupLabel as describeTargetGroup } from './sceneDescribe'
 
 /**
  * Full-screen scene editor. The live stage renders on the left with the
@@ -42,6 +42,9 @@ interface SceneEditorModalProps {
 export function SceneEditorModal({ scene, onChange, onClose }: SceneEditorModalProps): JSX.Element {
   const { project, triggerScene, status } = useLightingStore()
   const previousSceneRef = useRef<string | null>(status?.activeSceneId ?? null)
+  // Which layer is being worked on: its fixtures glow in the preview.
+  const [selectedLayer, setSelectedLayer] = useState(0)
+  const activeLayer = Math.min(selectedLayer, scene.targets.length - 1)
 
   // Auto-preview: the edited scene plays while the editor is open and the
   // previous look is restored on close.
@@ -78,6 +81,22 @@ export function SceneEditorModal({ scene, onChange, onClose }: SceneEditorModalP
     [project.patches]
   )
 
+  // Fixtures driven by the layer being edited, so the preview can glow them.
+  const highlightIds = useMemo(() => {
+    const target = scene.targets[activeLayer]
+    if (!target) return null
+    const defs = fixturesById(project.customFixtures)
+    const ids = new Set<string>()
+    for (const patch of project.patches) {
+      const kind = defs.get(patch.definitionId)?.kind
+      if (target.group === 'all') ids.add(patch.id)
+      else if (target.group.startsWith('kind:')) {
+        if (kind === target.group.slice(5)) ids.add(patch.id)
+      } else if (patch.group === target.group) ids.add(patch.id)
+    }
+    return ids
+  }, [scene.targets, activeLayer, project.patches, project.customFixtures])
+
   function updateTarget(index: number, partial: Partial<SceneTarget>): void {
     onChange({
       ...scene,
@@ -102,10 +121,10 @@ export function SceneEditorModal({ scene, onChange, onClose }: SceneEditorModalP
         <div className="scene-modal-stage">
           <div className="scene-modal-stage-header">
             <span className="settings-hint" style={{ margin: 0 }}>
-              Live preview - every change shows here instantly
+              Live preview - the layer you are editing glows blue
             </span>
           </div>
-          <StageVisualizer height={Math.min(440, window.innerHeight - 320)} />
+          <StageVisualizer height={Math.min(440, window.innerHeight - 320)} highlightIds={highlightIds} />
         </div>
 
         <div className="scene-modal-editor">
@@ -149,15 +168,24 @@ export function SceneEditorModal({ scene, onChange, onClose }: SceneEditorModalP
               const usesMovement = effectInfo.isMovement
 
               return (
-                <div key={index} className="target-card">
+                <div
+                  key={index}
+                  className={`target-card${index === activeLayer ? ' selected' : ''}`}
+                  onClick={() => setSelectedLayer(index)}
+                >
                   <div className="target-card-head">
-                    <span className="target-card-title">Layer {index + 1}</span>
+                    <span className="target-card-title">
+                      Layer {index + 1}
+                      <span className="target-card-sub"> - {describeTargetGroup(target.group)}</span>
+                    </span>
                     {scene.targets.length > 1 && (
                       <button
                         className="text-button danger"
-                        onClick={() =>
+                        onClick={(e) => {
+                          e.stopPropagation()
                           onChange({ ...scene, targets: scene.targets.filter((_, i) => i !== index) })
-                        }
+                          setSelectedLayer((s) => Math.max(0, s > index ? s - 1 : s))
+                        }}
                       >
                         Remove layer
                       </button>
@@ -348,7 +376,8 @@ export function SceneEditorModal({ scene, onChange, onClose }: SceneEditorModalP
 
             <button
               className="secondary-button add-layer-button"
-              onClick={() =>
+              onClick={() => {
+                setSelectedLayer(scene.targets.length)
                 onChange({
                   ...scene,
                   targets: [
@@ -356,7 +385,7 @@ export function SceneEditorModal({ scene, onChange, onClose }: SceneEditorModalP
                     { group: 'all', color: { r: 255, g: 255, b: 255 }, dimmer: 0.8 }
                   ]
                 })
-              }
+              }}
             >
               + Add layer (target another set of fixtures)
             </button>

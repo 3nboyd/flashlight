@@ -862,22 +862,24 @@ export function SetupPanel({ view }: { view: SetupView }): JSX.Element {
         )}
         <button
           className="secondary-button"
-          onClick={() =>
+          onClick={() => {
+            const id = `scene-${Date.now()}`
             updateProject((p) => ({
               ...p,
               scenes: [
                 ...p.scenes,
                 {
-                  id: `scene-${Date.now()}`,
+                  id,
                   name: `Scene ${p.scenes.length + 1}`,
                   uiColor: '#8b5cf6',
                   targets: [{ group: 'all', color: { r: 255, g: 255, b: 255 }, dimmer: 0.8 }]
                 }
               ]
             }))
-          }
+            setEditingSceneId(id) // open the editor right away, like building one
+          }}
         >
-          New Scene
+          + New Scene
         </button>
 
         {editingScene && (

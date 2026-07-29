@@ -30,6 +30,8 @@ interface StageVisualizerProps {
   /** Fired on empty-area click (used by the mini view to expand). */
   onBackgroundClick?: () => void
   className?: string
+  /** Fixtures to ring with a pulsing highlight (the layer being edited). */
+  highlightIds?: Set<string> | null
 }
 
 type DragTarget = { type: 'fixture'; id: string } | { type: 'prop'; id: string }
@@ -70,13 +72,16 @@ export function StageVisualizer({
   height,
   editable = false,
   onBackgroundClick,
-  className
+  className,
+  highlightIds
 }: StageVisualizerProps): JSX.Element {
   const canvasRef = useRef<HTMLCanvasElement | null>(null)
   const snapshotRef = useRef<Record<number, number[]>>({})
   const positionsRef = useRef<Map<string, StagePosition>>(new Map())
   const dragRef = useRef<DragState | null>(null)
   const propDragXRef = useRef<Map<string, number>>(new Map())
+  const highlightRef = useRef<Set<string> | null>(null)
+  highlightRef.current = highlightIds ?? null
   const [pickerOpen, setPickerOpen] = useState(false)
   const [selected, setSelected] = useState<DragTarget | null>(null)
   const selectedRef = useRef<DragTarget | null>(null)
@@ -151,6 +156,7 @@ export function StageVisualizer({
         props: currentProps(),
         editable,
         selected: selectedRef.current,
+        highlight: highlightRef.current,
         timeMs: performance.now()
       })
     }
@@ -442,6 +448,7 @@ interface RenderContext {
   props: StageProp[]
   editable: boolean
   selected: DragTarget | null
+  highlight: Set<string> | null
   timeMs: number
 }
 
@@ -545,7 +552,31 @@ function renderStage(
     if (rc.selected?.type === 'fixture' && rc.selected.id === state.patchId) {
       drawSelectionRing(ctx, fx, fy, height)
     }
+    if (rc.highlight?.has(state.patchId)) {
+      drawHighlightRing(ctx, fx, fy, height, rc.timeMs)
+    }
   })
+}
+
+/** Pulsing ring marking the fixtures the layer being edited controls. */
+function drawHighlightRing(
+  ctx: CanvasRenderingContext2D,
+  fx: number,
+  fy: number,
+  height: number,
+  timeMs: number
+): void {
+  const pulse = 0.5 + 0.5 * Math.sin(timeMs / 260)
+  const r = Math.max(16, height * 0.06) + pulse * 4
+  ctx.save()
+  ctx.strokeStyle = `rgba(96, 165, 250, ${0.55 + pulse * 0.4})`
+  ctx.lineWidth = 2
+  ctx.shadowColor = 'rgba(96, 165, 250, 0.9)'
+  ctx.shadowBlur = 8 + pulse * 8
+  ctx.beginPath()
+  ctx.arc(fx, fy, r, 0, Math.PI * 2)
+  ctx.stroke()
+  ctx.restore()
 }
 
 function drawSelectionRing(ctx: CanvasRenderingContext2D, fx: number, fy: number, height: number): void {

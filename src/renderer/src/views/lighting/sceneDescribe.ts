@@ -22,7 +22,7 @@ const GROUP_LABELS: Record<string, string> = {
   'kind:dimmer': 'Dimmers'
 }
 
-function groupLabel(group: string): string {
+export function groupLabel(group: string): string {
   if (GROUP_LABELS[group]) return GROUP_LABELS[group]
   if (group.startsWith('kind:')) return group.slice(5)
   return `"${group}" group`
