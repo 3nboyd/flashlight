@@ -16,21 +16,29 @@ export function OutputDiagnostics(): JSX.Element {
   const [scanning, setScanning] = useState(false)
   const [nodes, setNodes] = useState<DiscoveredNode[] | null>(null)
   const [identifyId, setIdentifyId] = useState<string | null>(null)
+  const [probeError, setProbeError] = useState<string | null>(null)
   const lastSample = useRef<{ packets: number; ms: number } | null>(null)
 
   useEffect(() => {
     let alive = true
     const poll = async (): Promise<void> => {
-      const next = await window.djCompanion.lighting.getOutputDiagnostics()
-      if (!alive) return
-      const now = performance.now()
-      const prev = lastSample.current
-      if (prev && now > prev.ms) {
-        const rate = ((next.packetsSent - prev.packets) / (now - prev.ms)) * 1000
-        setPps(Math.max(0, Math.round(rate)))
+      try {
+        const next = await window.djCompanion.lighting.getOutputDiagnostics()
+        if (!alive) return
+        const now = performance.now()
+        const prev = lastSample.current
+        if (prev && now > prev.ms) {
+          const rate = ((next.packetsSent - prev.packets) / (now - prev.ms)) * 1000
+          setPps(Math.max(0, Math.round(rate)))
+        }
+        lastSample.current = { packets: next.packetsSent, ms: now }
+        setDiag(next)
+        setProbeError(null)
+      } catch (err) {
+        // Handler missing (stale build) or engine down: surface it instead of
+        // sitting on "Checking output..." forever.
+        if (alive) setProbeError(err instanceof Error ? err.message : String(err))
       }
-      lastSample.current = { packets: next.packetsSent, ms: now }
-      setDiag(next)
     }
     void poll()
     const interval = setInterval(poll, 700)
@@ -64,11 +72,21 @@ export function OutputDiagnostics(): JSX.Element {
 
   return (
     <div className="diag">
+      {probeError && (
+        <div className="banner error">
+          Output diagnostics unavailable ({probeError}). Fully quit and reopen the app to load the
+          latest build.
+        </div>
+      )}
       <div className="diag-row">
         <span className={`diag-dot ${sending ? 'ok' : diag?.running ? 'warn' : 'off'}`} />
         <div className="diag-status">
           {!diag ? (
-            'Checking output…'
+            probeError ? (
+              'Output info unavailable - restart the app.'
+            ) : (
+              'Checking output…'
+            )
           ) : !diag.running ? (
             <>
               Output stopped. Press <strong>Start Output</strong> in Perform to begin sending.
