@@ -1889,7 +1889,39 @@
 }
 
 .midi-modal {
-  width: min(720px, calc(100vw - 80px));
+  width: min(920px, calc(100vw - 60px));
+  max-height: 90vh;
+  display: flex;
+  flex-direction: column;
+}
+
+/* Header stays put; only the body scrolls if a rig ever needs it. */
+.midi-modal .stage-overlay-header {
+  flex-shrink: 0;
+}
+
+.midi-modal-body {
+  display: flex;
+  gap: 22px;
+  align-items: flex-start;
+  overflow-y: auto;
+  min-height: 0;
+}
+
+.midi-col-pads {
+  flex: 0 0 auto;
+  width: min(48%, 400px);
+}
+
+.midi-col-settings {
+  flex: 1 1 0;
+  min-width: 0;
+}
+
+/* One column of learn rows inside the narrower settings column. */
+.midi-learn-grid.single {
+  grid-template-columns: 1fr;
+  gap: 4px;
 }
 
 .stages-preview-hint {
