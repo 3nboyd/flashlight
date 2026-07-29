@@ -12,6 +12,7 @@ import { StageVisualizer } from './StageVisualizer'
 import { Knob } from './Knob'
 import { SceneBrowser } from './SceneBrowser'
 import { padColumns } from './padGrid'
+import { parsePadFunction, padFunctionInfo, type PadFunctionKind } from './padFunctions'
 import type { Rgbw } from '@core/lighting/engine/types'
 
 const OVERRIDE_COLORS: { name: string; color: Rgbw | null; css: string }[] = [
@@ -81,20 +82,60 @@ export function PerformPanel(): JSX.Element {
     return () => window.removeEventListener('keydown', onKey)
   }, [stageExpanded])
 
+  // A pad assigned a control function. `on` is press/hold (true) or release
+  // (false); momentary functions use both, the rest act on press only.
+  const firePadFunction = useCallback(
+    (kind: PadFunctionKind, on: boolean) => {
+      switch (kind) {
+        case 'strobe':
+          setOverrides({ strobe: on })
+          break
+        case 'blinder':
+          setOverrides({ blind: on })
+          break
+        case 'blackout':
+          if (on) setOverrides({ blackout: !useLightingStore.getState().overrides.blackout })
+          break
+        case 'manual':
+          if (on) window.djCompanion.lighting.manualPulse().then(refreshStatus)
+          break
+        case 'tap':
+          if (on) window.djCompanion.lighting.tapTempo()
+          break
+        case 'resync':
+          if (on) window.djCompanion.lighting.resyncDownbeat()
+          break
+        case 'autopilot':
+          if (on)
+            updateProject((p) => ({
+              ...p,
+              autopilot: { ...p.autopilot, enabled: !p.autopilot.enabled }
+            }))
+          break
+      }
+    },
+    [setOverrides, refreshStatus, updateProject]
+  )
+
   const handleMidiAction = useCallback(
     (action: PadAction, _velocity: number, isNoteOn: boolean) => {
       switch (action.kind) {
         case 'pad': {
           const state = useLightingStore.getState()
-          const sceneId = state.project.padSceneIds[action.padIndex]
-          if (!sceneId) return
-          const scene = state.project.scenes.find((s) => s.id === sceneId)
+          const value = state.project.padSceneIds[action.padIndex]
+          const fnKind = parsePadFunction(value)
+          if (fnKind) {
+            firePadFunction(fnKind, isNoteOn)
+            break
+          }
+          if (!value) return
+          const scene = state.project.scenes.find((s) => s.id === value)
           if (scene?.momentary) {
             // HOLD pads: fire on note-on, restore the previous look on note-off.
-            if (isNoteOn) pressMomentary(sceneId)
+            if (isNoteOn) pressMomentary(value)
             else releaseMomentary()
           } else if (isNoteOn) {
-            triggerScene(sceneId)
+            triggerScene(value)
           }
           break
         }
@@ -126,7 +167,7 @@ export function PerformPanel(): JSX.Element {
           break
       }
     },
-    [triggerScene, setOverrides, pressMomentary, releaseMomentary]
+    [triggerScene, setOverrides, pressMomentary, releaseMomentary, firePadFunction]
   )
 
   const handleMidiControl = useCallback(
@@ -321,6 +362,42 @@ export function PerformPanel(): JSX.Element {
 
       <div className={`pad-grid cols-${padColumns(project.padCount)}`}>
         {project.padSceneIds.map((sceneId, index) => {
+          const fnKind = parsePadFunction(sceneId)
+          if (fnKind) {
+            const info = padFunctionInfo(fnKind)
+            const fnActive =
+              (fnKind === 'blackout' && overrides.blackout) ||
+              (fnKind === 'strobe' && overrides.strobe) ||
+              (fnKind === 'blinder' && overrides.blind) ||
+              (fnKind === 'manual' && status?.manualActive === true) ||
+              (fnKind === 'autopilot' && project.autopilot.enabled)
+            return (
+              <div
+                key={index}
+                className={`pad pad-fn${fnActive ? ' active' : ''}`}
+                style={{ '--pad-color': info.uiColor } as React.CSSProperties}
+                title={info.hint}
+                onMouseDown={() => firePadFunction(fnKind, true)}
+                onMouseUp={() => firePadFunction(fnKind, false)}
+                onMouseLeave={() => info.momentary && firePadFunction(fnKind, false)}
+              >
+                <span className="pad-name">{info.label}</span>
+                {info.momentary && <span className="hold-tag pad-hold">HOLD</span>}
+                <button
+                  className="pad-menu-btn"
+                  title="Reassign this pad"
+                  onClick={(e) => {
+                    e.stopPropagation()
+                    setReassignPad(index)
+                  }}
+                >
+                  <span />
+                  <span />
+                  <span />
+                </button>
+              </div>
+            )
+          }
           const scene = sceneId ? project.scenes.find((s) => s.id === sceneId) : null
           const isActive = scene !== null && scene !== undefined && scene.id === activeSceneId
           const momentary = scene?.momentary === true
@@ -329,7 +406,7 @@ export function PerformPanel(): JSX.Element {
               <button
                 key={index}
                 className="pad empty"
-                title="Assign a scene"
+                title="Assign a scene or control"
                 onClick={() => setReassignPad(index)}
               >
                 <span className="pad-plus">+</span>
@@ -370,6 +447,7 @@ export function PerformPanel(): JSX.Element {
           scenes={project.scenes}
           title={`Assign pad ${reassignPad + 1}`}
           currentId={project.padSceneIds[reassignPad]}
+          includeControls
           onPick={(id) => assignPad(reassignPad, id)}
           onClear={
             project.padSceneIds[reassignPad] ? () => assignPad(reassignPad, null) : undefined

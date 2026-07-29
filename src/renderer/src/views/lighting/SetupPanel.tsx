@@ -14,6 +14,7 @@ import { rigProfile, sceneCompatible } from './sceneCompat'
 import { SetupSection, SetupViewContext, type SetupView } from './SetupSection'
 import { FixtureIcon } from './FixtureIcons'
 import { padColumns, resizePadArray } from './padGrid'
+import { parsePadFunction, padFunctionInfo } from './padFunctions'
 import { CustomFixtureEditor } from './CustomFixtureEditor'
 import { StageVisualizer } from './StageVisualizer'
 import { AudioAnalyzer } from '../../audio/AudioAnalyzer'
@@ -259,6 +260,31 @@ export function SetupPanel({ view }: { view: SetupView }): JSX.Element {
       </button>
     </div>
   )
+
+  const startNoteLearn = (action: PadAction): void => {
+    midiPads.cancelLearn()
+    setLearningControl(null)
+    setLearningAction(action)
+    midiPads.learnOnce((note) => {
+      midiPads.bind(note, action)
+      setLearningAction(null)
+      setMidiMapVersion((v) => v + 1)
+    })
+  }
+  const startControlLearn = (action: ControlAction): void => {
+    midiPads.cancelLearn()
+    setLearningAction(null)
+    setLearningControl(action.kind)
+    midiPads.learnControlOnce((cc) => {
+      const prev = Object.entries(midiPads.getMapping().controls).find(
+        ([, a]) => a.kind === action.kind
+      )?.[0]
+      if (prev) midiPads.unbindControl(Number(prev))
+      midiPads.bindControl(cc, action)
+      setLearningControl(null)
+      setMidiMapVersion((v) => v + 1)
+    })
+  }
 
   function addFixtures(): void {
     const definition = defs.get(addForm.definitionId)
@@ -1104,8 +1130,65 @@ export function SetupPanel({ view }: { view: SetupView }): JSX.Element {
                   Done
                 </button>
               </div>
+              <div className="midi-block-title">Pads</div>
+              <span className="settings-hint" style={{ margin: '0 0 8px' }}>
+                Click a pad below, then hit the matching pad on your controller.
+              </span>
+              <div
+                className={`midi-pad-grid cols-${padColumns(project.padCount)}`}
+                data-version={midiMapVersion}
+              >
+                {Array.from({ length: project.padCount }, (_, i) => {
+                  const boundNote = Object.entries(midiPads.getMapping().notes).find(
+                    ([, action]) => action.kind === 'pad' && action.padIndex === i
+                  )?.[0]
+                  const isLearning = learningAction?.kind === 'pad' && learningAction.padIndex === i
+                  const value = project.padSceneIds[i]
+                  const fn = parsePadFunction(value)
+                  const assignLabel = fn
+                    ? padFunctionInfo(fn).label
+                    : value
+                      ? (project.scenes.find((s) => s.id === value)?.name ?? 'Scene')
+                      : 'empty'
+                  return (
+                    <div
+                      key={i}
+                      className={`midi-pad-cell${isLearning ? ' learning' : ''}${boundNote ? ' bound' : ''}`}
+                      onClick={() => {
+                        if (isLearning) {
+                          midiPads.cancelLearn()
+                          setLearningAction(null)
+                          return
+                        }
+                        startNoteLearn({ kind: 'pad', padIndex: i })
+                      }}
+                    >
+                      <span className="midi-pad-num">{i + 1}</span>
+                      <span className="midi-pad-assign">{assignLabel}</span>
+                      <span className="midi-pad-note">
+                        {isLearning ? 'hit a pad…' : boundNote ? `note ${boundNote}` : 'Learn'}
+                      </span>
+                      {boundNote && (
+                        <button
+                          className="midi-pad-x"
+                          title="Unbind"
+                          onClick={(e) => {
+                            e.stopPropagation()
+                            midiPads.unbindNote(Number(boundNote))
+                            setMidiMapVersion((v) => v + 1)
+                          }}
+                        >
+                          ✕
+                        </button>
+                      )}
+                    </div>
+                  )
+                })}
+              </div>
+
+              <div className="midi-block-title">Buttons</div>
               <div className="midi-learn-grid" data-version={midiMapVersion}>
-                {LEARNABLE_ACTIONS.map((entry) => {
+                {LEARNABLE_ACTIONS.filter((e) => e.action.kind !== 'pad').map((entry) => {
                   const boundNote = Object.entries(midiPads.getMapping().notes).find(
                     ([, action]) => describeAction(action) === entry.label
                   )?.[0]
@@ -1119,29 +1202,33 @@ export function SetupPanel({ view }: { view: SetupView }): JSX.Element {
                         className={isLearning ? 'primary-button' : 'secondary-button'}
                         onClick={() => {
                           if (isLearning) {
-                            // Second click cancels the armed learn.
                             midiPads.cancelLearn()
                             setLearningAction(null)
                             return
                           }
-                          midiPads.cancelLearn()
-                          setLearningControl(null)
-                          setLearningAction(entry.action)
-                          midiPads.learnOnce((note) => {
-                            midiPads.bind(note, entry.action)
-                            setLearningAction(null)
-                            setMidiMapVersion((v) => v + 1)
-                          })
+                          startNoteLearn(entry.action)
                         }}
                       >
                         {isLearning ? 'Cancel' : 'Learn'}
                       </button>
+                      {boundNote && (
+                        <button
+                          className="midi-unbind"
+                          title="Unbind"
+                          onClick={() => {
+                            midiPads.unbindNote(Number(boundNote))
+                            setMidiMapVersion((v) => v + 1)
+                          }}
+                        >
+                          ✕
+                        </button>
+                      )}
                     </div>
                   )
                 })}
               </div>
 
-              <div className="midi-section-title">Knobs & Faders</div>
+              <div className="midi-block-title">Knobs & Faders</div>
               <span className="settings-hint" style={{ margin: '0 0 8px' }}>
                 Click Learn, then move a knob or fader on your controller.
               </span>
@@ -1163,23 +1250,23 @@ export function SetupPanel({ view }: { view: SetupView }): JSX.Element {
                             setLearningControl(null)
                             return
                           }
-                          midiPads.cancelLearn()
-                          setLearningAction(null)
-                          setLearningControl(entry.action.kind)
-                          midiPads.learnControlOnce((cc) => {
-                            // One CC per control: drop any prior binding first.
-                            const prev = Object.entries(midiPads.getMapping().controls).find(
-                              ([, action]) => action.kind === entry.action.kind
-                            )?.[0]
-                            if (prev) midiPads.unbindControl(Number(prev))
-                            midiPads.bindControl(cc, entry.action)
-                            setLearningControl(null)
-                            setMidiMapVersion((v) => v + 1)
-                          })
+                          startControlLearn(entry.action)
                         }}
                       >
                         {isLearning ? 'Cancel' : 'Learn'}
                       </button>
+                      {boundCc && (
+                        <button
+                          className="midi-unbind"
+                          title="Unbind"
+                          onClick={() => {
+                            midiPads.unbindControl(Number(boundCc))
+                            setMidiMapVersion((v) => v + 1)
+                          }}
+                        >
+                          ✕
+                        </button>
+                      )}
                     </div>
                   )
                 })}

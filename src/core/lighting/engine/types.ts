@@ -94,6 +94,8 @@ export interface LiveOverrides {
   blackout: boolean
   /** Momentary strobe-everything while held. */
   strobe: boolean
+  /** Momentary blinder: force every fixture to full white while held. */
+  blind: boolean
   /** Replaces every target's color while set. */
   colorOverride: Rgbw | null
   /** Knob: shifts every fixture's pan left/right, -1..1 (0 = no shift). */
@@ -110,6 +112,7 @@ export const DEFAULT_OVERRIDES: LiveOverrides = {
   masterDimmer: 1,
   blackout: false,
   strobe: false,
+  blind: false,
   colorOverride: null,
   panOffset: 0,
   tiltOffset: 0,

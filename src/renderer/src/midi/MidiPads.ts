@@ -163,6 +163,11 @@ export class MidiPads {
     saveMidiMapping(this.mapping)
   }
 
+  unbindNote(note: number): void {
+    delete this.mapping.notes[note]
+    saveMidiMapping(this.mapping)
+  }
+
   bindControl(cc: number, action: ControlAction): void {
     this.mapping.controls[cc] = action
     saveMidiMapping(this.mapping)

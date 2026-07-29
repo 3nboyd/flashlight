@@ -445,6 +445,9 @@ export function renderTick(options: {
       if (overrides.strobe && !overrides.blackout) {
         next = { ...next, color: WHITE, dimmer: 1, strobing: true }
       }
+      if (overrides.blind && !overrides.blackout) {
+        next = { ...next, color: WHITE, dimmer: 1 }
+      }
       if (overrides.colorOverride && !overrides.blackout && next.dimmer > 0) {
         next = { ...next, color: overrides.colorOverride }
       }

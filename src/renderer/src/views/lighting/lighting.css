@@ -1472,6 +1472,59 @@
   padding: 7px;
 }
 
+/* Control-function tiles in the pad-assign browser. */
+.fn-tile {
+  --tile: #666;
+  position: relative;
+  aspect-ratio: 1 / 1;
+  border-radius: var(--radius-md);
+  border: 1px solid var(--border-subtle);
+  background: color-mix(in srgb, var(--tile) 24%, var(--bg-2));
+  color: #fff;
+  font-size: 11px;
+  font-weight: 700;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  text-align: center;
+  padding: 6px;
+  cursor: pointer;
+}
+
+.fn-tile:hover {
+  border-color: var(--tile);
+}
+
+.fn-tile.selected {
+  border-color: var(--tile);
+  box-shadow: 0 0 0 2px color-mix(in srgb, var(--tile) 65%, transparent);
+}
+
+.fn-tile-hold {
+  position: absolute;
+  top: 5px;
+  right: 6px;
+  font-size: 8px;
+  font-weight: 700;
+  letter-spacing: 1px;
+  opacity: 0.65;
+}
+
+/* Function pads in Perform: a dotted accent marks them as controls, not scenes. */
+.pad-fn::after {
+  content: '';
+  position: absolute;
+  left: 8px;
+  bottom: 7px;
+  width: 5px;
+  height: 5px;
+  border-radius: 50%;
+  background: var(--pad-color);
+  box-shadow: 8px 0 0 var(--pad-color);
+  opacity: 0.7;
+  z-index: 1;
+}
+
 .scene-browser-col-tiles .scene-tile2-label {
   font-size: 11px;
 }
@@ -2353,13 +2406,109 @@
   margin-bottom: 10px;
 }
 
-.midi-section-title {
+.midi-block-title {
   font-size: 13px;
   font-weight: 700;
   color: var(--text-primary);
   margin: 16px 0 2px;
   border-top: 1px solid var(--border-subtle);
   padding-top: 14px;
+}
+
+.midi-pad-grid {
+  display: grid;
+  gap: 6px;
+  margin-bottom: 6px;
+}
+
+.midi-pad-grid.cols-4 {
+  grid-template-columns: repeat(4, 1fr);
+}
+
+.midi-pad-grid.cols-8 {
+  grid-template-columns: repeat(8, 1fr);
+}
+
+.midi-pad-cell {
+  position: relative;
+  aspect-ratio: 1 / 1;
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-md);
+  background: var(--bg-1);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 2px;
+  padding: 4px;
+  cursor: pointer;
+  text-align: center;
+  transition: border-color 0.12s, background 0.12s;
+}
+
+.midi-pad-cell:hover {
+  border-color: var(--border-strong);
+}
+
+.midi-pad-cell.bound {
+  background: color-mix(in srgb, var(--accent) 12%, var(--bg-1));
+  border-color: color-mix(in srgb, var(--accent) 40%, var(--border-subtle));
+}
+
+.midi-pad-cell.learning {
+  border-color: var(--accent);
+  box-shadow: 0 0 0 1px var(--accent);
+}
+
+.midi-pad-num {
+  font-size: 11px;
+  font-weight: 700;
+  color: var(--text-tertiary);
+}
+
+.midi-pad-assign {
+  font-size: 10px;
+  color: var(--text-secondary);
+  max-width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.midi-pad-note {
+  font-size: 10px;
+  color: var(--text-tertiary);
+}
+
+.midi-pad-cell.bound .midi-pad-note {
+  color: var(--accent);
+}
+
+.midi-pad-x,
+.midi-unbind {
+  border: none;
+  background: transparent;
+  color: var(--text-tertiary);
+  cursor: pointer;
+  font-size: 11px;
+  line-height: 1;
+  padding: 2px;
+}
+
+.midi-pad-x {
+  position: absolute;
+  top: 3px;
+  right: 4px;
+  opacity: 0.4;
+}
+
+.midi-pad-cell:hover .midi-pad-x {
+  opacity: 1;
+}
+
+.midi-pad-x:hover,
+.midi-unbind:hover {
+  color: var(--danger);
 }
 
 .midi-learn-row {
