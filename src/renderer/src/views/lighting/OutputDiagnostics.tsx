@@ -10,7 +10,7 @@ import type { DiscoveredNode } from '../../../../main/lighting/ArtNetDiscovery'
  * leaving, plus an ArtPoll scan that proves a node is reachable.
  */
 export function OutputDiagnostics(): JSX.Element {
-  const { project } = useLightingStore()
+  const { project, updateProject } = useLightingStore()
   const [diag, setDiag] = useState<Diagnostics | null>(null)
   const [pps, setPps] = useState(0)
   const [scanning, setScanning] = useState(false)
@@ -65,6 +65,11 @@ export function OutputDiagnostics(): JSX.Element {
       setIdentifyId(active)
     },
     [identifyId]
+  )
+
+  const setTarget = useCallback(
+    (ip: string) => updateProject((p) => ({ ...p, output: { ...p.output, artnetHost: ip } })),
+    [updateProject]
   )
 
   const isArtnet = diag?.protocol === 'artnet'
@@ -158,6 +163,20 @@ export function OutputDiagnostics(): JSX.Element {
                       </span>
                     </div>
                   </div>
+                  {project.output.artnetHost === node.ip ? (
+                    <span className="diag-target-badge" style={{ marginLeft: 'auto' }}>
+                      ● Output target
+                    </span>
+                  ) : (
+                    <button
+                      className="secondary-button"
+                      style={{ marginLeft: 'auto' }}
+                      title="Send DMX to this node (sets the Target above)"
+                      onClick={() => setTarget(node.ip)}
+                    >
+                      Use as target
+                    </button>
+                  )}
                 </li>
               ))}
             </ul>
