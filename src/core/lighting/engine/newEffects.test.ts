@@ -209,32 +209,68 @@ describe('tapPulse', () => {
     targets: [{ group: 'all', color: { r: 255, g: 0, b: 90 }, dimmer: 1, effect: { type: 'tapPulse', colors } }]
   })
 
-  it('is barely lit with no tap and full-bright white on a fresh tap', () => {
-    const fixtures = [patched('p', 'generic-rgb-4ch', 1)] // ch1 dimmer, 2/3/4 = r/g/b
-    const colors: Rgbw[] = [
-      { r: 255, g: 0, b: 0 },
-      { r: 0, g: 255, b: 0 }
-    ]
+  it('is fully dark with no tap and full brightness on a fresh tap', () => {
+    const fixtures = [patched('p', 'generic-rgb-4ch', 1)] // ch1 = dimmer
+    const colors: Rgbw[] = [{ r: 255, g: 0, b: 0 }]
     const dark = renderTick({ fixtures, scene: scene(colors), tap: { env: 0, index: 0 }, beat: beatAt(0), nowMs: 0 }).get(1)!
-    expect(dark.getChannel(1)).toBeLessThan(30) // barely-visible base
+    expect(dark.getChannel(1)).toBe(0) // blackout base
     const flash = renderTick({ fixtures, scene: scene(colors), tap: { env: 1, index: 0 }, beat: beatAt(0), nowMs: 0 }).get(1)!
-    expect(flash.getChannel(1)).toBeGreaterThan(240) // full brightness
-    expect(flash.getChannel(2)).toBeGreaterThan(240) // peak is white...
-    expect(flash.getChannel(3)).toBeGreaterThan(240)
-    expect(flash.getChannel(4)).toBeGreaterThan(240)
+    expect(flash.getChannel(1)).toBeGreaterThan(240) // full on the tap
   })
 
-  it('cycles the settled color with the tap index', () => {
-    const fixtures = [patched('p', 'generic-rgb-3ch', 1)] // ch1/2/3 = r/g/b
+  it('fires the white LED alongside the color on a tap', () => {
+    // rgbw-strobe-panel-11ch: ch1 dimmer, ch2 R, ch3 G, ch4 B, ch5 W.
+    const fixtures = [patched('p', 'rgbw-strobe-panel-11ch', 1)]
+    const flash = renderTick({
+      fixtures,
+      scene: scene([{ r: 0, g: 0, b: 255 }]),
+      tap: { env: 1, index: 0 },
+      beat: beatAt(0),
+      nowMs: 0
+    }).get(1)!
+    expect(flash.getChannel(4)).toBeGreaterThan(240) // blue color LED
+    expect(flash.getChannel(5)).toBeGreaterThan(200) // white LED (strobe) fires too
+  })
+
+  it('cycles the flash color with the tap index', () => {
+    // RGBW panel (ch2 R, ch3 G) keeps color separate from the white LED, so
+    // the cycling color stays visible under the white strobe.
+    const fixtures = [patched('p', 'rgbw-strobe-panel-11ch', 1)]
     const colors: Rgbw[] = [
       { r: 255, g: 0, b: 0 },
       { r: 0, g: 255, b: 0 }
     ]
-    // env below the 0.55 white threshold, so the color is the plain swatch.
-    const t0 = renderTick({ fixtures, scene: scene(colors), tap: { env: 0.4, index: 0 }, beat: beatAt(0), nowMs: 0 }).get(1)!
-    const t1 = renderTick({ fixtures, scene: scene(colors), tap: { env: 0.4, index: 1 }, beat: beatAt(0), nowMs: 0 }).get(1)!
-    expect(t0.getChannel(1)).toBeGreaterThan(t0.getChannel(2)) // index 0 = red
-    expect(t1.getChannel(2)).toBeGreaterThan(t1.getChannel(1)) // index 1 = green
+    const t0 = renderTick({ fixtures, scene: scene(colors), tap: { env: 1, index: 0 }, beat: beatAt(0), nowMs: 0 }).get(1)!
+    const t1 = renderTick({ fixtures, scene: scene(colors), tap: { env: 1, index: 1 }, beat: beatAt(0), nowMs: 0 }).get(1)!
+    expect(t0.getChannel(2)).toBeGreaterThan(t0.getChannel(3)) // index 0 = red
+    expect(t1.getChannel(3)).toBeGreaterThan(t1.getChannel(2)) // index 1 = green
+  })
+})
+
+describe('sweep (side to side, position-ordered)', () => {
+  it('lights the left end first, then the right end as the head travels', () => {
+    const fixtures = [
+      patched('a', 'generic-rgb-4ch', 1),
+      patched('b', 'generic-rgb-4ch', 5),
+      patched('c', 'generic-rgb-4ch', 9)
+    ]
+    const positions = new Map([
+      ['a', 0],
+      ['b', 0.5],
+      ['c', 1]
+    ])
+    const scene: Scene = {
+      id: 's',
+      name: 's',
+      uiColor: '#fff',
+      targets: [{ group: 'all', color: { r: 255, g: 255, b: 255 }, dimmer: 1, effect: { type: 'sweep', beats: 4 } }]
+    }
+    const dim = (ms: number, addr: number): number =>
+      renderTick({ fixtures, scene, positions, beat: beatAt(ms), nowMs: ms }).get(1)!.getChannel(addr)
+    // beat ~0: head at the left -> a lit, c dark.
+    expect(dim(20, 1)).toBeGreaterThan(dim(20, 9))
+    // beat ~4 (head swept to the right) -> c lit, a dark.
+    expect(dim(1980, 9)).toBeGreaterThan(dim(1980, 1))
   })
 })
 

@@ -178,6 +178,11 @@ export const PRESET_LIBRARY: PresetCategory[] = [
     // couple seconds - the rest stay dark.
     scene('preset-lone-beam', 'Lone Beam', '#b91c1c', [
       { group: 'all', color: { r: 200, g: 0, b: 0 }, dimmer: 1, effect: { type: 'solo', beats: 4 } }
+    ]),
+    // A bright point sweeps side to side across the rig in stage order, so it
+    // reads as one light travelling left to right on any layout.
+    scene('preset-side-sweep', 'Side Sweep', '#e2e8f0', [
+      { group: 'all', color: WHITE, dimmer: 1, effect: { type: 'sweep', beats: 4 } }
     ])
   ]),
 
@@ -186,19 +191,13 @@ export const PRESET_LIBRARY: PresetCategory[] = [
       { group: 'all', color: WHITE, dimmer: 1, effect: { type: 'eighthBuild' } }
     ]),
     scene('preset-color-riser', 'Color Riser', '#22d3ee', [
-      { group: 'kind:par', color: { r: 0, g: 200, b: 255 }, dimmer: 1, effect: { type: 'eighthBuild' } },
-      {
-        group: 'kind:movingHead',
-        color: { r: 0, g: 200, b: 255 },
-        dimmer: 1,
-        effect: { type: 'movementNod', beats: 4, amplitude: 0.8 }
-      }
+      { group: 'all', color: { r: 0, g: 200, b: 255 }, dimmer: 1, effect: { type: 'eighthBuild' } }
     ]),
     scene('preset-filter-swell', 'Filter Swell', '#a78bfa', [
       { group: 'all', color: { r: 150, g: 80, b: 255 }, dimmer: 0.9, effect: { type: 'breathe', beats: 8 } }
     ]),
     scene('preset-snare-rush', 'Snare Rush', '#fb7185', [
-      { group: 'kind:par', color: { r: 255, g: 40, b: 60 }, dimmer: 1, effect: { type: 'eighthBuild' } },
+      { group: 'all', color: { r: 255, g: 40, b: 60 }, dimmer: 1, effect: { type: 'eighthBuild' } },
       {
         group: 'kind:movingHead',
         color: { r: 255, g: 40, b: 60 },
@@ -260,7 +259,9 @@ export const PRESET_LIBRARY: PresetCategory[] = [
 
   group('Peaks', 'Full-rig, rainbow-crazy, drop-time energy.', 'peak', [
     scene('preset-rainbow-peak', 'Rainbow Peak', '#f43f5e', [
-      { group: 'all', color: { r: 255, g: 0, b: 0 }, dimmer: 1, effect: { type: 'rainbowStep', beats: 1 } }
+      { group: 'all', color: { r: 255, g: 0, b: 0 }, dimmer: 1, effect: { type: 'rainbowStep', beats: 1 } },
+      // Strobes flash white on the beat over the changing rainbow colors.
+      { group: 'kind:strobe', color: WHITE, dimmer: 1, effect: { type: 'eighthStrobe' } }
     ]),
     scene('preset-rainbow-flow', 'Rainbow Flow', '#8b5cf6', [
       { group: 'all', color: { r: 255, g: 0, b: 0 }, dimmer: 0.85, effect: { type: 'rainbow', beats: 16 } }

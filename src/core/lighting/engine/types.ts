@@ -17,7 +17,8 @@ export type EffectType =
   | 'breathe' // slow sine swell of intensity
   | 'eighthBuild' // 8th-note pulses that ramp brighter/tighter across the phrase
   | 'strike' // a hard hit every N beats that holds and fades (occasional beam)
-  | 'tapPulse' // dim colored base; each manual tap flashes bright (white peak) and cycles color
+  | 'tapPulse' // blackout base; each manual tap flashes a cycling color + white strobe
+  | 'sweep' // a bright point travels side to side across the group in stage order
   | 'colorCycle' // step through colors every N beats
   | 'randomColor' // jump to a random palette color every N beats and hold
   | 'alternate' // odd/even fixtures swap two colors on the beat

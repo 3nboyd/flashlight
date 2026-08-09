@@ -423,7 +423,18 @@ export function PerformPanel(): JSX.Element {
               key={index}
               className={`pad${isActive ? ' active' : ''}`}
               style={{ '--pad-color': scene.uiColor } as React.CSSProperties}
-              onClick={momentary ? undefined : () => triggerScene(isActive ? null : scene.id)}
+              onClick={
+                momentary
+                  ? undefined
+                  : scene.targets.some((t) => t.effect?.type === 'tapPulse')
+                    ? () => {
+                        // Tap Pulse pad: first press activates it, each press
+                        // fires a flash (rather than toggling the scene off).
+                        if (!isActive) triggerScene(scene.id)
+                        window.djCompanion.lighting.manualPulse().then(refreshStatus)
+                      }
+                    : () => triggerScene(isActive ? null : scene.id)
+              }
               onMouseDown={momentary ? () => pressMomentary(scene.id) : undefined}
               onMouseUp={momentary ? releaseMomentary : undefined}
               onMouseLeave={momentary && isActive ? releaseMomentary : undefined}

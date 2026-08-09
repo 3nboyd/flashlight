@@ -106,19 +106,23 @@ function applyEffect(
       return { ...base, dimmer: target.dimmer * Math.pow(1 - phase, 1.3) }
     }
     case 'tapPulse': {
-      // Manual-tap flash: a barely-visible colored base most of the time, and
-      // each tap punches to full. The strobe peak is white, settling into the
-      // current color; the color cycles every tap while white stays white.
+      // Blackout until tapped: fully dark between taps, and each tap fires a
+      // strong flash in a cycling rainbow color with the white LEDs firing too
+      // (color on RGB, strobe on the white channel).
       const swatch = palette[tap.index % palette.length]
-      const whiteMix = Math.max(0, (tap.env - 0.55) / 0.45) // white only at the peak
-      const color: Rgbw = {
-        r: Math.round(swatch.r + (255 - swatch.r) * whiteMix),
-        g: Math.round(swatch.g + (255 - swatch.g) * whiteMix),
-        b: Math.round(swatch.b + (255 - swatch.b) * whiteMix),
-        w: Math.round(255 * whiteMix)
-      }
-      const floor = 0.09 // barely visible between taps
-      return { ...base, color, dimmer: target.dimmer * (floor + (1 - floor) * tap.env) }
+      const color: Rgbw = { r: swatch.r, g: swatch.g, b: swatch.b, w: Math.round(255 * tap.env) }
+      return { ...base, color, dimmer: target.dimmer * tap.env }
+    }
+    case 'sweep': {
+      // A bright point travels across the group in stage order, side to side
+      // (ping-pong), dark elsewhere. Position-aware, so it flows left to right
+      // across whatever fixtures/pixels the scene targets.
+      const pos = fixtureCount > 1 ? fixtureIndex / (fixtureCount - 1) : 0.5
+      const phase = (beat.beat / beats) % 2
+      const head = phase < 1 ? phase : 2 - phase // 0 -> 1 -> 0
+      const width = 0.24
+      const env = Math.max(0, 1 - Math.abs(pos - head) / width)
+      return { ...base, dimmer: target.dimmer * Math.pow(env, 1.4) }
     }
     case 'colorCycle': {
       const step = Math.floor(beat.beat / beats) % palette.length
