@@ -329,6 +329,26 @@ export function SceneEditorModal({ scene, onChange, onClose }: SceneEditorModalP
                     </div>
                   )}
 
+                  {effectType === 'melodyBeat' && (
+                    <div className="slider-row">
+                      <label>Sensitivity</label>
+                      <input
+                        type="range"
+                        min={0}
+                        max={100}
+                        title="How eagerly it flashes to the melody and enters beat mode"
+                        value={Math.round((target.effect?.amplitude ?? 0.5) * 100)}
+                        onChange={(e) =>
+                          target.effect &&
+                          updateTarget(index, {
+                            effect: { ...target.effect, amplitude: Number(e.target.value) / 100 }
+                          })
+                        }
+                      />
+                      <span className="slider-value">{Math.round((target.effect?.amplitude ?? 0.5) * 100)}%</span>
+                    </div>
+                  )}
+
                   {effectType === 'rainbowStrobe' && (
                     <div className="slider-row">
                       <label>White flash</label>

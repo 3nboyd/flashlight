@@ -30,6 +30,22 @@ function hueToRgb(hue: number): Rgbw {
   return { r: Math.round(rgb[0] * 255), g: Math.round(rgb[1] * 255), b: Math.round(rgb[2] * 255) }
 }
 
+/** Hue (0-360) of an RGB color; greys fall back to green so shifts stay lush. */
+function rgbToHue(c: Rgbw): number {
+  const r = c.r / 255
+  const g = c.g / 255
+  const b = c.b / 255
+  const max = Math.max(r, g, b)
+  const min = Math.min(r, g, b)
+  const d = max - min
+  if (d < 1e-4) return 140
+  let h: number
+  if (max === r) h = ((g - b) / d) % 6
+  else if (max === g) h = (b - r) / d + 2
+  else h = (r - g) / d + 4
+  return ((h * 60) % 360 + 360) % 360
+}
+
 /**
  * Computes what one fixture in a target should output at a given musical
  * position. Pure per-tick math: every animated quantity derives from the
@@ -63,9 +79,15 @@ export interface SongState {
   phase: SmartPhase
   /** 0-1 progress through a detected build-up. */
   buildProgress: number
+  /**
+   * 0-1 kick envelope: snaps up on bass-drum transients and releases slowly,
+   * so it reads "high" through a driving-kick section and falls to ~0 in quiet
+   * or purely-melodic passages. Drives the melodyBeat scene's mode switch.
+   */
+  bassEnv?: number
 }
 
-const STEADY_SONG: SongState = { phase: 'steady', buildProgress: 0 }
+const STEADY_SONG: SongState = { phase: 'steady', buildProgress: 0, bassEnv: 0 }
 
 /** Effects that actively aim moving fixtures, so they should NOT park home. */
 const MOVEMENT_EFFECTS = new Set<EffectSettings['type']>([
@@ -423,6 +445,38 @@ function applyEffect(
       // Steady/break: slow icy swell that never fully goes dark.
       const swell = 0.5 - 0.5 * Math.cos(beat.phrasePhase * 4 * Math.PI)
       return { ...base, color: target.color, dimmer: target.dimmer * (0.25 + 0.5 * swell) }
+    }
+    case 'melodyBeat': {
+      // A smart, silence-aware scene. In quiet or purely melodic passages it
+      // stays black and fires quick flashes that track the live rhythm (as
+      // responsive as the audio envelope allows). When a driving bass drum
+      // comes in it switches to a quarter-note beat look: the white LEDs pop
+      // briefly while the color (a slowly shifting emerald) flashes too and
+      // lingers a touch longer than the white-only pop. `amplitude` is the
+      // sensitivity: higher = enters beat mode sooner and flashes on quieter
+      // melodic hits.
+      const sens = effect.amplitude ?? 0.5
+      const driving = (song.bassEnv ?? 0) > 0.3 - 0.2 * sens
+
+      if (driving) {
+        const sinceBeat = beat.beat % 1 // quarter-note grid
+        const inWhite = sinceBeat < 0.12 // white LEDs: short pop
+        const colorEnv = Math.max(0, 1 - sinceBeat / 0.34) // color lingers a bit longer
+        const shifted = hueToRgb(rgbToHue(target.color) + 18 * Math.sin(beat.beat * 0.11))
+        return {
+          ...base,
+          color: { r: shifted.r, g: shifted.g, b: shifted.b, w: inWhite ? 255 : 0 },
+          dimmer: target.dimmer * (inWhite ? 1 : colorEnv)
+        }
+      }
+
+      // Sparse mode: pitch black except quick flashes on melodic/rhythmic hits,
+      // tracking the live audio envelope so the light hits the actual rhythm.
+      const gain = (1.6 + 3 * sens) * mod.reactivity
+      const floor = 0.22 - 0.14 * sens
+      const env = Math.max(audio.high, audio.rms * 0.9, audio.onset ? 0.8 : 0)
+      const level = Math.min(1, Math.max(0, env - floor) * gain)
+      return { ...base, color: target.color, dimmer: target.dimmer * level }
     }
     default:
       return base

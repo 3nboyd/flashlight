@@ -47,7 +47,8 @@ export const EFFECT_CATALOG: EffectInfo[] = [
   { type: 'movementRandom', label: 'Random', hint: 'Ballyhoo jumps', usesPalette: false, isMovement: true },
   { type: 'songRainbow', label: 'Song: Rainbow', hint: 'Follows the song (needs audio)', usesPalette: false, isMovement: false },
   { type: 'songRed', label: 'Song: Alert', hint: 'Follows the song in one color', usesPalette: false, isMovement: false },
-  { type: 'songFrost', label: 'Song: Frost', hint: 'Follows the song, icy + white', usesPalette: false, isMovement: false }
+  { type: 'songFrost', label: 'Song: Frost', hint: 'Follows the song, icy + white', usesPalette: false, isMovement: false },
+  { type: 'melodyBeat', label: 'Live Pulse', hint: 'Silent + rhythm flashes, beat on the kick', usesPalette: false, isMovement: false }
 ]
 
 export function EffectIcon({ type }: { type: EffectType }): JSX.Element {

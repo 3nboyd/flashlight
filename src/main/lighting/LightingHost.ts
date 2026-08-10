@@ -128,6 +128,9 @@ export class LightingHost {
   private readonly songSensor = new SmartModeEngine(40)
   private songPhase: SmartPhase = 'steady'
   private songBuild = 0
+  // Kick envelope: fast attack on bass transients, slow release, so a driving
+  // bass-drum section reads "on" between kicks. Drives melodyBeat's mode.
+  private bassEnv = 0
   // Manual tap: drives tapPulse scenes. Each tap advances the color index and
   // restarts a decaying flash; the base look stays barely-visible between taps.
   private tapIndex = 0
@@ -506,7 +509,9 @@ export class LightingHost {
       audio: audioFresh ? this.audio : SILENT_FEATURES,
       positions: this.stageXPositions(),
       tap: this.tapState(nowMs),
-      song: audioFresh ? { phase: this.songPhase, buildProgress: this.songBuild } : { phase: 'steady', buildProgress: 0 },
+      song: audioFresh
+        ? { phase: this.songPhase, buildProgress: this.songBuild, bassEnv: this.bassEnv }
+        : { phase: 'steady', buildProgress: 0, bassEnv: 0 },
       nowMs
     })
     this.applyIdentify(universes, nowMs)
@@ -543,7 +548,9 @@ export class LightingHost {
       audio: audioFresh ? this.audio : SILENT_FEATURES,
       positions: this.stageXPositions(),
       tap: this.tapState(nowMs),
-      song: audioFresh ? { phase: this.songPhase, buildProgress: this.songBuild } : { phase: 'steady', buildProgress: 0 },
+      song: audioFresh
+        ? { phase: this.songPhase, buildProgress: this.songBuild, bassEnv: this.bassEnv }
+        : { phase: 'steady', buildProgress: 0, bassEnv: 0 },
       nowMs
     })
     this.applyIdentify(universes, nowMs)
@@ -627,6 +634,10 @@ export class LightingHost {
     const songDecision = this.songSensor.addFrame(features, this.clock.positionAt(Date.now()))
     this.songPhase = songDecision.phase
     this.songBuild = songDecision.buildProgress
+    // Kick envelope: snap up to bass transients, release slowly (~0.7s) so a
+    // driving-kick section holds "on" between hits and quiet parts fall away.
+    if (features.bass > this.bassEnv) this.bassEnv = features.bass
+    else this.bassEnv += (1 - Math.exp(-1 / (40 * 0.7))) * (features.bass - this.bassEnv)
 
     if (this.smartEnabled) {
       const decision = this.smart.addFrame(features, this.clock.positionAt(Date.now()))

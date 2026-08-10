@@ -44,7 +44,8 @@ const KIND_OF: Record<EffectType, PreviewKind> = {
   movementRandom: 'move',
   songRainbow: 'rainbow',
   songRed: 'strobe',
-  songFrost: 'strobe'
+  songFrost: 'strobe',
+  melodyBeat: 'strobe'
 }
 
 /** Higher wins when a scene layers several effects: pick the most eye-catching. */

@@ -351,6 +351,12 @@ export const PRESET_LIBRARY: PresetCategory[] = [
       ]),
       scene('preset-song-frost', 'Deep Freeze', '#38bdf8', [
         { group: 'all', color: { r: 0, g: 110, b: 255 }, dimmer: 1, effect: { type: 'songFrost' } }
+      ]),
+      // Silence-aware: black + quick rhythm flashes over a melody, then a
+      // quarter-note white strobe + shifting emerald once the kick drives.
+      // amplitude = sensitivity (how eagerly it flashes / enters beat mode).
+      scene('preset-live-pulse', 'Live Pulse', '#10b981', [
+        { group: 'all', color: { r: 0, g: 200, b: 80 }, dimmer: 1, effect: { type: 'melodyBeat', amplitude: 0.5 } }
       ])
     ]
   )

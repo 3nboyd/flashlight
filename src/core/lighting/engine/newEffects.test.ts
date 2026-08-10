@@ -4,6 +4,7 @@ import { BeatClock } from './BeatClock'
 import { builtinFixturesById } from '../fixtures/library'
 import type { PatchedFixture } from '../fixtures/types'
 import type { Scene, EffectSettings, Rgbw } from './types'
+import type { AudioFeatures } from '../audio/features'
 import { readFixtureVisualState } from '../visualizer/fixtureVisualState'
 
 const defs = builtinFixturesById()
@@ -427,5 +428,43 @@ describe('adaptive song-arc effects', () => {
     const steady = renderTick({ fixtures, scene: panelScene('songRed'), song: { phase: 'steady', buildProgress: 0 }, beat: beatAt(0), nowMs: 0 }).get(1)!
     expect(drop.getChannel(5)).toBeGreaterThan(200) // white LED strobes on the drop
     expect(steady.getChannel(5)).toBe(0) // no white flash in the calm base look
+  })
+})
+
+describe('melodyBeat (Live Pulse, silence-aware)', () => {
+  // rgbw-strobe-panel-11ch: ch1 dimmer, ch2 red, ch3 green, ch5 white.
+  const fixtures = [patched('p', 'rgbw-strobe-panel-11ch', 1)]
+  const scene: Scene = {
+    id: 's',
+    name: 's',
+    uiColor: '#fff',
+    targets: [{ group: 'all', color: { r: 0, g: 200, b: 80 }, dimmer: 1, effect: { type: 'melodyBeat', amplitude: 0.5 } }]
+  }
+  const audio = (over: Partial<AudioFeatures>): AudioFeatures => ({
+    rms: 0,
+    bass: 0,
+    mid: 0,
+    high: 0,
+    onset: false,
+    timestampMs: 0,
+    ...over
+  })
+
+  it('is black in silence and flashes on a melodic hit when no kick is present', () => {
+    const song = { phase: 'steady' as const, buildProgress: 0, bassEnv: 0 }
+    const silent = renderTick({ fixtures, scene, song, audio: audio({}), beat: beatAt(300), nowMs: 300 }).get(1)!
+    const hit = renderTick({ fixtures, scene, song, audio: audio({ high: 0.9, rms: 0.6 }), beat: beatAt(300), nowMs: 300 }).get(1)!
+    expect(silent.getChannel(1)).toBe(0) // pitch black when quiet
+    expect(hit.getChannel(1)).toBeGreaterThan(0) // quick flash on the melodic hit
+    expect(hit.getChannel(5)).toBe(0) // no white strobe in the melodic/quiet mode
+  })
+
+  it('runs a quarter-note white + shifting-color beat once the kick drives', () => {
+    const song = { phase: 'steady' as const, buildProgress: 0, bassEnv: 0.9 }
+    const onBeat = renderTick({ fixtures, scene, song, audio: audio({ bass: 0.9 }), beat: beatAt(0), nowMs: 0 }).get(1)!
+    const between = renderTick({ fixtures, scene, song, audio: audio({ bass: 0.9 }), beat: beatAt(250), nowMs: 250 }).get(1)!
+    expect(onBeat.getChannel(5)).toBeGreaterThan(200) // white LEDs pop on the beat
+    expect(between.getChannel(5)).toBe(0) // white only pops on the beat
+    expect(onBeat.getChannel(3)).toBeGreaterThan(onBeat.getChannel(2)) // emerald: green over red
   })
 })

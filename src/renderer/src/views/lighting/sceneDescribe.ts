@@ -127,6 +127,8 @@ function effectPhrase(effect: EffectSettings): string {
       return 'follows the song: sparse red to red+white bass peak'
     case 'songFrost':
       return 'follows the song: icy swell to white-strobe drop'
+    case 'melodyBeat':
+      return 'black + rhythm flashes when quiet, white+color beat on the kick'
     default:
       return ''
   }
