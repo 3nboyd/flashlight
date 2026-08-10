@@ -1,0 +1,77 @@
+import { describe, it, expect } from 'vitest'
+import { MusicPulse } from './MusicPulse'
+import { BeatClock } from './BeatClock'
+import type { AudioFeatures } from '../audio/features'
+
+const FPS = 40
+const frame = (over: Partial<AudioFeatures>): AudioFeatures => ({
+  rms: 0,
+  bass: 0,
+  mid: 0,
+  high: 0,
+  onset: false,
+  timestampMs: 0,
+  ...over
+})
+
+function clockAt(bpm: number): BeatClock {
+  const c = new BeatClock()
+  c.setBpm(bpm, 0)
+  c.resyncDownbeat(0)
+  return c
+}
+
+/** Feed `seconds` of audio at 40fps; `sampler(ms)` returns each frame's features. */
+function run(pulse: MusicPulse, clock: BeatClock, seconds: number, sampler: (ms: number) => AudioFeatures): number {
+  let kick = 0
+  const frames = Math.round(seconds * FPS)
+  for (let i = 0; i < frames; i++) {
+    const ms = (i / FPS) * 1000
+    kick = pulse.addFrame(sampler(ms), clock.positionAt(ms)).kick
+  }
+  return kick
+}
+
+describe('MusicPulse kick detection', () => {
+  it('rises for a consistent on-grid quarter-note kick drum', () => {
+    const pulse = new MusicPulse(FPS)
+    const clock = clockAt(120) // 500ms per beat
+    const kick = run(pulse, clock, 3, (ms) => {
+      // A short punchy bass hit at the top of each beat, quiet between.
+      const intoBeat = ms % 500
+      const hit = intoBeat < 60 ? 0.9 : 0.02
+      return frame({ bass: hit, rms: hit })
+    })
+    expect(kick).toBeGreaterThan(0.6)
+  })
+
+  it('stays low for a sustained bass note (energy but no transients)', () => {
+    const pulse = new MusicPulse(FPS)
+    const clock = clockAt(120)
+    const kick = run(pulse, clock, 3, () => frame({ bass: 0.7, rms: 0.5 }))
+    expect(kick).toBeLessThan(0.3)
+  })
+
+  it('stays low for a low melody whose hits land off the beat grid', () => {
+    const pulse = new MusicPulse(FPS)
+    const clock = clockAt(120)
+    const kick = run(pulse, clock, 3, (ms) => {
+      // Punchy low hits, but syncopated (halfway between beats) - not a kick.
+      const intoBeat = ms % 500
+      const hit = intoBeat > 250 && intoBeat < 310 ? 0.9 : 0.02
+      return frame({ bass: hit, rms: hit })
+    })
+    expect(kick).toBeLessThan(0.4)
+  })
+
+  it('level tracks energy and releases toward zero on silence', () => {
+    const pulse = new MusicPulse(FPS)
+    const clock = clockAt(120)
+    let state = pulse.addFrame(frame({ rms: 0.5, bass: 0.4 }), clock.positionAt(0))
+    for (let i = 1; i < 8; i++) state = pulse.addFrame(frame({ rms: 0.5, bass: 0.4 }), clock.positionAt(i * 25))
+    expect(state.level).toBeGreaterThan(0.3)
+    // Go silent for ~0.5s.
+    for (let i = 0; i < 20; i++) state = pulse.addFrame(frame({}), clock.positionAt(200 + i * 25))
+    expect(state.level).toBeLessThan(0.02)
+  })
+})

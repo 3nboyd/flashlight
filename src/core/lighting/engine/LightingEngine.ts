@@ -79,15 +79,17 @@ export interface SongState {
   phase: SmartPhase
   /** 0-1 progress through a detected build-up. */
   buildProgress: number
+  /** Smoothed overall energy 0-1 (dark gate; slow release avoids flicker). */
+  level?: number
   /**
-   * 0-1 kick envelope: snaps up on bass-drum transients and releases slowly,
-   * so it reads "high" through a driving-kick section and falls to ~0 in quiet
-   * or purely-melodic passages. Drives the melodyBeat scene's mode switch.
+   * 0-1 confidence of a consistent, on-grid quarter-note kick DRUM (transient +
+   * beat-aligned), not just bass energy. Only this drives the hard beat flash,
+   * so sustained bass / low melodies do not trigger it. See MusicPulse.
    */
-  bassEnv?: number
+  kick?: number
 }
 
-const STEADY_SONG: SongState = { phase: 'steady', buildProgress: 0, bassEnv: 0 }
+const STEADY_SONG: SongState = { phase: 'steady', buildProgress: 0, level: 0, kick: 0 }
 
 /** Effects that actively aim moving fixtures, so they should NOT park home. */
 const MOVEMENT_EFFECTS = new Set<EffectSettings['type']>([
@@ -165,14 +167,15 @@ function adaptiveOutput(
   audio: AudioFeatures,
   song: SongState
 ): FixtureOutput {
-  const energy = Math.max(audio.rms, audio.bass, song.bassEnv ?? 0)
-  if (energy < 0.02) return { ...base, color: adaptiveColor(style, target, 0, beat, 0), dimmer: 0 }
+  // Dark only on a real lull (smoothed level, so gaps between hits don't cut).
+  const level = song.level ?? Math.max(audio.rms, audio.bass)
+  if (level < 0.02) return { ...base, color: adaptiveColor(style, target, 0, beat, 0), dimmer: 0 }
 
   const pos = fixtureCount > 1 ? fixtureIndex / (fixtureCount - 1) : 0.5
   const spread = fixtureCount > 1 ? (fixtureIndex / fixtureCount) * 360 : 0
 
-  if ((song.bassEnv ?? 0) > 0.18) {
-    // Kick driving: consistent quarter-note beat flash with deep contrast.
+  // TRUE beat flash only for a consistent, on-grid kick drum (not bass energy).
+  if ((song.kick ?? 0) > 0.55) {
     const sinceBeat = beat.beat % 1
     const inWhite = sinceBeat < 0.12
     const colorEnv = Math.max(0, 1 - sinceBeat / 0.32)
@@ -194,17 +197,16 @@ function adaptiveOutput(
     }
   }
 
-  // Calm / melodic: a moving pixel flow (pattern varies per section and per
-  // scene), gently pulsing on the beat, its level tracking how loud the mix is.
+  // Everything else (melody, bass without a kick, synth): a moving pixel flow
+  // (pattern varies per section and per scene) whose brightness FLASHES on the
+  // live rhythm - a soft glow that tracks the mix plus a bright pop on each hit.
   const section = Math.floor(beat.beat / 16) + (style === 'rainbow' ? 0 : style === 'solid' ? 1 : 2)
   const flow = flowEnv(pos, beat.beat, section)
-  const react = Math.min(1, energy * 2.4)
-  const beatEmph = 0.7 + 0.3 * Math.pow(1 - beat.beatPhase, 2)
-  return {
-    ...base,
-    color: adaptiveColor(style, target, spread, beat, 0),
-    dimmer: target.dimmer * flow * (0.35 + 0.65 * react) * beatEmph
-  }
+  const glow = Math.min(1, level * 1.6)
+  const hit = Math.min(1, Math.max(0, Math.max(audio.high, audio.rms * 0.9) - 0.05) * 3)
+  const beatEmph = 0.8 + 0.2 * Math.pow(1 - beat.beatPhase, 2)
+  const bright = Math.max(0.14, Math.max(glow * 0.6, hit)) * beatEmph
+  return { ...base, color: adaptiveColor(style, target, spread, beat, 0), dimmer: target.dimmer * flow * bright }
 }
 
 function applyEffect(
@@ -506,7 +508,8 @@ function applyEffect(
       // sensitivity: higher = enters beat mode sooner and flashes on quieter
       // melodic hits.
       const sens = effect.amplitude ?? 0.5
-      const driving = (song.bassEnv ?? 0) > 0.3 - 0.2 * sens
+      // Only a consistent on-grid kick drum drives the quarter-note beat mode.
+      const driving = (song.kick ?? 0) > 0.6 - 0.3 * sens
 
       if (driving) {
         const sinceBeat = beat.beat % 1 // quarter-note grid

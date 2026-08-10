@@ -436,7 +436,7 @@ describe('adaptive song-arc effects', () => {
     const u = renderTick({
       fixtures,
       scene: panelScene('songRed'),
-      song: { phase: 'steady', buildProgress: 0, bassEnv: 0 },
+      song: { phase: 'steady', buildProgress: 0, kick: 0, level: 0 },
       audio: aud({}),
       beat: beatAt(0),
       nowMs: 0
@@ -448,7 +448,7 @@ describe('adaptive song-arc effects', () => {
     const u = renderTick({
       fixtures,
       scene: panelScene('songRed'),
-      song: { phase: 'steady', buildProgress: 0, bassEnv: 0.9 },
+      song: { phase: 'steady', buildProgress: 0, kick: 0.9, level: 0.9 },
       audio: aud({ bass: 0.9 }),
       beat: beatAt(0),
       nowMs: 0
@@ -468,7 +468,7 @@ describe('adaptive song-arc effects', () => {
     const u = renderTick({
       fixtures: bar,
       scene,
-      song: { phase: 'steady', buildProgress: 0, bassEnv: 0 },
+      song: { phase: 'steady', buildProgress: 0, kick: 0, level: 0.35 },
       audio: aud({ rms: 0.35, high: 0.3 }),
       beat: beatAt(500),
       nowMs: 500
@@ -535,7 +535,7 @@ describe('melodyBeat (Live Pulse, silence-aware)', () => {
   })
 
   it('is black in silence and flashes on a melodic hit when no kick is present', () => {
-    const song = { phase: 'steady' as const, buildProgress: 0, bassEnv: 0 }
+    const song = { phase: 'steady' as const, buildProgress: 0, kick: 0 }
     const silent = renderTick({ fixtures, scene, song, audio: audio({}), beat: beatAt(300), nowMs: 300 }).get(1)!
     const hit = renderTick({ fixtures, scene, song, audio: audio({ high: 0.9, rms: 0.6 }), beat: beatAt(300), nowMs: 300 }).get(1)!
     expect(silent.getChannel(1)).toBe(0) // pitch black when quiet
@@ -544,7 +544,7 @@ describe('melodyBeat (Live Pulse, silence-aware)', () => {
   })
 
   it('runs a quarter-note white + shifting-color beat once the kick drives', () => {
-    const song = { phase: 'steady' as const, buildProgress: 0, bassEnv: 0.9 }
+    const song = { phase: 'steady' as const, buildProgress: 0, kick: 0.9 }
     const onBeat = renderTick({ fixtures, scene, song, audio: audio({ bass: 0.9 }), beat: beatAt(0), nowMs: 0 }).get(1)!
     const between = renderTick({ fixtures, scene, song, audio: audio({ bass: 0.9 }), beat: beatAt(250), nowMs: 250 }).get(1)!
     expect(onBeat.getChannel(5)).toBeGreaterThan(200) // white LEDs pop on the beat

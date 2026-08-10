@@ -13,6 +13,7 @@ import {
 } from '@core/lighting/engine/types'
 import { PRESET_SCENES, PRESET_CATEGORY_BY_ID, defaultSmartPools } from '@core/lighting/engine/presetScenes'
 import { SmartModeEngine, type SmartPhase } from '@core/lighting/engine/SmartMode'
+import { MusicPulse } from '@core/lighting/engine/MusicPulse'
 import { fixturesById } from '@core/lighting/fixtures/library'
 import { resolveStagePositions } from '@core/lighting/visualizer/fixtureVisualState'
 import type { PatchedFixture } from '@core/lighting/fixtures/types'
@@ -104,9 +105,10 @@ export class LightingHost {
   private activeSceneId: string | null = null
   private audio: AudioFeatures = SILENT_FEATURES
   private lastAudioAtMs = 0
-  // Wall-clock of the last frame with real sound, so a track pause / silence is
-  // detected within ~130ms and the rig stops instead of chasing a phantom beat.
-  private lastLoudMs = 0
+  // Wall-clock of the last frame whose smoothed level was audible, so a real
+  // pause is detected fast (the slow-release level bridges gaps between hits,
+  // so a beat never falsely reads as silence between kicks).
+  private lastLevelLoudMs = 0
   private readonly bpmEstimator = new BpmEstimator(40)
   private bpmFollowsAudio = true
   private sender: DmxSender
@@ -131,9 +133,11 @@ export class LightingHost {
   private readonly songSensor = new SmartModeEngine(40)
   private songPhase: SmartPhase = 'steady'
   private songBuild = 0
-  // Kick envelope: fast attack on bass transients, slow release, so a driving
-  // bass-drum section reads "on" between kicks. Drives melodyBeat's mode.
-  private bassEnv = 0
+  // Distinguishes a real quarter-note kick drum from mere bass energy, and a
+  // smoothed level for gating/pause detection. Drives the adaptive scenes.
+  private readonly pulse = new MusicPulse(40)
+  private songKick = 0
+  private songLevel = 0
   // Manual tap: drives tapPulse scenes. Each tap advances the color index and
   // restarts a decaying flash; the base look stays barely-visible between taps.
   private tapIndex = 0
@@ -490,9 +494,9 @@ export class LightingHost {
     const darkFrozen = master <= 0.002 && this.darkSinceMs !== null && nowMs - this.darkSinceMs > 2000
 
     // Silence freeze: only when audio is actually being streamed (so OS2L- or
-    // manual-only rigs are unaffected), and it has just gone quiet.
+    // manual-only rigs are unaffected), and its smoothed level has gone quiet.
     const audioPresent = nowMs - this.lastAudioAtMs < 500
-    const musicSilent = audioPresent && nowMs - this.lastLoudMs > 130
+    const musicSilent = audioPresent && nowMs - this.lastLevelLoudMs > 80
 
     if (!darkFrozen && !musicSilent) {
       this.frozenBeatAtMs = null
@@ -523,8 +527,8 @@ export class LightingHost {
       positions: this.stageXPositions(),
       tap: this.tapState(nowMs),
       song: audioFresh
-        ? { phase: this.songPhase, buildProgress: this.songBuild, bassEnv: this.bassEnv }
-        : { phase: 'steady', buildProgress: 0, bassEnv: 0 },
+        ? { phase: this.songPhase, buildProgress: this.songBuild, kick: this.songKick, level: this.songLevel }
+        : { phase: 'steady', buildProgress: 0, kick: 0, level: 0 },
       nowMs
     })
     this.applyIdentify(universes, nowMs)
@@ -562,8 +566,8 @@ export class LightingHost {
       positions: this.stageXPositions(),
       tap: this.tapState(nowMs),
       song: audioFresh
-        ? { phase: this.songPhase, buildProgress: this.songBuild, bassEnv: this.bassEnv }
-        : { phase: 'steady', buildProgress: 0, bassEnv: 0 },
+        ? { phase: this.songPhase, buildProgress: this.songBuild, kick: this.songKick, level: this.songLevel }
+        : { phase: 'steady', buildProgress: 0, kick: 0, level: 0 },
       nowMs
     })
     this.applyIdentify(universes, nowMs)
@@ -641,17 +645,18 @@ export class LightingHost {
   updateAudioFeatures(features: AudioFeatures & { flux?: number }): void {
     this.audio = features
     this.lastAudioAtMs = Date.now()
-    if (features.rms > 0.012) this.lastLoudMs = this.lastAudioAtMs
 
     // Always track the song's build/drop arc so adaptive scenes can follow it,
     // independent of whether Smart Mode is driving scene selection.
-    const songDecision = this.songSensor.addFrame(features, this.clock.positionAt(Date.now()))
+    const beatNow = this.clock.positionAt(this.lastAudioAtMs)
+    const songDecision = this.songSensor.addFrame(features, beatNow)
     this.songPhase = songDecision.phase
     this.songBuild = songDecision.buildProgress
-    // Kick envelope: snap up to bass transients, release slowly (~0.7s) so a
-    // driving-kick section holds "on" between hits and quiet parts fall away.
-    if (features.bass > this.bassEnv) this.bassEnv = features.bass
-    else this.bassEnv += (1 - Math.exp(-1 / (40 * 0.7))) * (features.bass - this.bassEnv)
+    // Kick-drum vs bass-energy detection + smoothed level for gating/pause.
+    const p = this.pulse.addFrame(features, beatNow)
+    this.songKick = p.kick
+    this.songLevel = p.level
+    if (p.level > 0.02) this.lastLevelLoudMs = this.lastAudioAtMs
 
     if (this.smartEnabled) {
       const decision = this.smart.addFrame(features, this.clock.positionAt(Date.now()))
