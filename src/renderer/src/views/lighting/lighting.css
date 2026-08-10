@@ -1428,7 +1428,7 @@
 }
 
 .scene-browser {
-  width: min(1000px, 96vw);
+  width: min(1240px, 96vw);
   max-height: 86vh;
   display: flex;
   flex-direction: column;
@@ -1467,8 +1467,8 @@
 }
 
 .scene-browser-col {
-  flex: 1 1 200px;
-  min-width: 180px;
+  flex: 1 1 150px;
+  min-width: 145px;
 }
 
 .scene-browser-col-title {

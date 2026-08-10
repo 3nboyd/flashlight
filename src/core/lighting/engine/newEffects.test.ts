@@ -414,7 +414,7 @@ describe('home / park position', () => {
 })
 
 describe('adaptive song-arc effects', () => {
-  // rgbw-strobe-panel-11ch: ch2 = red, ch5 = white.
+  // rgbw-strobe-panel-11ch: ch1 dimmer, ch2 red, ch5 white.
   const panelScene = (type: EffectSettings['type']): Scene => ({
     id: 's',
     name: 's',
@@ -422,12 +422,96 @@ describe('adaptive song-arc effects', () => {
     targets: [{ group: 'all', color: { r: 255, g: 0, b: 0 }, dimmer: 1, effect: { type } }]
   })
   const fixtures = [patched('p', 'rgbw-strobe-panel-11ch', 1)]
+  const aud = (over: Partial<AudioFeatures>): AudioFeatures => ({
+    rms: 0,
+    bass: 0,
+    mid: 0,
+    high: 0,
+    onset: false,
+    timestampMs: 0,
+    ...over
+  })
 
-  it('songRed pops the white LED on the drop but stays color-only when steady', () => {
-    const drop = renderTick({ fixtures, scene: panelScene('songRed'), song: { phase: 'drop', buildProgress: 0 }, beat: beatAt(0), nowMs: 0 }).get(1)!
-    const steady = renderTick({ fixtures, scene: panelScene('songRed'), song: { phase: 'steady', buildProgress: 0 }, beat: beatAt(0), nowMs: 0 }).get(1)!
-    expect(drop.getChannel(5)).toBeGreaterThan(200) // white LED strobes on the drop
-    expect(steady.getChannel(5)).toBe(0) // no white flash in the calm base look
+  it('is dark when nothing is playing', () => {
+    const u = renderTick({
+      fixtures,
+      scene: panelScene('songRed'),
+      song: { phase: 'steady', buildProgress: 0, bassEnv: 0 },
+      audio: aud({}),
+      beat: beatAt(0),
+      nowMs: 0
+    }).get(1)!
+    expect(u.getChannel(1)).toBe(0) // no light at all
+  })
+
+  it('pops white + color on the beat once the kick drives', () => {
+    const u = renderTick({
+      fixtures,
+      scene: panelScene('songRed'),
+      song: { phase: 'steady', buildProgress: 0, bassEnv: 0.9 },
+      audio: aud({ bass: 0.9 }),
+      beat: beatAt(0),
+      nowMs: 0
+    }).get(1)!
+    expect(u.getChannel(5)).toBeGreaterThan(200) // white LED pops on the beat
+    expect(u.getChannel(2)).toBeGreaterThan(100) // the color flashes too
+  })
+
+  it('runs a moving pixel flow over a melody (no kick): not uniform, not dark', () => {
+    const bar = [patched('b', 'rgbw-beam-bar-10px-43ch', 1)] // 10 RGBW pixels, first R at ch3
+    const scene: Scene = {
+      id: 's',
+      name: 's',
+      uiColor: '#fff',
+      targets: [{ group: 'all', color: { r: 0, g: 200, b: 80 }, dimmer: 1, effect: { type: 'songRainbow' } }]
+    }
+    const u = renderTick({
+      fixtures: bar,
+      scene,
+      song: { phase: 'steady', buildProgress: 0, bassEnv: 0 },
+      audio: aud({ rms: 0.35, high: 0.3 }),
+      beat: beatAt(500),
+      nowMs: 500
+    }).get(1)!
+    const pixels = Array.from({ length: 10 }, (_, p) => {
+      const r = u.getChannel(3 + p * 4)
+      const g = u.getChannel(4 + p * 4)
+      const b = u.getChannel(5 + p * 4)
+      return Math.max(r, g, b)
+    })
+    expect(Math.max(...pixels)).toBeGreaterThan(60) // some pixels lit
+    expect(Math.min(...pixels)).toBeLessThan(Math.max(...pixels) * 0.5) // a moving bright region, not uniform
+  })
+})
+
+describe('jerseyClub (tempo-locked kick bounce)', () => {
+  const fixtures = [patched('p', 'generic-rgb-4ch', 1)] // ch1 dimmer
+  const colors: Rgbw[] = [
+    { r: 0, g: 80, b: 255 },
+    { r: 0, g: 230, b: 120 },
+    { r: 150, g: 0, b: 255 }
+  ]
+  const scene: Scene = {
+    id: 's',
+    name: 's',
+    uiColor: '#fff',
+    targets: [{ group: 'all', color: colors[0], dimmer: 1, effect: { type: 'jerseyClub', colors } }]
+  }
+  // 120bpm -> 500ms/beat, 125ms/sixteenth. Kicks at 16th 0,3,6,10,12.
+  const level = (ms: number): number => renderTick({ fixtures, scene, beat: beatAt(ms), nowMs: ms }).get(1)!.getChannel(1)
+
+  it('flashes on the kicks and stays near-black between them', () => {
+    expect(level(0)).toBeGreaterThan(240) // kick at 16th 0
+    expect(level(3 * 125)).toBeGreaterThan(240) // kick at 16th 3
+    expect(level(8 * 125)).toBeLessThan(40) // 16th 8 is a gap -> near black
+  })
+
+  it('cycles a different color on consecutive kicks', () => {
+    // ch2=R, ch3=G, ch4=B. Kick0 = blue (B), kick1 (16th 3) = green (G).
+    const k0 = renderTick({ fixtures, scene, beat: beatAt(0), nowMs: 0 }).get(1)!
+    const k1 = renderTick({ fixtures, scene, beat: beatAt(3 * 125), nowMs: 3 * 125 }).get(1)!
+    expect(k0.getChannel(4)).toBeGreaterThan(k0.getChannel(3)) // kick 0: blue > green
+    expect(k1.getChannel(3)).toBeGreaterThan(k1.getChannel(4)) // kick 1: green > blue
   })
 })
 

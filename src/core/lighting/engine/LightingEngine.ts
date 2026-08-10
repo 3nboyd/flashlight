@@ -99,6 +99,114 @@ const MOVEMENT_EFFECTS = new Set<EffectSettings['type']>([
   'solo'
 ])
 
+type AdaptiveStyle = 'rainbow' | 'solid' | 'frost'
+
+/**
+ * A cool position-aware "pixel flow" for the calm/melodic parts of an adaptive
+ * scene: a bright region that travels across the rig, the pattern rotating per
+ * section so different passages/drops get different motion. Returns 0-1
+ * brightness for a pixel at normalized position `pos`.
+ */
+function flowEnv(pos: number, beatVal: number, pattern: number): number {
+  switch (((pattern % 4) + 4) % 4) {
+    case 0: {
+      // Side-to-side sweep (ping-pong).
+      const phase = (beatVal / 4) % 2
+      const head = phase < 1 ? phase : 2 - phase
+      return Math.pow(Math.max(0, 1 - Math.abs(pos - head) / 0.3), 1.5)
+    }
+    case 1: {
+      // Running chase that wraps around the ends.
+      const head = (beatVal / 3) % 1
+      const raw = Math.abs(pos - head)
+      return Math.pow(Math.max(0, 1 - Math.min(raw, 1 - raw) / 0.22), 1.6)
+    }
+    case 2: {
+      // A soft glow roaming back and forth.
+      const c = 0.5 + 0.42 * Math.sin(beatVal * 0.22)
+      return Math.pow(Math.max(0, 1 - Math.abs(pos - c) / 0.4), 1.8)
+    }
+    default: {
+      // Symmetric pair opening/closing from the center.
+      const spread = (Math.sin(beatVal * 0.35) * 0.5 + 0.5) * 0.5
+      const d = Math.abs(Math.abs(pos - 0.5) - spread)
+      return Math.pow(Math.max(0, 1 - d / 0.16), 1.6)
+    }
+  }
+}
+
+function adaptiveColor(style: AdaptiveStyle, target: SceneTarget, spread: number, beat: BeatPosition, w: number): Rgbw {
+  if (style === 'rainbow') {
+    const c = hueToRgb(Math.floor(beat.beat) * 40 + spread)
+    return { r: c.r, g: c.g, b: c.b, w }
+  }
+  if (style === 'frost') return { ...target.color, w }
+  // solid: the selected color, drifting slightly in hue so it feels alive.
+  const c = hueToRgb(rgbToHue(target.color) + 14 * Math.sin(beat.beat * 0.1))
+  return { r: c.r, g: c.g, b: c.b, w }
+}
+
+/**
+ * Shared body for the adaptive "song arc" scenes. Four states, driven by the
+ * host's always-on energy detector so a single scene follows the whole track:
+ *  - nothing playing  -> no light (recognized instantly),
+ *  - melody / no kick -> a cool moving pixel flow, brightness tracking the mix,
+ *  - build            -> pulse on the beat with rising contrast (dims sink),
+ *  - kick driving     -> a hard quarter-note flash: white LEDs pop short, the
+ *                        colors flash and linger a touch longer, black between.
+ */
+function adaptiveOutput(
+  style: AdaptiveStyle,
+  base: FixtureOutput,
+  target: SceneTarget,
+  fixtureIndex: number,
+  fixtureCount: number,
+  beat: BeatPosition,
+  audio: AudioFeatures,
+  song: SongState
+): FixtureOutput {
+  const energy = Math.max(audio.rms, audio.bass, song.bassEnv ?? 0)
+  if (energy < 0.02) return { ...base, color: adaptiveColor(style, target, 0, beat, 0), dimmer: 0 }
+
+  const pos = fixtureCount > 1 ? fixtureIndex / (fixtureCount - 1) : 0.5
+  const spread = fixtureCount > 1 ? (fixtureIndex / fixtureCount) * 360 : 0
+
+  if ((song.bassEnv ?? 0) > 0.18) {
+    // Kick driving: consistent quarter-note beat flash with deep contrast.
+    const sinceBeat = beat.beat % 1
+    const inWhite = sinceBeat < 0.12
+    const colorEnv = Math.max(0, 1 - sinceBeat / 0.32)
+    return {
+      ...base,
+      color: adaptiveColor(style, target, spread, beat, inWhite ? 255 : 0),
+      dimmer: target.dimmer * (inWhite ? 1 : colorEnv)
+    }
+  }
+
+  if (song.phase === 'build') {
+    // Building: beat pulse whose floor sinks toward black as the build grows.
+    const floor = 0.35 * (1 - song.buildProgress)
+    const bp = Math.pow(1 - beat.beatPhase, 2)
+    return {
+      ...base,
+      color: adaptiveColor(style, target, spread, beat, 0),
+      dimmer: target.dimmer * (floor + (1 - floor) * bp)
+    }
+  }
+
+  // Calm / melodic: a moving pixel flow (pattern varies per section and per
+  // scene), gently pulsing on the beat, its level tracking how loud the mix is.
+  const section = Math.floor(beat.beat / 16) + (style === 'rainbow' ? 0 : style === 'solid' ? 1 : 2)
+  const flow = flowEnv(pos, beat.beat, section)
+  const react = Math.min(1, energy * 2.4)
+  const beatEmph = 0.7 + 0.3 * Math.pow(1 - beat.beatPhase, 2)
+  return {
+    ...base,
+    color: adaptiveColor(style, target, spread, beat, 0),
+    dimmer: target.dimmer * flow * (0.35 + 0.65 * react) * beatEmph
+  }
+}
+
 function applyEffect(
   target: SceneTarget,
   effect: EffectSettings | undefined,
@@ -378,74 +486,16 @@ function applyEffect(
       }
     }
     // ---- Adaptive "song arc" effects ---------------------------------------
-    // One scene that follows the track: a calm base look, a rising build, and a
-    // peak on the drop. `song.phase` comes from the host's always-on energy
-    // detector; `song.buildProgress` ramps 0->1 through a build. All three read
-    // the live bass so the peak genuinely punches on the kick.
-    case 'songRainbow': {
-      const spread = fixtureCount > 1 ? (fixtureIndex / fixtureCount) * 360 : 0
-      const bassHit = Math.min(1, Math.max(0, audio.bass - 0.05) * 1.8)
-      if (song.phase === 'drop') {
-        // Peak: per-beat rainbow, white LEDs pop on the beat, bass-driven throb.
-        const rgb = hueToRgb(Math.floor(beat.beat) * 60 + spread)
-        const pulse = 0.4 + 0.6 * Math.max(Math.pow(1 - beat.beatPhase, 2), bassHit)
-        return {
-          ...base,
-          color: { r: rgb.r, g: rgb.g, b: rgb.b, w: beat.beatPhase < 0.16 ? 255 : 0 },
-          dimmer: target.dimmer * pulse
-        }
-      }
-      if (song.phase === 'build') {
-        // Build: quarter-note rainbow with a rising floor and 8th-note pulse.
-        const rgb = hueToRgb(Math.floor(beat.beat) * 60 + spread)
-        const eighth = (beat.beat * 2) % 1
-        const floor = 0.2 + 0.5 * song.buildProgress
-        return { ...base, color: rgb, dimmer: target.dimmer * Math.min(1, floor + (1 - floor) * Math.pow(1 - eighth, 2)) }
-      }
-      // Steady/break: slow rainbow wash breathing gently on the beat.
-      const soft = 0.55 + 0.45 * Math.pow(1 - beat.beatPhase, 1.6)
-      return { ...base, color: hueToRgb(beat.phrasePhase * 720 + spread), dimmer: target.dimmer * soft }
-    }
-    case 'songRed': {
-      const bassHit = Math.min(1, Math.max(0, audio.bass - 0.05) * 1.8)
-      if (song.phase === 'drop') {
-        // Peak: the alert color pulses hard with the bass while white LEDs pop.
-        const pulse = 0.35 + 0.65 * Math.max(Math.pow(1 - beat.beatPhase, 2), bassHit)
-        return { ...base, color: { ...target.color, w: beat.beatPhase < 0.14 ? 255 : 0 }, dimmer: target.dimmer * pulse }
-      }
-      if (song.phase === 'build') {
-        // Build: a crash strobe that quickens and brightens toward the drop.
-        const rate = 2 + Math.floor(song.buildProgress * 6)
-        const gate = Math.floor(beat.beat * rate) % 2 === 0 ? 1 : 0.12 + 0.3 * song.buildProgress
-        return { ...base, color: target.color, dimmer: target.dimmer * gate }
-      }
-      // Steady/break: small random lights flickering in the alert color.
-      const sub = Math.floor(beat.beat * 2)
-      const h = Math.abs(Math.sin(sub * 12.9898 + fixtureIndex * 78.233)) * 43758.5453
-      const lit = h - Math.floor(h) < 0.22
-      return { ...base, color: target.color, dimmer: target.dimmer * (lit ? 1 : 0.04) }
-    }
-    case 'songFrost': {
-      const bassHit = Math.min(1, Math.max(0, audio.bass - 0.05) * 1.8)
-      if (song.phase === 'drop') {
-        // Peak: icy color + white LEDs strobing on the bass.
-        const pulse = 0.4 + 0.6 * Math.max(Math.pow(1 - beat.beatPhase, 2), bassHit)
-        return { ...base, color: { ...target.color, w: beat.beatPhase < 0.16 ? 255 : 0 }, dimmer: target.dimmer * pulse }
-      }
-      if (song.phase === 'build') {
-        // Build: a white riser that whitens and quickens toward the drop.
-        const rate = 2 + Math.floor(song.buildProgress * 6)
-        const gate = Math.floor(beat.beat * rate) % 2 === 0 ? 1 : 0.15 + 0.3 * song.buildProgress
-        return {
-          ...base,
-          color: { ...target.color, w: Math.round(255 * song.buildProgress) },
-          dimmer: target.dimmer * gate
-        }
-      }
-      // Steady/break: slow icy swell that never fully goes dark.
-      const swell = 0.5 - 0.5 * Math.cos(beat.phrasePhase * 4 * Math.PI)
-      return { ...base, color: target.color, dimmer: target.dimmer * (0.25 + 0.5 * swell) }
-    }
+    // One scene that follows the track through four states (see adaptiveOutput):
+    // dark when nothing plays, a cool moving pixel flow over a melody, a rising
+    // contrast pulse through a build, and a hard beat flash once the kick drives.
+    // Each carries a different visual style and its own flow pattern.
+    case 'songRainbow':
+      return adaptiveOutput('rainbow', base, target, fixtureIndex, fixtureCount, beat, audio, song)
+    case 'songRed':
+      return adaptiveOutput('solid', base, target, fixtureIndex, fixtureCount, beat, audio, song)
+    case 'songFrost':
+      return adaptiveOutput('frost', base, target, fixtureIndex, fixtureCount, beat, audio, song)
     case 'melodyBeat': {
       // A smart, silence-aware scene. In quiet or purely melodic passages it
       // stays black and fires quick flashes that track the live rhythm (as
@@ -477,6 +527,21 @@ function applyEffect(
       const env = Math.max(audio.high, audio.rms * 0.9, audio.onset ? 0.8 : 0)
       const level = Math.min(1, Math.max(0, env - floor) * gain)
       return { ...base, color: target.color, dimmer: target.dimmer * level }
+    }
+    case 'jerseyClub': {
+      // Tempo-locked Jersey club kick bounce: five syncopated kicks per bar,
+      // each firing a punchy flash in the next palette color over a near-black
+      // base. Follows the beat grid (OS2L/BPM), no audio detection needed.
+      const KICKS = [0, 3, 6, 10, 12] // 16th-note positions of the bounce in a bar
+      const sixteenth = (((beat.beat % 4) + 4) % 4) * 4 // 0..16 within the bar
+      let idx = -1
+      for (let i = 0; i < KICKS.length; i++) if (KICKS[i] <= sixteenth + 1e-6) idx = i
+      const bars = Math.floor(beat.beat / 4)
+      const kick16 = idx >= 0 ? KICKS[idx] : KICKS[KICKS.length - 1] - 16
+      const pulseCount = idx >= 0 ? bars * KICKS.length + idx : (bars - 1) * KICKS.length + (KICKS.length - 1)
+      const flash = Math.pow(Math.max(0, 1 - (sixteenth - kick16) / 1.3), 2.2) // ~1.3 16ths long
+      const color = palette[((pulseCount % palette.length) + palette.length) % palette.length]
+      return { ...base, color, dimmer: target.dimmer * Math.max(0.03, flash) }
     }
     default:
       return base

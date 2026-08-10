@@ -104,6 +104,9 @@ export class LightingHost {
   private activeSceneId: string | null = null
   private audio: AudioFeatures = SILENT_FEATURES
   private lastAudioAtMs = 0
+  // Wall-clock of the last frame with real sound, so a track pause / silence is
+  // detected within ~130ms and the rig stops instead of chasing a phantom beat.
+  private lastLoudMs = 0
   private readonly bpmEstimator = new BpmEstimator(40)
   private bpmFollowsAudio = true
   private sender: DmxSender
@@ -472,19 +475,29 @@ export class LightingHost {
   }
 
   /**
-   * Beat time used to drive animation. While the rig is dark (master at zero
-   * or blackout) for more than ~2s, this freezes so pan/tilt stop changing and
-   * moving fixtures park their motors; it resumes the instant light returns.
+   * Beat time used to drive animation. It freezes (so pan/tilt stop changing,
+   * pulses stop, moving fixtures park) in two cases:
+   *  - the rig is dark (master 0 / blackout) for more than ~2s, or
+   *  - live audio is present but has gone silent for ~130ms (track paused /
+   *    beat dropped out) - so the rig stops the instant the music does instead
+   *    of chasing a phantom beat for seconds.
+   * It resumes the moment light or sound returns.
    */
   private movementClockMs(nowMs: number, overrides: LiveOverrides): number {
     const master = overrides.blackout ? 0 : overrides.masterDimmer
-    if (master > 0.002) {
-      this.darkSinceMs = null
+    if (master > 0.002) this.darkSinceMs = null
+    else if (this.darkSinceMs === null) this.darkSinceMs = nowMs
+    const darkFrozen = master <= 0.002 && this.darkSinceMs !== null && nowMs - this.darkSinceMs > 2000
+
+    // Silence freeze: only when audio is actually being streamed (so OS2L- or
+    // manual-only rigs are unaffected), and it has just gone quiet.
+    const audioPresent = nowMs - this.lastAudioAtMs < 500
+    const musicSilent = audioPresent && nowMs - this.lastLoudMs > 130
+
+    if (!darkFrozen && !musicSilent) {
       this.frozenBeatAtMs = null
       return nowMs
     }
-    if (this.darkSinceMs === null) this.darkSinceMs = nowMs
-    if (nowMs - this.darkSinceMs <= 2000) return nowMs
     if (this.frozenBeatAtMs === null) this.frozenBeatAtMs = nowMs
     return this.frozenBeatAtMs
   }
@@ -628,6 +641,7 @@ export class LightingHost {
   updateAudioFeatures(features: AudioFeatures & { flux?: number }): void {
     this.audio = features
     this.lastAudioAtMs = Date.now()
+    if (features.rms > 0.012) this.lastLoudMs = this.lastAudioAtMs
 
     // Always track the song's build/drop arc so adaptive scenes can follow it,
     // independent of whether Smart Mode is driving scene selection.

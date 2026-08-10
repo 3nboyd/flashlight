@@ -42,6 +42,7 @@ export type EffectType =
   | 'songRed' // adaptive: sparse red -> red crash-strobe build -> red+white bass peak
   | 'songFrost' // adaptive: icy breathe -> white riser -> blue/white strobe peak
   | 'melodyBeat' // adaptive: black + quick rhythm flashes when quiet, quarter-note white+color beat when the kick drives
+  | 'jerseyClub' // tempo-locked Jersey club kick bounce, each kick a new palette color over near-black
 
 export interface EffectSettings {
   type: EffectType

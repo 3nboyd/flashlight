@@ -129,6 +129,8 @@ function effectPhrase(effect: EffectSettings): string {
       return 'follows the song: icy swell to white-strobe drop'
     case 'melodyBeat':
       return 'black + rhythm flashes when quiet, white+color beat on the kick'
+    case 'jerseyClub':
+      return 'Jersey club kick bounce, a new color each pulse'
     default:
       return ''
   }

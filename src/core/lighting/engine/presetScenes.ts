@@ -220,6 +220,23 @@ export const PRESET_LIBRARY: PresetCategory[] = [
       scene('preset-eighth-strobe', 'Eighth Strobe', '#fafafa', [
         { group: 'all', color: WHITE, dimmer: 1, effect: { type: 'eighthStrobe' } }
       ]),
+      // Tempo-locked Jersey club kick bounce; each kick a new color (blue,
+      // green, purple by default) over near-black.
+      scene('preset-jersey-club', 'Jersey Club', '#22d3ee', [
+        {
+          group: 'all',
+          color: { r: 0, g: 80, b: 255 },
+          dimmer: 1,
+          effect: {
+            type: 'jerseyClub',
+            colors: [
+              { r: 0, g: 80, b: 255 },
+              { r: 0, g: 230, b: 120 },
+              { r: 150, g: 0, b: 255 }
+            ]
+          }
+        }
+      ]),
       scene('preset-color-strobe', 'Color Strobe', '#38bdf8', [
         { group: 'all', color: { r: 0, g: 180, b: 255 }, dimmer: 1, effect: { type: 'eighthStrobe' } }
       ]),
