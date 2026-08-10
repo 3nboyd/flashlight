@@ -174,14 +174,22 @@ function applyEffect(
       return { ...base, color: hueToRgb(step * 60 + spread) }
     }
     case 'rainbowStrobe': {
-      // RGB pixels rainbow (snapping each quarter note, spread across the rig)
-      // while the white LEDs flash on the beat - one effect drives both a
-      // fixture's color channels and its separate white LEDs/strips.
+      // The color LEDs flash through rainbow colors (snapping each beat, spread
+      // across the pixels) while ONLY the separate white LEDs pop white for a
+      // brief moment right on each beat. A gentle beat pulse breathes over
+      // everything so the whole panel throbs on the downbeat instead of sitting
+      // flat - one effect drives a fixture's color pixels and its white LEDs.
       const step = Math.floor(beat.beat / beats)
       const spread = fixtureCount > 1 ? (fixtureIndex / fixtureCount) * 360 : 0
       const rgb = hueToRgb(step * 60 + spread)
-      const eighth = (beat.beat * 2) % 1
-      return { ...base, color: { r: rgb.r, g: rgb.g, b: rgb.b, w: eighth < 0.3 ? 255 : 0 } }
+      const phase = (beat.beat / beats) % 1 // 0..1 within each color step
+      const whitePop = phase < 0.16 ? 255 : 0 // short white flash on the beat
+      const pulse = 0.5 + 0.5 * Math.pow(1 - phase, 2) // gentle throb, never dark
+      return {
+        ...base,
+        color: { r: rgb.r, g: rgb.g, b: rgb.b, w: whitePop },
+        dimmer: target.dimmer * pulse
+      }
     }
     case 'strobe':
       // Strobe naturally punches at full brightness (master dimmer / a

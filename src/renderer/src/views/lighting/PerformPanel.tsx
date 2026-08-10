@@ -140,7 +140,15 @@ export function PerformPanel(): JSX.Element {
             if (isNoteOn) pressMomentary(value)
             else releaseMomentary()
           } else if (isNoteOn) {
-            triggerScene(value)
+            // Tap Pulse from a MIDI pad: activate it on the first hit, then fire
+            // a flash on every hit so the DJ can tap their own rhythm (matching
+            // the on-screen pad), instead of just re-triggering the scene.
+            if (scene?.targets.some((t) => t.effect?.type === 'tapPulse')) {
+              if (state.status?.activeSceneId !== value) triggerScene(value)
+              window.djCompanion.lighting.manualPulse()
+            } else {
+              triggerScene(value)
+            }
           }
           break
         }

@@ -247,6 +247,32 @@ describe('tapPulse', () => {
   })
 })
 
+describe('rainbowStrobe (Rainbow Peak panel)', () => {
+  // rgb-white-panel-165ch: ch1..135 = 45 RGB pixels, ch136..165 = 30 white LEDs.
+  const fixtures = [patched('p', 'rgb-white-panel-165ch', 1)]
+  const scene = sceneWith({ type: 'rainbowStrobe', beats: 1 })
+  const maxRgb = (u: ReturnType<ReturnType<typeof renderTick>['get']>): number => {
+    let m = 0
+    for (let c = 1; c <= 135; c++) m = Math.max(m, u!.getChannel(c))
+    return m
+  }
+
+  it('pops the white LEDs on the beat and keeps them off between beats', () => {
+    // 120bpm -> 500ms/beat: 0ms is on the beat, 250ms is mid-beat.
+    const onBeat = renderTick({ fixtures, scene, beat: beatAt(0), nowMs: 0 }).get(1)!
+    const offBeat = renderTick({ fixtures, scene, beat: beatAt(250), nowMs: 250 }).get(1)!
+    expect(onBeat.getChannel(136)).toBeGreaterThan(200) // white LED flashes on the beat
+    expect(offBeat.getChannel(136)).toBe(0) // ...and only on the beat
+  })
+
+  it('keeps the color pixels lit through the whole beat (only pulsing, never dark)', () => {
+    const onBeat = renderTick({ fixtures, scene, beat: beatAt(0), nowMs: 0 }).get(1)!
+    const offBeat = renderTick({ fixtures, scene, beat: beatAt(250), nowMs: 250 }).get(1)!
+    expect(maxRgb(onBeat)).toBeGreaterThan(200)
+    expect(maxRgb(offBeat)).toBeGreaterThan(100) // dimmed by the pulse but still colorful
+  })
+})
+
 describe('sweep (side to side, position-ordered)', () => {
   it('lights the left end first, then the right end as the head travels', () => {
     const fixtures = [
