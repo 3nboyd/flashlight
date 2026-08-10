@@ -634,6 +634,24 @@
   right: 8px;
 }
 
+.preset-new-tag {
+  font-size: 9px;
+  font-weight: 700;
+  letter-spacing: 1px;
+  padding: 1px 5px;
+  border-radius: 3px;
+  background: rgba(16, 185, 129, 0.18);
+  color: #34d399;
+}
+
+.preset-sync-row {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  flex-wrap: wrap;
+  margin-bottom: 12px;
+}
+
 /* ---- Scene editor modal ---- */
 
 .scene-modal-backdrop {

@@ -1,5 +1,5 @@
 import { type JSX } from 'react'
-import { PRESET_LIBRARY } from '@core/lighting/engine/presetScenes'
+import { PRESET_LIBRARY, PRESET_SCENES } from '@core/lighting/engine/presetScenes'
 import type { Scene } from '@core/lighting/engine/types'
 import { useLightingStore } from '../../state/lightingStore'
 import { StageVisualizer } from './StageVisualizer'
@@ -26,6 +26,18 @@ export function PresetBrowser({ onClose, showStage = false }: PresetBrowserProps
 
   const inProject = (scene: Scene): boolean => project.scenes.some((s) => s.id === scene.id)
   const onPad = (scene: Scene): boolean => project.padSceneIds.includes(scene.id)
+
+  // Built-in presets this stage is missing (excluding ones sitting in the
+  // trash, so intentionally deleted presets are not resurrected). Each stage
+  // stores its own scenes, so newly-shipped presets do not appear until added.
+  const missing = PRESET_SCENES.filter(
+    (s) => !inProject(s) && !(project.trashScenes ?? []).some((t) => t.id === s.id)
+  )
+
+  async function addAllMissing(): Promise<void> {
+    if (missing.length === 0) return
+    await updateProject((p) => ({ ...p, scenes: [...p.scenes, ...missing.map((s) => structuredClone(s))] }))
+  }
 
   async function ensureInProject(scene: Scene): Promise<void> {
     if (!inProject(scene)) {
@@ -76,6 +88,19 @@ export function PresetBrowser({ onClose, showStage = false }: PresetBrowserProps
           presets find your fog machines, lasers, strobes, and movers automatically.
         </p>
 
+        <div className="preset-sync-row">
+          <button className="secondary-button" onClick={addAllMissing} disabled={missing.length === 0}>
+            {missing.length === 0
+              ? 'All presets are in this stage ✓'
+              : `+ Add ${missing.length} new preset${missing.length === 1 ? '' : 's'} to this stage`}
+          </button>
+          {missing.length > 0 && (
+            <span className="settings-hint" style={{ margin: 0 }}>
+              Newer built-in scenes (like the Adaptive ones) are not in this stage yet.
+            </span>
+          )}
+        </div>
+
         <div className="preset-drawer-scroll">
           {PRESET_LIBRARY.map((category) => (
             <section key={category.name} className="preset-category">
@@ -95,6 +120,7 @@ export function PresetBrowser({ onClose, showStage = false }: PresetBrowserProps
                       <div className="preset-card-name">
                         {scene.name}
                         {scene.momentary && <span className="hold-tag">HOLD</span>}
+                        {!inProject(scene) && <span className="preset-new-tag">NEW</span>}
                       </div>
                       <div className="preset-card-actions">
                         <button className="text-button" onClick={() => play(scene)}>
