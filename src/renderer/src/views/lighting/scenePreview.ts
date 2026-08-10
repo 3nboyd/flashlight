@@ -33,6 +33,7 @@ const KIND_OF: Record<EffectType, PreviewKind> = {
   sparkle: 'cycle',
   rainbow: 'rainbow',
   rainbowStep: 'rainbow',
+  rainbowStrobe: 'rainbow',
   strobe: 'strobe',
   eighthStrobe: 'strobe',
   movementCircle: 'move',

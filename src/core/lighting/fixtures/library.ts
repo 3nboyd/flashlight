@@ -110,6 +110,19 @@ export const BUILTIN_FIXTURES: FixtureDefinition[] = [
       { role: 'static', staticValue: 0 } // Ch11 White Effect Speed
     ]
   },
+  {
+    // Hi-res RGB strobe panel in its 165ch "console" mode: 45 RGB pixels then
+    // 30 separate white LEDs. Modeled as 75 segments (pixels 0-44 RGB, 45-74
+    // white), so effects like Side Sweep get fine resolution and Rainbow +
+    // Strobe rainbows the pixels while flashing the white LEDs.
+    id: 'rgb-white-panel-165ch',
+    name: 'RGB+White Pixel Panel (165ch: 45 RGB + 30 White)',
+    kind: 'strobe',
+    channels: [
+      ...Array.from({ length: 45 }, (_, i) => rgb(i)).flat(),
+      ...Array.from({ length: 30 }, (_, i): ChannelSpec => ({ role: 'white', segment: 45 + i }))
+    ]
+  },
 
   // ---- Moving heads ----
   {

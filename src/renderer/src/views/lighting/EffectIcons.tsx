@@ -34,6 +34,7 @@ export const EFFECT_CATALOG: EffectInfo[] = [
   { type: 'sparkle', label: 'Sparkle', hint: 'Random twinkle', usesPalette: false, isMovement: false },
   { type: 'rainbow', label: 'Rainbow', hint: 'Hue flow across rig', usesPalette: false, isMovement: false },
   { type: 'rainbowStep', label: 'Rainbow Peak', hint: 'Hue snaps per beat', usesPalette: false, isMovement: false },
+  { type: 'rainbowStrobe', label: 'Rainbow + Strobe', hint: 'RGB rainbow + white flash', usesPalette: false, isMovement: false },
   { type: 'strobe', label: 'Strobe', hint: 'Continuous flash', usesPalette: true, isMovement: false },
   { type: 'eighthStrobe', label: 'Eighth Strobe', hint: 'Flash on 8th notes', usesPalette: true, isMovement: false },
   { type: 'audioLevel', label: 'Audio Level', hint: 'Follows loudness', usesPalette: false, isMovement: false },
@@ -146,6 +147,12 @@ export function EffectIcon({ type }: { type: EffectType }): JSX.Element {
       return (
         <div className="fx-icon">
           <div className="fx-dot fx-anim-rainbow-step" />
+        </div>
+      )
+    case 'rainbowStrobe':
+      return (
+        <div className="fx-icon">
+          <div className="fx-dot fx-anim-rainbow" />
         </div>
       )
     case 'strobe':

@@ -260,8 +260,9 @@ export const PRESET_LIBRARY: PresetCategory[] = [
   group('Peaks', 'Full-rig, rainbow-crazy, drop-time energy.', 'peak', [
     scene('preset-rainbow-peak', 'Rainbow Peak', '#f43f5e', [
       { group: 'all', color: { r: 255, g: 0, b: 0 }, dimmer: 1, effect: { type: 'rainbowStep', beats: 1 } },
-      // Strobes flash white on the beat over the changing rainbow colors.
-      { group: 'kind:strobe', color: WHITE, dimmer: 1, effect: { type: 'eighthStrobe' } }
+      // Strobes: RGB rainbows on the quarter note while their white LEDs flash
+      // on the beat.
+      { group: 'kind:strobe', color: WHITE, dimmer: 1, effect: { type: 'rainbowStrobe', beats: 1 } }
     ]),
     scene('preset-rainbow-flow', 'Rainbow Flow', '#8b5cf6', [
       { group: 'all', color: { r: 255, g: 0, b: 0 }, dimmer: 0.85, effect: { type: 'rainbow', beats: 16 } }

@@ -2924,3 +2924,55 @@
   color: var(--text-secondary);
   border-color: var(--border-strong);
 }
+
+/* --- Custom fixture import --- */
+.fixture-import {
+  margin-top: 14px;
+  border-top: 1px solid var(--border-subtle);
+  padding-top: 14px;
+  display: flex;
+  flex-direction: column;
+}
+
+.fixture-import-head {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-bottom: 4px;
+}
+
+.fixture-import-head .picker-label {
+  flex: 1;
+}
+
+.fixture-import-file {
+  position: relative;
+  overflow: hidden;
+  cursor: pointer;
+}
+
+.fixture-import-file input[type='file'] {
+  position: absolute;
+  inset: 0;
+  opacity: 0;
+  cursor: pointer;
+}
+
+.fixture-import-text {
+  width: 100%;
+  min-height: 120px;
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: 12px;
+  line-height: 1.5;
+  background: var(--bg-1);
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-sm);
+  color: var(--text-primary);
+  padding: 8px 10px;
+  resize: vertical;
+  margin-bottom: 8px;
+}
+
+.fixture-import .primary-button {
+  align-self: flex-start;
+}

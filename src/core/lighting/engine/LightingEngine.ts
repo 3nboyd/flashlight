@@ -173,6 +173,16 @@ function applyEffect(
       const spread = fixtureCount > 1 ? (fixtureIndex / fixtureCount) * 360 : 0
       return { ...base, color: hueToRgb(step * 60 + spread) }
     }
+    case 'rainbowStrobe': {
+      // RGB pixels rainbow (snapping each quarter note, spread across the rig)
+      // while the white LEDs flash on the beat - one effect drives both a
+      // fixture's color channels and its separate white LEDs/strips.
+      const step = Math.floor(beat.beat / beats)
+      const spread = fixtureCount > 1 ? (fixtureIndex / fixtureCount) * 360 : 0
+      const rgb = hueToRgb(step * 60 + spread)
+      const eighth = (beat.beat * 2) % 1
+      return { ...base, color: { r: rgb.r, g: rgb.g, b: rgb.b, w: eighth < 0.3 ? 255 : 0 } }
+    }
     case 'strobe':
       // Strobe naturally punches at full brightness (master dimmer / a
       // fixture's brightness cap still apply downstream).

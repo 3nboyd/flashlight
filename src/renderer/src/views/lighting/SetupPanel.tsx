@@ -16,6 +16,7 @@ import { FixtureIcon } from './FixtureIcons'
 import { padColumns, resizePadArray } from './padGrid'
 import { parsePadFunction, padFunctionInfo } from './padFunctions'
 import { CustomFixtureEditor } from './CustomFixtureEditor'
+import { parseFixtureImport, FIXTURE_AI_PROMPT } from '@core/lighting/fixtures/fixtureImport'
 import { StageVisualizer } from './StageVisualizer'
 import { AudioAnalyzer } from '../../audio/AudioAnalyzer'
 import {
@@ -124,6 +125,9 @@ export function SetupPanel({ view }: { view: SetupView }): JSX.Element {
   const [audioRunning, setAudioRunning] = useState(audioAnalyzer.isRunning())
   const [levels, setLevels] = useState({ rms: 0, bass: 0, mid: 0, high: 0 })
   const [profileEditor, setProfileEditor] = useState<'closed' | 'new' | string>('closed')
+  const [importText, setImportText] = useState('')
+  const [importError, setImportError] = useState<string | null>(null)
+  const [promptCopied, setPromptCopied] = useState(false)
   const lastMeterUpdateRef = useRef(0)
 
   const refreshSerialPorts = useCallback(async () => {
@@ -854,6 +858,78 @@ export function SetupPanel({ view }: { view: SetupView }): JSX.Element {
             ))}
           </div>
         )}
+
+        <div className="fixture-import">
+          <div className="fixture-import-head">
+            <span className="picker-label" style={{ margin: 0 }}>
+              Import a fixture (paste or file)
+            </span>
+            <button
+              className="secondary-button"
+              onClick={() => {
+                navigator.clipboard
+                  .writeText(FIXTURE_AI_PROMPT)
+                  .then(() => {
+                    setPromptCopied(true)
+                    setTimeout(() => setPromptCopied(false), 2500)
+                  })
+                  .catch(() => undefined)
+              }}
+            >
+              {promptCopied ? 'Copied!' : 'Copy AI prompt'}
+            </button>
+            <label className="secondary-button fixture-import-file">
+              Load file…
+              <input
+                type="file"
+                accept=".json,.txt"
+                onChange={(e) => {
+                  const file = e.target.files?.[0]
+                  e.target.value = ''
+                  if (!file) return
+                  file.text().then((t) => {
+                    setImportText(t)
+                    setImportError(null)
+                  })
+                }}
+              />
+            </label>
+          </div>
+          <span className="settings-hint" style={{ margin: '2px 0 8px' }}>
+            No AI is built in: paste the prompt into any AI chat with your fixture&apos;s DMX
+            manual (and photos), then paste the JSON it returns here and Import.
+          </span>
+          <textarea
+            className="fixture-import-text"
+            spellCheck={false}
+            placeholder={'{\n  "name": "My Panel (165ch)",\n  "kind": "strobe",\n  "pixels": [{ "count": 45, "channels": ["red","green","blue"] }, { "count": 30, "channels": ["white"] }]\n}'}
+            value={importText}
+            onChange={(e) => {
+              setImportText(e.target.value)
+              setImportError(null)
+            }}
+          />
+          {importError && <div className="banner error">{importError}</div>}
+          <button
+            className="primary-button"
+            disabled={!importText.trim()}
+            onClick={() => {
+              const { fixture, error } = parseFixtureImport(importText)
+              if (error || !fixture) {
+                setImportError(error ?? 'Import failed.')
+                return
+              }
+              updateProject((p) => ({
+                ...p,
+                customFixtures: [...p.customFixtures.filter((f) => f.id !== fixture.id), fixture]
+              }))
+              setImportText('')
+              setImportError(null)
+            }}
+          >
+            Import fixture
+          </button>
+        </div>
         {profileEditor === 'closed' ? (
           <button className="secondary-button" onClick={() => setProfileEditor('new')}>
             New Custom Profile

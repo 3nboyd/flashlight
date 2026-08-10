@@ -27,6 +27,7 @@ export type EffectType =
   | 'sparkle' // random fixtures/cells flash each beat subdivision
   | 'rainbow' // continuous hue rotation across fixtures
   | 'rainbowStep' // rainbow that snaps to a new hue on each quarter note
+  | 'rainbowStrobe' // RGB rainbows per quarter note while the white LEDs flash on the beat
   | 'strobe' // continuous strobing while the scene is active
   | 'eighthStrobe' // sharp flash on every 8th note
   | 'audioLevel' // dimmer follows overall loudness
