@@ -23,6 +23,7 @@ const KIND_OF: Record<EffectType, PreviewKind> = {
   strike: 'pulse',
   tapPulse: 'strobe',
   sweep: 'move',
+  drift: 'move',
   audioLevel: 'pulse',
   bassPulse: 'pulse',
   colorCycle: 'cycle',

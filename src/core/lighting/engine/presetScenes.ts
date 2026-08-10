@@ -183,6 +183,11 @@ export const PRESET_LIBRARY: PresetCategory[] = [
     // reads as one light travelling left to right on any layout.
     scene('preset-side-sweep', 'Side Sweep', '#e2e8f0', [
       { group: 'all', color: WHITE, dimmer: 1, effect: { type: 'sweep', beats: 4 } }
+    ]),
+    // Lone Beam's cousin: a soft glow roams slowly + randomly across the rig,
+    // fading to dark at its edges - an eerie, always-drifting pulse.
+    scene('preset-drifting-glow', 'Drifting Glow', '#6d28d9', [
+      { group: 'all', color: { r: 90, g: 0, b: 200 }, dimmer: 1, effect: { type: 'drift', beats: 8, size: 0.4 } }
     ])
   ]),
 

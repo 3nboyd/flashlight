@@ -333,6 +333,36 @@ describe('solo (eerie / sparse)', () => {
   })
 })
 
+describe('drift (roaming soft glow)', () => {
+  const fixtures = Array.from({ length: 11 }, (_, i) => patched(`p${i}`, 'generic-rgb-4ch', 1 + i * 4))
+  const positions = new Map(fixtures.map((f, i) => [f.patch.id, i / 10]))
+  const scene: Scene = {
+    id: 's',
+    name: 's',
+    uiColor: '#fff',
+    targets: [{ group: 'all', color: { r: 255, g: 0, b: 0 }, dimmer: 1, effect: { type: 'drift', beats: 8, size: 0.4 } }]
+  }
+  const levels = (ms: number): number[] =>
+    fixtures.map((f) => renderTick({ fixtures, scene, positions, beat: beatAt(ms), nowMs: ms }).get(1)!.getChannel(f.patch.address))
+
+  it('is a soft gradient (a peak fading to nothing), not a hard on/off', () => {
+    const l = levels(1000)
+    const max = Math.max(...l)
+    expect(max).toBeGreaterThan(0)
+    expect(l.some((v) => v > 5 && v < max * 0.9)).toBe(true) // a partial-brightness falloff cell
+    expect(l.some((v) => v === 0)).toBe(true) // and cells fully faded out
+  })
+
+  it('drifts: the brightest cell wanders over time', () => {
+    const brightest = (ms: number): number => {
+      const l = levels(ms)
+      return l.indexOf(Math.max(...l))
+    }
+    const idxs = [0, 2000, 4000, 6000, 8000, 10000].map(brightest)
+    expect(new Set(idxs).size).toBeGreaterThan(1)
+  })
+})
+
 describe('home / park position', () => {
   // rgbw-beam-bar-10px-43ch: ch1 = tilt.
   const bar = (limits: { homeTilt?: number }): PatchedFixture => {

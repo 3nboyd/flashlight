@@ -115,6 +115,8 @@ function effectPhrase(effect: EffectSettings): string {
       return 'a lone band sweeping around'
     case 'sweep':
       return 'a bright point crossing the rig'
+    case 'drift':
+      return 'a soft glow roaming slowly (eerie)'
     case 'tapPulse':
       return 'blackout until you tap'
     case 'rainbowStrobe':

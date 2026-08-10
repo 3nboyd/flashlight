@@ -19,6 +19,7 @@ export type EffectType =
   | 'strike' // a hard hit every N beats that holds and fades (occasional beam)
   | 'tapPulse' // blackout base; each manual tap flashes a cycling color + white strobe
   | 'sweep' // a bright point travels side to side across the group in stage order
+  | 'drift' // a soft glow roams slowly + randomly across the rig, fading at its edges (eerie)
   | 'colorCycle' // step through colors every N beats
   | 'randomColor' // jump to a random palette color every N beats and hold
   | 'alternate' // odd/even fixtures swap two colors on the beat

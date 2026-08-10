@@ -148,6 +148,31 @@ function applyEffect(
       const env = Math.max(0, 1 - Math.abs(pos - head) / width)
       return { ...base, dimmer: target.dimmer * Math.pow(env, 1.4) }
     }
+    case 'drift': {
+      // A soft glow that roams slowly and semi-randomly across the rig in stage
+      // order, brightness easing to nothing at its edges - an eerie, constantly
+      // drifting pulse (not beat-locked). `beats` sets how slowly it wanders
+      // between random waypoints; `size` sets how wide the glow is. The white
+      // LEDs glow too, so a fixture's white strip joins the drift.
+      const pos = fixtureCount > 1 ? fixtureIndex / (fixtureCount - 1) : 0.5
+      const t = beat.beat / beats // slow timebase; each unit is one wander leg
+      const waypoint = (n: number): number => {
+        const v = Math.abs(Math.sin(n * 127.1 + 4.7)) * 43758.5453
+        return v - Math.floor(v) // deterministic 0..1 target per leg
+      }
+      const legStart = Math.floor(t)
+      const f = t - legStart
+      const eased = f * f * (3 - 2 * f) // smoothstep for a gentle glide
+      // Wander between random waypoints, plus a tiny wobble so it never sits
+      // perfectly still even while easing between legs.
+      const center =
+        waypoint(legStart) +
+        (waypoint(legStart + 1) - waypoint(legStart)) * eased +
+        0.015 * Math.sin(beat.beat * 1.3)
+      const width = Math.max(0.05, effect.size ?? 0.38)
+      const glow = Math.pow(Math.max(0, 1 - Math.abs(pos - center) / width), 1.8)
+      return { ...base, color: { ...target.color, w: Math.round(255 * glow) }, dimmer: target.dimmer * glow }
+    }
     case 'colorCycle': {
       const step = Math.floor(beat.beat / beats) % palette.length
       return { ...base, color: palette[step] }

@@ -26,6 +26,7 @@ export const EFFECT_CATALOG: EffectInfo[] = [
   { type: 'strike', label: 'Strike', hint: 'Occasional hit + hold', usesPalette: false, isMovement: false },
   { type: 'tapPulse', label: 'Tap Pulse', hint: 'Blackout; flashes on each tap', usesPalette: true, isMovement: false },
   { type: 'sweep', label: 'Side Sweep', hint: 'Light travels side to side', usesPalette: false, isMovement: false },
+  { type: 'drift', label: 'Drifting Glow', hint: 'Soft glow roams slowly (eerie)', usesPalette: false, isMovement: false },
   { type: 'colorCycle', label: 'Color Cycle', hint: 'Step through colors', usesPalette: true, isMovement: false },
   { type: 'randomColor', label: 'Random Color', hint: 'Random color holds', usesPalette: true, isMovement: false },
   { type: 'alternate', label: 'Alternate', hint: 'Odd/even swap', usesPalette: true, isMovement: false },
