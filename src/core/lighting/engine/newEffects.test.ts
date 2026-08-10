@@ -318,4 +318,71 @@ describe('solo (eerie / sparse)', () => {
     const chosen = [20, 520, 1020, 1520, 2020, 2520].map(litIndex)
     expect(new Set(chosen).size).toBeGreaterThan(1) // switches around over steps
   })
+
+  it('lights a band ~a third of a larger group, not a single cell', () => {
+    const fixtures = Array.from({ length: 9 }, (_, i) => patched(`p${i}`, 'generic-rgb-4ch', 1 + i * 4))
+    const scene: Scene = {
+      id: 's',
+      name: 's',
+      uiColor: '#fff',
+      targets: [{ group: 'all', color: { r: 255, g: 0, b: 0 }, dimmer: 1, effect: { type: 'solo', beats: 4, size: 0.34 } }]
+    }
+    const u = renderTick({ fixtures, scene, beat: beatAt(0), nowMs: 0 }).get(1)!
+    const lit = fixtures.filter((f) => u.getChannel(f.patch.address) > 0).length
+    expect(lit).toBe(3) // round(9 * 0.34) = 3 contiguous cells, not one
+  })
+})
+
+describe('home / park position', () => {
+  // rgbw-beam-bar-10px-43ch: ch1 = tilt.
+  const bar = (limits: { homeTilt?: number }): PatchedFixture => {
+    const p = patched('bar', 'rgbw-beam-bar-10px-43ch', 1)
+    return { ...p, patch: { ...p.patch, limits } }
+  }
+  const barScene = (effect: EffectSettings, extras: Partial<Scene['targets'][0]> = {}): Scene => ({
+    id: 's',
+    name: 's',
+    uiColor: '#fff',
+    targets: [{ group: 'all', color: { r: 255, g: 0, b: 0 }, dimmer: 1, effect, ...extras }]
+  })
+
+  it('parks tilt at home when a still scene leaves position unset', () => {
+    const u = renderTick({ fixtures: [bar({ homeTilt: 200 })], scene: barScene({ type: 'beatPulse' }), beat: beatAt(0), nowMs: 0 }).get(1)!
+    expect(u.getChannel(1)).toBe(200)
+  })
+
+  it('lets a movement effect drive tilt instead of parking home', () => {
+    const fixtures = [bar({ homeTilt: 200 })]
+    const scene = barScene({ type: 'movementNod', amplitude: 1 })
+    const tilts = [0, 250, 500, 750].map((ms) => renderTick({ fixtures, scene, beat: beatAt(ms), nowMs: ms }).get(1)!.getChannel(1))
+    expect(tilts.some((t) => t !== 200)).toBe(true)
+  })
+
+  it('honors an explicit scene tilt over the home position', () => {
+    const u = renderTick({
+      fixtures: [bar({ homeTilt: 200 })],
+      scene: barScene({ type: 'beatPulse' }, { tilt: 60 }),
+      beat: beatAt(0),
+      nowMs: 0
+    }).get(1)!
+    expect(u.getChannel(1)).toBe(60)
+  })
+})
+
+describe('adaptive song-arc effects', () => {
+  // rgbw-strobe-panel-11ch: ch2 = red, ch5 = white.
+  const panelScene = (type: EffectSettings['type']): Scene => ({
+    id: 's',
+    name: 's',
+    uiColor: '#fff',
+    targets: [{ group: 'all', color: { r: 255, g: 0, b: 0 }, dimmer: 1, effect: { type } }]
+  })
+  const fixtures = [patched('p', 'rgbw-strobe-panel-11ch', 1)]
+
+  it('songRed pops the white LED on the drop but stays color-only when steady', () => {
+    const drop = renderTick({ fixtures, scene: panelScene('songRed'), song: { phase: 'drop', buildProgress: 0 }, beat: beatAt(0), nowMs: 0 }).get(1)!
+    const steady = renderTick({ fixtures, scene: panelScene('songRed'), song: { phase: 'steady', buildProgress: 0 }, beat: beatAt(0), nowMs: 0 }).get(1)!
+    expect(drop.getChannel(5)).toBeGreaterThan(200) // white LED strobes on the drop
+    expect(steady.getChannel(5)).toBe(0) // no white flash in the calm base look
+  })
 })

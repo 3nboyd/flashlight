@@ -43,7 +43,10 @@ export const EFFECT_CATALOG: EffectInfo[] = [
   { type: 'movementSweep', label: 'Sweep', hint: 'Side-to-side wave', usesPalette: false, isMovement: true },
   { type: 'movementFigure8', label: 'Figure 8', hint: 'Infinity trace', usesPalette: false, isMovement: true },
   { type: 'movementNod', label: 'Nod', hint: 'Tilt wave', usesPalette: false, isMovement: true },
-  { type: 'movementRandom', label: 'Random', hint: 'Ballyhoo jumps', usesPalette: false, isMovement: true }
+  { type: 'movementRandom', label: 'Random', hint: 'Ballyhoo jumps', usesPalette: false, isMovement: true },
+  { type: 'songRainbow', label: 'Song: Rainbow', hint: 'Follows the song (needs audio)', usesPalette: false, isMovement: false },
+  { type: 'songRed', label: 'Song: Alert', hint: 'Follows the song in one color', usesPalette: false, isMovement: false },
+  { type: 'songFrost', label: 'Song: Frost', hint: 'Follows the song, icy + white', usesPalette: false, isMovement: false }
 ]
 
 export function EffectIcon({ type }: { type: EffectType }): JSX.Element {

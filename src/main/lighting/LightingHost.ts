@@ -122,6 +122,12 @@ export class LightingHost {
   private smartIntensity = 1
   private smartPhase: SmartPhase = 'steady'
   private smartBuildProgress = 0
+  // Always-on song-arc sensor (empty pools, so it only reports phase and never
+  // switches scenes). Feeds adaptive scenes their build/drop phase even when
+  // autopilot/Smart Mode is off, so a "song arc" scene just works when picked.
+  private readonly songSensor = new SmartModeEngine(40)
+  private songPhase: SmartPhase = 'steady'
+  private songBuild = 0
   // Manual tap: drives tapPulse scenes. Each tap advances the color index and
   // restarts a decaying flash; the base look stays barely-visible between taps.
   private tapIndex = 0
@@ -500,6 +506,7 @@ export class LightingHost {
       audio: audioFresh ? this.audio : SILENT_FEATURES,
       positions: this.stageXPositions(),
       tap: this.tapState(nowMs),
+      song: audioFresh ? { phase: this.songPhase, buildProgress: this.songBuild } : { phase: 'steady', buildProgress: 0 },
       nowMs
     })
     this.applyIdentify(universes, nowMs)
@@ -536,6 +543,7 @@ export class LightingHost {
       audio: audioFresh ? this.audio : SILENT_FEATURES,
       positions: this.stageXPositions(),
       tap: this.tapState(nowMs),
+      song: audioFresh ? { phase: this.songPhase, buildProgress: this.songBuild } : { phase: 'steady', buildProgress: 0 },
       nowMs
     })
     this.applyIdentify(universes, nowMs)
@@ -613,6 +621,12 @@ export class LightingHost {
   updateAudioFeatures(features: AudioFeatures & { flux?: number }): void {
     this.audio = features
     this.lastAudioAtMs = Date.now()
+
+    // Always track the song's build/drop arc so adaptive scenes can follow it,
+    // independent of whether Smart Mode is driving scene selection.
+    const songDecision = this.songSensor.addFrame(features, this.clock.positionAt(Date.now()))
+    this.songPhase = songDecision.phase
+    this.songBuild = songDecision.buildProgress
 
     if (this.smartEnabled) {
       const decision = this.smart.addFrame(features, this.clock.positionAt(Date.now()))

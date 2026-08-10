@@ -177,7 +177,7 @@ export const PRESET_LIBRARY: PresetCategory[] = [
     // Eerie/sparse: one light at a time, switching to a different one every
     // couple seconds - the rest stay dark.
     scene('preset-lone-beam', 'Lone Beam', '#b91c1c', [
-      { group: 'all', color: { r: 200, g: 0, b: 0 }, dimmer: 1, effect: { type: 'solo', beats: 4 } }
+      { group: 'all', color: { r: 200, g: 0, b: 0 }, dimmer: 1, effect: { type: 'solo', beats: 4, size: 0.34 } }
     ]),
     // A bright point sweeps side to side across the rig in stage order, so it
     // reads as one light travelling left to right on any layout.
@@ -331,7 +331,24 @@ export const PRESET_LIBRARY: PresetCategory[] = [
         effect: { type: 'strike', beats: 2 }
       }
     ])
-  ])
+  ]),
+
+  group(
+    'Adaptive',
+    'One scene that follows the song: calm base, rising build, peak on the drop. Needs audio input so it can hear the track.',
+    'adaptive',
+    [
+      scene('preset-song-rainbow', 'Rainbow Journey', '#8b5cf6', [
+        { group: 'all', color: { r: 255, g: 0, b: 90 }, dimmer: 1, effect: { type: 'songRainbow' } }
+      ]),
+      scene('preset-song-red', 'Red Alert', '#ef4444', [
+        { group: 'all', color: { r: 255, g: 0, b: 0 }, dimmer: 1, effect: { type: 'songRed' } }
+      ]),
+      scene('preset-song-frost', 'Deep Freeze', '#38bdf8', [
+        { group: 'all', color: { r: 0, g: 110, b: 255 }, dimmer: 1, effect: { type: 'songFrost' } }
+      ])
+    ]
+  )
 ]
 
 /** Flat list, used to seed a brand-new project's scene list and pads. */

@@ -40,7 +40,10 @@ const KIND_OF: Record<EffectType, PreviewKind> = {
   movementSweep: 'move',
   movementFigure8: 'move',
   movementNod: 'move',
-  movementRandom: 'move'
+  movementRandom: 'move',
+  songRainbow: 'rainbow',
+  songRed: 'strobe',
+  songFrost: 'strobe'
 }
 
 /** Higher wins when a scene layers several effects: pick the most eye-catching. */

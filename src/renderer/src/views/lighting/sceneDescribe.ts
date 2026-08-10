@@ -111,6 +111,20 @@ function effectPhrase(effect: EffectSettings): string {
       return 'beams nodding (tilt)'
     case 'movementRandom':
       return `beams jumping to random spots ${beats(effect, 4)}`
+    case 'solo':
+      return 'a lone band sweeping around'
+    case 'sweep':
+      return 'a bright point crossing the rig'
+    case 'tapPulse':
+      return 'blackout until you tap'
+    case 'rainbowStrobe':
+      return 'rainbow pixels + white LEDs popping on the beat'
+    case 'songRainbow':
+      return 'follows the song: rainbow wash to rainbow-strobe drop'
+    case 'songRed':
+      return 'follows the song: sparse red to red+white bass peak'
+    case 'songFrost':
+      return 'follows the song: icy swell to white-strobe drop'
     default:
       return ''
   }

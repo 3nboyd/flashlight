@@ -81,7 +81,9 @@ export function FixtureLimitsModal({ patch, definition, onChange, onClose }: Pro
       merged.tiltMax === undefined &&
       !merged.invertPan &&
       !merged.invertTilt &&
-      merged.dimmerMax === undefined
+      merged.dimmerMax === undefined &&
+      merged.homePan === undefined &&
+      merged.homeTilt === undefined
     onChange(isEmpty ? undefined : merged)
   }
 
@@ -121,6 +123,42 @@ export function FixtureLimitsModal({ patch, definition, onChange, onClose }: Pro
             onMax={(v) => patchLimits({ tiltMax: v })}
             onInvert={(v) => patchLimits({ invertTilt: v || undefined })}
           />
+        )}
+
+        {(hasPan || hasTilt) && (
+          <div className="limit-group">
+            <div className="limit-head">
+              <span>Home / rest position</span>
+            </div>
+            <p className="settings-hint">
+              Where this fixture parks when no movement effect is running (idle, blackout, or a still
+              scene). Watch the stage preview to aim it (e.g. a bar at ~45 degrees).
+            </p>
+            {hasPan && (
+              <label className="limit-slider">
+                <span>Pan {pct(limits.homePan, 128)}%</span>
+                <input
+                  type="range"
+                  min={0}
+                  max={100}
+                  value={pct(limits.homePan, 128)}
+                  onChange={(e) => patchLimits({ homePan: toDmx(Number(e.target.value)) })}
+                />
+              </label>
+            )}
+            {hasTilt && (
+              <label className="limit-slider">
+                <span>Tilt {pct(limits.homeTilt, 128)}%</span>
+                <input
+                  type="range"
+                  min={0}
+                  max={100}
+                  value={pct(limits.homeTilt, 128)}
+                  onChange={(e) => patchLimits({ homeTilt: toDmx(Number(e.target.value)) })}
+                />
+              </label>
+            )}
+          </div>
         )}
 
         {hasDimmer && (

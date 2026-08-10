@@ -5,6 +5,7 @@ import { SILENT_FEATURES } from '../audio/features'
 import type { BeatPosition } from './BeatClock'
 import type { LiveOverrides, Rgbw, Scene, SceneTarget, EffectSettings } from './types'
 import { DEFAULT_OVERRIDES } from './types'
+import type { SmartPhase } from './SmartMode'
 
 interface FixtureOutput {
   color: Rgbw
@@ -54,6 +55,28 @@ export interface TapState {
 
 const NO_TAP: TapState = { env: 0, index: 0 }
 
+/**
+ * Where the track is in its build/drop arc, so a single scene can adapt: the
+ * host feeds this from an always-on energy detector (no autopilot required).
+ */
+export interface SongState {
+  phase: SmartPhase
+  /** 0-1 progress through a detected build-up. */
+  buildProgress: number
+}
+
+const STEADY_SONG: SongState = { phase: 'steady', buildProgress: 0 }
+
+/** Effects that actively aim moving fixtures, so they should NOT park home. */
+const MOVEMENT_EFFECTS = new Set<EffectSettings['type']>([
+  'movementCircle',
+  'movementSweep',
+  'movementFigure8',
+  'movementNod',
+  'movementRandom',
+  'solo'
+])
+
 function applyEffect(
   target: SceneTarget,
   effect: EffectSettings | undefined,
@@ -62,7 +85,8 @@ function applyEffect(
   beat: BeatPosition,
   audio: AudioFeatures,
   mod: EffectModifiers = NO_MODIFIERS,
-  tap: TapState = NO_TAP
+  tap: TapState = NO_TAP,
+  song: SongState = STEADY_SONG
 ): FixtureOutput {
   const base: FixtureOutput = {
     color: target.color,
@@ -277,13 +301,17 @@ function applyEffect(
       }
     }
     case 'solo': {
-      // Eerie sparse look: exactly one cell lit at a time, switching to a
-      // different random one every `beats`. Beam fixtures with a palette also
-      // re-aim per switch so a single beam points somewhere new each time.
+      // Eerie sparse look: a contiguous band of cells lit at a time, jumping to
+      // a different random spot every `beats`. The band is a fraction of the
+      // group (default ~a third) so on a many-pixel strobe it reads as a solid
+      // chunk, not a single dot; on a few-cell beam bar it stays a lone beam.
+      // Beam fixtures also re-aim per switch so the light points somewhere new.
       const step = Math.floor(beat.beat / beats)
       const hash = Math.abs(Math.sin(step * 53.17 + 11.7)) * 43758.5453
-      const chosen = Math.floor((hash - Math.floor(hash)) * Math.max(1, fixtureCount))
-      const lit = fixtureIndex === chosen
+      const width = Math.max(1, Math.round(fixtureCount * (effect.size ?? 0.3)))
+      const center = Math.floor((hash - Math.floor(hash)) * Math.max(1, fixtureCount))
+      const start = Math.max(0, Math.min(fixtureCount - width, center - Math.floor(width / 2)))
+      const lit = fixtureIndex >= start && fixtureIndex < start + width
       const aim = (salt: number): number => {
         const v = Math.abs(Math.sin(step * 12.9898 + salt)) * 43758.5453
         return (v - Math.floor(v)) * 2 - 1
@@ -296,6 +324,75 @@ function applyEffect(
         tilt: (target.tilt ?? 128) + aim(7) * amplitude
       }
     }
+    // ---- Adaptive "song arc" effects ---------------------------------------
+    // One scene that follows the track: a calm base look, a rising build, and a
+    // peak on the drop. `song.phase` comes from the host's always-on energy
+    // detector; `song.buildProgress` ramps 0->1 through a build. All three read
+    // the live bass so the peak genuinely punches on the kick.
+    case 'songRainbow': {
+      const spread = fixtureCount > 1 ? (fixtureIndex / fixtureCount) * 360 : 0
+      const bassHit = Math.min(1, Math.max(0, audio.bass - 0.05) * 1.8)
+      if (song.phase === 'drop') {
+        // Peak: per-beat rainbow, white LEDs pop on the beat, bass-driven throb.
+        const rgb = hueToRgb(Math.floor(beat.beat) * 60 + spread)
+        const pulse = 0.4 + 0.6 * Math.max(Math.pow(1 - beat.beatPhase, 2), bassHit)
+        return {
+          ...base,
+          color: { r: rgb.r, g: rgb.g, b: rgb.b, w: beat.beatPhase < 0.16 ? 255 : 0 },
+          dimmer: target.dimmer * pulse
+        }
+      }
+      if (song.phase === 'build') {
+        // Build: quarter-note rainbow with a rising floor and 8th-note pulse.
+        const rgb = hueToRgb(Math.floor(beat.beat) * 60 + spread)
+        const eighth = (beat.beat * 2) % 1
+        const floor = 0.2 + 0.5 * song.buildProgress
+        return { ...base, color: rgb, dimmer: target.dimmer * Math.min(1, floor + (1 - floor) * Math.pow(1 - eighth, 2)) }
+      }
+      // Steady/break: slow rainbow wash breathing gently on the beat.
+      const soft = 0.55 + 0.45 * Math.pow(1 - beat.beatPhase, 1.6)
+      return { ...base, color: hueToRgb(beat.phrasePhase * 720 + spread), dimmer: target.dimmer * soft }
+    }
+    case 'songRed': {
+      const bassHit = Math.min(1, Math.max(0, audio.bass - 0.05) * 1.8)
+      if (song.phase === 'drop') {
+        // Peak: the alert color pulses hard with the bass while white LEDs pop.
+        const pulse = 0.35 + 0.65 * Math.max(Math.pow(1 - beat.beatPhase, 2), bassHit)
+        return { ...base, color: { ...target.color, w: beat.beatPhase < 0.14 ? 255 : 0 }, dimmer: target.dimmer * pulse }
+      }
+      if (song.phase === 'build') {
+        // Build: a crash strobe that quickens and brightens toward the drop.
+        const rate = 2 + Math.floor(song.buildProgress * 6)
+        const gate = Math.floor(beat.beat * rate) % 2 === 0 ? 1 : 0.12 + 0.3 * song.buildProgress
+        return { ...base, color: target.color, dimmer: target.dimmer * gate }
+      }
+      // Steady/break: small random lights flickering in the alert color.
+      const sub = Math.floor(beat.beat * 2)
+      const h = Math.abs(Math.sin(sub * 12.9898 + fixtureIndex * 78.233)) * 43758.5453
+      const lit = h - Math.floor(h) < 0.22
+      return { ...base, color: target.color, dimmer: target.dimmer * (lit ? 1 : 0.04) }
+    }
+    case 'songFrost': {
+      const bassHit = Math.min(1, Math.max(0, audio.bass - 0.05) * 1.8)
+      if (song.phase === 'drop') {
+        // Peak: icy color + white LEDs strobing on the bass.
+        const pulse = 0.4 + 0.6 * Math.max(Math.pow(1 - beat.beatPhase, 2), bassHit)
+        return { ...base, color: { ...target.color, w: beat.beatPhase < 0.16 ? 255 : 0 }, dimmer: target.dimmer * pulse }
+      }
+      if (song.phase === 'build') {
+        // Build: a white riser that whitens and quickens toward the drop.
+        const rate = 2 + Math.floor(song.buildProgress * 6)
+        const gate = Math.floor(beat.beat * rate) % 2 === 0 ? 1 : 0.15 + 0.3 * song.buildProgress
+        return {
+          ...base,
+          color: { ...target.color, w: Math.round(255 * song.buildProgress) },
+          dimmer: target.dimmer * gate
+        }
+      }
+      // Steady/break: slow icy swell that never fully goes dark.
+      const swell = 0.5 - 0.5 * Math.cos(beat.phrasePhase * 4 * Math.PI)
+      return { ...base, color: target.color, dimmer: target.dimmer * (0.25 + 0.5 * swell) }
+    }
     default:
       return base
   }
@@ -305,16 +402,30 @@ function applyEffect(
  * Remaps a fixture's output through its physical limits: optionally mirror
  * pan/tilt, compress the full 0-255 sweep into the allowed [min,max] window
  * (so effects keep their motion but stay inside a safe arc), and cap dimmer.
+ *
+ * When `resting` (no movement effect is aiming this fixture) and a home
+ * position is set, the fixture parks at that home pan/tilt directly - the
+ * window remap is skipped, since the DJ dialed the resting angle they want.
  */
-function applyLimits(out: FixtureOutput, limits: FixtureLimits): FixtureOutput {
-  let pan = limits.invertPan ? 255 - out.pan : out.pan
-  let tilt = limits.invertTilt ? 255 - out.tilt : out.tilt
-  const panMin = limits.panMin ?? 0
-  const panMax = limits.panMax ?? 255
-  const tiltMin = limits.tiltMin ?? 0
-  const tiltMax = limits.tiltMax ?? 255
-  pan = panMin + (Math.max(0, Math.min(255, pan)) / 255) * (panMax - panMin)
-  tilt = tiltMin + (Math.max(0, Math.min(255, tilt)) / 255) * (tiltMax - tiltMin)
+function applyLimits(out: FixtureOutput, limits: FixtureLimits, resting: boolean): FixtureOutput {
+  const clamp = (v: number): number => Math.max(0, Math.min(255, v))
+  let pan: number
+  let tilt: number
+  if (resting && (limits.homePan !== undefined || limits.homeTilt !== undefined)) {
+    const homePan = limits.homePan ?? out.pan
+    const homeTilt = limits.homeTilt ?? out.tilt
+    pan = clamp(limits.invertPan ? 255 - homePan : homePan)
+    tilt = clamp(limits.invertTilt ? 255 - homeTilt : homeTilt)
+  } else {
+    const p = limits.invertPan ? 255 - out.pan : out.pan
+    const t = limits.invertTilt ? 255 - out.tilt : out.tilt
+    const panMin = limits.panMin ?? 0
+    const panMax = limits.panMax ?? 255
+    const tiltMin = limits.tiltMin ?? 0
+    const tiltMax = limits.tiltMax ?? 255
+    pan = panMin + (clamp(p) / 255) * (panMax - panMin)
+    tilt = tiltMin + (clamp(t) / 255) * (tiltMax - tiltMin)
+  }
   const dimmer = limits.dimmerMax !== undefined ? Math.min(out.dimmer, limits.dimmerMax) : out.dimmer
   return { ...out, pan, tilt, dimmer }
 }
@@ -426,11 +537,14 @@ export function renderTick(options: {
   positions?: Map<string, number>
   /** Manual tap flash state for tapPulse scenes. */
   tap?: TapState
+  /** Song build/drop phase, so adaptive scenes can follow the track. */
+  song?: SongState
 }): Map<number, Universe> {
   const { fixtures, scene, beat, nowMs } = options
   const overrides = options.overrides ?? DEFAULT_OVERRIDES
   const audio = options.audio ?? SILENT_FEATURES
   const tap = options.tap ?? NO_TAP
+  const song = options.song ?? STEADY_SONG
   const order = scene && !overrides.blackout ? computeGroupOrder(fixtures, scene, options.positions) : null
   const mod: EffectModifiers = {
     movementSpeed: overrides.movementSpeed ?? 1,
@@ -462,12 +576,18 @@ export function renderTick(options: {
     // in group effects as its own "virtual fixture", so a chase runs across a
     // pixel bar's cells and movement effects wave across a bar's heads.
     let segmentOutputs: FixtureOutput[] = []
+    // Whether the fixture parks at its home position this tick: true when no
+    // movement effect is aiming it AND the scene doesn't pin an explicit
+    // pan/tilt (idle, blackout, or a still scene that leaves position unset).
+    let restsAtHome = true
 
     if (scene && order && !overrides.blackout) {
       // Last matching target wins; fixtures in no target stay dark.
       const targets = scene.targets.filter((t) => targetMatches(t, fixture))
       if (targets.length > 0) {
         const target = targets[targets.length - 1]
+        const movementActive = target.effect !== undefined && MOVEMENT_EFFECTS.has(target.effect.type)
+        restsAtHome = !movementActive && target.pan === undefined && target.tilt === undefined
         const cellRanks = order.cellRank.get(fixture.patch.id) ?? [0]
         const totalCells = order.cellTotal.get(fixture.patch.id) ?? 1
         // Non-segmented output: a multi-pixel bar moves as one unit (fixture
@@ -476,12 +596,12 @@ export function renderTick(options: {
         const wholeIndex =
           segments > 1 ? (order.fixtureRank.get(fixture.patch.id) ?? 0) : (cellRanks[0] ?? 0)
         const wholeCount = segments > 1 ? (order.fixtureTotal.get(fixture.patch.id) ?? 1) : totalCells
-        output = applyEffect(target, target.effect, wholeIndex, wholeCount, beat, audio, mod, tap)
+        output = applyEffect(target, target.effect, wholeIndex, wholeCount, beat, audio, mod, tap, song)
 
         if (segments > 1) {
           for (let s = 0; s < segments; s++) {
             segmentOutputs.push(
-              applyEffect(target, target.effect, cellRanks[s] ?? s, totalCells, beat, audio, mod, tap)
+              applyEffect(target, target.effect, cellRanks[s] ?? s, totalCells, beat, audio, mod, tap, song)
             )
           }
         }
@@ -519,8 +639,8 @@ export function renderTick(options: {
     // applied last, so scenes stay generic and this fixture obeys its own rig.
     const limits = fixture.patch.limits
     if (limits) {
-      output = applyLimits(output, limits)
-      segmentOutputs = segmentOutputs.map((o) => applyLimits(o, limits))
+      output = applyLimits(output, limits, restsAtHome)
+      segmentOutputs = segmentOutputs.map((o) => applyLimits(o, limits, restsAtHome))
     }
 
     const master = overrides.blackout ? 0 : overrides.masterDimmer

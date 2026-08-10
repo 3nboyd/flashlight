@@ -37,6 +37,9 @@ export type EffectType =
   | 'movementFigure8' // pan/tilt trace a lissajous figure-8
   | 'movementNod' // tilt-only wave (the classic beam nod)
   | 'movementRandom' // ballyhoo: heads jump to pseudo-random positions each beat
+  | 'songRainbow' // adaptive: normal rainbow pulse -> build rainbow -> rainbow-strobe peak on the drop
+  | 'songRed' // adaptive: sparse red -> red crash-strobe build -> red+white bass peak
+  | 'songFrost' // adaptive: icy breathe -> white riser -> blue/white strobe peak
 
 export interface EffectSettings {
   type: EffectType
@@ -46,6 +49,8 @@ export interface EffectSettings {
   colors?: Rgbw[]
   /** 0-1 movement size for movement effects. */
   amplitude?: number
+  /** 0-1 fraction of the group lit at once (solo band width). */
+  size?: number
 }
 
 export interface SceneTarget {
@@ -73,8 +78,9 @@ export interface SceneTarget {
  *  - build:   rising tension that escalates into a drop
  *  - flash:   strobes, blinders, and burst hits
  *  - peak:    full-rig, rainbow-crazy, drop-time energy
+ *  - adaptive: one scene that follows the song (build/drop-aware)
  */
-export type SceneCategory = 'normal' | 'build' | 'flash' | 'peak'
+export type SceneCategory = 'normal' | 'build' | 'flash' | 'peak' | 'adaptive'
 
 export interface Scene {
   id: string

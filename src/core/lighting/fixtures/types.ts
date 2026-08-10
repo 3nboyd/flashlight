@@ -93,6 +93,13 @@ export interface FixtureLimits {
   invertTilt?: boolean
   /** Ceiling on this fixture's brightness, 0-1 (1 = no cap). */
   dimmerMax?: number
+  /**
+   * Resting pan/tilt (0-255) the fixture parks at when no movement effect is
+   * driving it (idle look, blackout, or a non-moving scene). Lets a moving
+   * bar sit at, say, a 45 degree tilt instead of wherever it was left.
+   */
+  homePan?: number
+  homeTilt?: number
 }
 
 export interface FixturePatch {
