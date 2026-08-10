@@ -271,6 +271,19 @@ describe('rainbowStrobe (Rainbow Peak panel)', () => {
     expect(maxRgb(onBeat)).toBeGreaterThan(200)
     expect(maxRgb(offBeat)).toBeGreaterThan(100) // dimmed by the pulse but still colorful
   })
+
+  it('flashes the white LEDs on the configurable subdivision', () => {
+    const white = (flashBeats: number, ms: number): number =>
+      renderTick({ fixtures, scene: sceneWith({ type: 'rainbowStrobe', beats: 1, flashBeats }), beat: beatAt(ms), nowMs: ms })
+        .get(1)!
+        .getChannel(136)
+    // Every 4 beats: pops on beat 0, dark on beat 1 (500ms at 120bpm).
+    expect(white(4, 0)).toBeGreaterThan(200)
+    expect(white(4, 500)).toBe(0)
+    // Eighth note: pops on beat 0 AND beat 0.5 (250ms).
+    expect(white(0.5, 0)).toBeGreaterThan(200)
+    expect(white(0.5, 250)).toBeGreaterThan(200)
+  })
 })
 
 describe('sweep (side to side, position-ordered)', () => {

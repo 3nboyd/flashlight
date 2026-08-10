@@ -232,8 +232,14 @@ function applyEffect(
       const spread = fixtureCount > 1 ? (fixtureIndex / fixtureCount) * 360 : 0
       const rgb = hueToRgb(step * 60 + spread)
       const phase = (beat.beat / beats) % 1 // 0..1 within each color step
-      const whitePop = phase < 0.16 ? 255 : 0 // short white flash on the beat
-      const pulse = 0.5 + 0.5 * Math.pow(1 - phase, 2) // gentle throb, never dark
+      // The white LEDs flash on their own subdivision (default a quarter note),
+      // a short fixed-length pop regardless of rate, so slower rates stay snappy.
+      const flashBeats = Math.max(0.125, effect.flashBeats ?? 1)
+      const flashing = beat.beat % flashBeats < 0.18
+      const whitePop = flashing ? 255 : 0
+      // Pop the whole panel to full on the flash (so the white hit reads at full
+      // brightness); otherwise breathe gently on the color pulse, never dark.
+      const pulse = flashing ? 1 : 0.5 + 0.5 * Math.pow(1 - phase, 2)
       return {
         ...base,
         color: { r: rgb.r, g: rgb.g, b: rgb.b, w: whitePop },

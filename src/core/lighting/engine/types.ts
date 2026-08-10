@@ -52,6 +52,12 @@ export interface EffectSettings {
   amplitude?: number
   /** 0-1 fraction of the group lit at once (solo band width). */
   size?: number
+  /**
+   * How often the white LEDs flash in rainbowStrobe, in beats (0.5 = eighth,
+   * 1 = quarter, 2, 4). Independent of `beats` (which drives the color snap),
+   * so the color and the white strobe can run at different rates. Default 1.
+   */
+  flashBeats?: number
 }
 
 export interface SceneTarget {

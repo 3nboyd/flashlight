@@ -329,6 +329,26 @@ export function SceneEditorModal({ scene, onChange, onClose }: SceneEditorModalP
                     </div>
                   )}
 
+                  {effectType === 'rainbowStrobe' && (
+                    <div className="slider-row">
+                      <label>White flash</label>
+                      <select
+                        value={target.effect?.flashBeats ?? 1}
+                        onChange={(e) =>
+                          target.effect &&
+                          updateTarget(index, {
+                            effect: { ...target.effect, flashBeats: Number(e.target.value) }
+                          })
+                        }
+                      >
+                        <option value={0.5}>Eighth note</option>
+                        <option value={1}>Quarter note</option>
+                        <option value={2}>Every 2 beats</option>
+                        <option value={4}>Every 4 beats</option>
+                      </select>
+                    </div>
+                  )}
+
                   {usesMovement && (
                     <>
                       <div className="slider-row">
