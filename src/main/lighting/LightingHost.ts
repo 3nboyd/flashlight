@@ -258,7 +258,13 @@ export class LightingHost {
     this.stageIndex.activeId = id
     await this.writeStageIndex()
     this.triggerScene(null)
-    return this.saveProject(this.freshProject())
+    // Carry over machine/hardware settings (DMX output target, OS2L, audio)
+    // so a new stage does not silently reset the Art-Net node address.
+    const fresh = this.freshProject()
+    fresh.output = { ...this.project.output }
+    fresh.os2l = { ...this.project.os2l }
+    fresh.audio = { ...this.project.audio }
+    return this.saveProject(fresh)
   }
 
   async switchStage(id: string): Promise<LightingProject> {
