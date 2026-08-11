@@ -363,7 +363,7 @@ export const PRESET_LIBRARY: PresetCategory[] = [
       scene('preset-song-rainbow', 'Rainbow Journey', '#8b5cf6', [
         { group: 'all', color: { r: 255, g: 0, b: 90 }, dimmer: 1, effect: { type: 'songRainbow' } }
       ]),
-      scene('preset-song-red', 'Red Alert', '#ef4444', [
+      scene('preset-song-red', 'Crimson Drive', '#ef4444', [
         { group: 'all', color: { r: 255, g: 0, b: 0 }, dimmer: 1, effect: { type: 'songRed' } }
       ]),
       scene('preset-song-frost', 'Deep Freeze', '#38bdf8', [
