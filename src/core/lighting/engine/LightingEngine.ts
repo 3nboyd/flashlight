@@ -155,7 +155,7 @@ function flowEnv(pos: number, beatVal: number, pattern: number): number {
 
 function adaptiveColor(style: AdaptiveStyle, target: SceneTarget, spread: number, beat: BeatPosition, w: number): Rgbw {
   if (style === 'rainbow') {
-    const c = hueToRgb(Math.floor(beat.beat) * 40 + spread)
+    const c = hueToRgb(Math.floor(beat.beat) * 65 + spread)
     return { r: c.r, g: c.g, b: c.b, w }
   }
   if (style === 'frost') return { ...target.color, w }
@@ -194,17 +194,15 @@ function adaptiveOutput(
   if ((song.kick ?? 0) > 0.5) {
     const sinceBeat = beat.beat % 1
     const beatIndex = Math.floor(beat.beat)
-    const inWhite = sinceBeat < 0.11
-    // Punchy color envelope: sharp hit, deep black between (strong pulsing).
-    const colorEnv = Math.pow(Math.max(0, 1 - sinceBeat / 0.28), 1.7)
-    // A bright accent that jumps to a new spot each beat, so a sustained kick
-    // section keeps moving (chase feel) instead of a static repeating flash.
+    // DEEP pulse: full on the hit, fading hard to black well before the next
+    // beat, so there's dramatic on/off contrast rather than a constant wash.
+    const pulse = Math.pow(Math.max(0, 1 - sinceBeat / 0.42), 2.4)
+    const inWhite = sinceBeat < 0.1 // white LEDs strobe on the hit
+    // A bright accent band that jumps each beat, so a sustained kick section
+    // keeps moving instead of the exact same flash every time.
     const accentPos = ((beatIndex * 3) % 8) / 7
-    const accent = Math.pow(Math.max(0, 1 - Math.abs(pos - accentPos) / 0.22), 1.6)
-    const body = inWhite ? 1 : colorEnv
-    // Every 4th beat, the whole rig punches full for an extra-strong downbeat.
-    const downbeat = beatIndex % 4 === 0 ? 1 : 0.6 + 0.4 * accent
-    const bright = Math.min(1, body * downbeat + accent * colorEnv * 0.5)
+    const accent = Math.pow(Math.max(0, 1 - Math.abs(pos - accentPos) / 0.26), 1.5)
+    const bright = pulse * (0.7 + 0.3 * accent)
     return {
       ...base,
       color: adaptiveColor(style, target, spread, beat, inWhite ? 255 : 0),
@@ -223,17 +221,17 @@ function adaptiveOutput(
     }
   }
 
-  // Everything else (melody, bass without a kick, scratching, synth): the whole
-  // rig glows with a brighter moving accent, its brightness tracking the FAST
-  // energy envelope so cutting the sound cuts the light and a cut-in snaps it
-  // back. Only a sustained lull (level gate above) goes fully dark.
+  // Everything else (melody, noise, scratching - anything but a steady kick): a
+  // LOCALIZED moving effect (sweep / explosion / snake / ...), only the moving
+  // region lit so it reads as a cool pattern, not a full wash. Its brightness
+  // tracks the FAST energy envelope, so it flashes with the sound and cuts to
+  // black the instant the sound cuts (scratching, stabs, silence gaps).
   const section = Math.floor(beat.beat / 16) + (style === 'rainbow' ? 0 : style === 'solid' ? 1 : 2)
   const flow = flowEnv(pos, beat.beat, section)
   const responsive = song.fast ?? Math.max(audio.rms, audio.bass)
-  const body = Math.min(1, responsive * 1.9)
+  const drive = Math.min(1, responsive * 2.2)
   const hit = Math.min(1, Math.max(0, Math.max(audio.high, audio.rms * 0.9) - 0.04) * 3.2)
-  const energyBright = Math.max(body, hit) // no floor: follows cuts tightly
-  const bright = Math.min(1, (0.3 + 0.7 * flow) * energyBright)
+  const bright = flow * Math.max(drive, hit)
   return { ...base, color: adaptiveColor(style, target, spread, beat, 0), dimmer: target.dimmer * bright }
 }
 
