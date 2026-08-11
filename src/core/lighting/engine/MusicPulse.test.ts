@@ -97,6 +97,25 @@ describe('MusicPulse kick detection', () => {
     expect(maxLater).toBeLessThan(0.2) // steady loud does not keep strobing
   })
 
+  it('holds the section through a steady groove and advances on a sustained texture change', () => {
+    const pulse = new MusicPulse(FPS)
+    const clock = clockAt(120)
+    const groove = (ms: number, extra: Partial<AudioFeatures> = {}): AudioFeatures => {
+      const bass = ms % 500 < 60 ? 0.6 : 0.35 // kick blip each beat
+      return frame({ rms: 0.4, bass, mid: 0.3, high: 0.15, ...extra })
+    }
+    let s = pulse.addFrame(groove(0), clock.positionAt(0))
+    for (let i = 1; i < 6 * FPS; i++) s = pulse.addFrame(groove(i * 25), clock.positionAt(i * 25))
+    const held = s.section // steady 6s groove: no churn
+    expect(held).toBe(0) // ~12 bars of one groove did not rotate the effect
+    // A new layer enters (mids + highs jump) and stays.
+    for (let i = 0; i < 3 * FPS; i++) {
+      const ms = 6000 + i * 25
+      s = pulse.addFrame(groove(ms, { rms: 0.55, mid: 0.5, high: 0.6 }), clock.positionAt(ms))
+    }
+    expect(s.section).toBeGreaterThan(held) // the new texture advanced the section
+  })
+
   it('level tracks energy and releases toward zero on silence', () => {
     const pulse = new MusicPulse(FPS)
     const clock = clockAt(120)

@@ -91,9 +91,11 @@ export interface SongState {
   fast?: number
   /** 0-1 decaying flash on a big hit out of relative quiet (peak marker). */
   surge?: number
+  /** Counter that advances only on a real musical change (holds the look). */
+  section?: number
 }
 
-const STEADY_SONG: SongState = { phase: 'steady', buildProgress: 0, level: 0, kick: 0, fast: 0, surge: 0 }
+const STEADY_SONG: SongState = { phase: 'steady', buildProgress: 0, level: 0, kick: 0, fast: 0, surge: 0, section: 0 }
 
 /** Effects that actively aim moving fixtures, so they should NOT park home. */
 const MOVEMENT_EFFECTS = new Set<EffectSettings['type']>([
@@ -192,11 +194,14 @@ function adaptiveOutput(
   const pos = fixtureCount > 1 ? fixtureIndex / (fixtureCount - 1) : 0.5
   const spread = fixtureCount > 1 ? (fixtureIndex / fixtureCount) * 360 : 0
 
-  // Peak marker: a big hit out of relative quiet strobes the whole rig white
-  // (with the white LEDs popping) for a brief moment, on top of whatever the
-  // scene is doing - marking drops, stabs, and silence->boom moments.
-  if ((song.surge ?? 0) > 0.12) {
-    return { ...base, color: WHITE, dimmer: target.dimmer * Math.max(0.7, song.surge ?? 0) }
+  // Peak marker: a big hit out of relative quiet. A no-bass loud peak (stab,
+  // vocal, riser) blasts the whole rig WHITE; a bass hit keeps the scene's
+  // color on the RGB pixels while the white-only LEDs flash full as blinders.
+  const surge = song.surge ?? 0
+  if (surge > 0.12) {
+    const bassy = (song.kick ?? 0) > 0.35 || audio.bass > 0.35
+    const color = bassy ? adaptiveColor(style, target, spread, beat, 255) : WHITE
+    return { ...base, color, dimmer: target.dimmer * Math.max(0.7, surge) }
   }
 
   // TRUE beat flash only for a consistent, on-grid kick drum (not bass energy).
@@ -235,7 +240,7 @@ function adaptiveOutput(
   // region lit so it reads as a cool pattern, not a full wash. Its brightness
   // tracks the FAST energy envelope, so it flashes with the sound and cuts to
   // black the instant the sound cuts (scratching, stabs, silence gaps).
-  const section = Math.floor(beat.beat / 16) + (style === 'rainbow' ? 0 : style === 'solid' ? 1 : 2)
+  const section = (song.section ?? 0) + (style === 'rainbow' ? 0 : style === 'solid' ? 1 : 2)
   const flow = flowEnv(pos, beat.beat, section)
   const responsive = song.fast ?? Math.max(audio.rms, audio.bass)
   const drive = Math.min(1, responsive * 2.2)

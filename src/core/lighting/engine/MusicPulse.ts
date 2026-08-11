@@ -28,6 +28,10 @@ export interface PulseState {
    *  (a big hit out of relative quiet, a section kicking in, silence->boom).
    *  Used to strobe a "peak marker" across the rig. */
   surge: number
+  /** Monotonic counter that only advances when the music's texture actually
+   *  shifts (a new element / frequency change, sustained), or after a long hold
+   *  - so a scene holds one look through a groove instead of churning effects. */
+  section: number
 }
 
 export class MusicPulse {
@@ -37,6 +41,15 @@ export class MusicPulse {
   private energyBaseline = 0
   private surgeEnv = 0
   private lastSurgeFrame = -Infinity
+  private bassMid = 0
+  private midMid = 0
+  private highMid = 0
+  private levelMid = 0
+  private sectionRef: { bass: number; mid: number; high: number; level: number } | null = null
+  private sectionChangeSince: number | null = null
+  private section = 0
+  private lastSectionFrame = -Infinity
+  private lastSectionBeat = 0
   private bassFast = 0
   private bassSlow = 0
   private prevExcess = 0
@@ -54,6 +67,10 @@ export class MusicPulse {
     this.energyBaseline = 0
     this.surgeEnv = 0
     this.lastSurgeFrame = -Infinity
+    this.sectionRef = null
+    this.sectionChangeSince = null
+    this.lastSectionFrame = -Infinity
+    this.lastSectionBeat = 0
     this.bassFast = 0
     this.bassSlow = 0
     this.prevExcess = 0
@@ -115,6 +132,47 @@ export class MusicPulse {
     }
     this.prevExcess = excess
 
-    return { level: this.energyLevel, kick: this.kickConfidence, fast: this.energyFast, surge: this.surgeEnv }
+    // --- Section / musical-change detection -------------------------------
+    // Track the medium-term spectral texture; advance the section only when it
+    // drifts far from the reference (a real, sustained change) or after a long
+    // hold, so a steady groove keeps one look instead of churning effects.
+    const aMid = 1 - Math.exp(-1 / (this.fps * 0.9))
+    this.bassMid += aMid * (features.bass - this.bassMid)
+    this.midMid += aMid * (features.mid - this.midMid)
+    this.highMid += aMid * (features.high - this.highMid)
+    this.levelMid += aMid * (energy - this.levelMid)
+    const cur = { bass: this.bassMid, mid: this.midMid, high: this.highMid, level: this.levelMid }
+    // Re-anchor while the EMAs are still settling (or before any reference), so
+    // the warm-up ramp is not mistaken for a real texture change.
+    if (this.sectionRef === null || this.frames < this.fps * 3) {
+      this.sectionRef = cur
+      this.lastSectionBeat = beat.beat
+    }
+    const r = this.sectionRef
+    const dist =
+      Math.abs(cur.bass - r.bass) * 1.3 +
+      Math.abs(cur.mid - r.mid) +
+      Math.abs(cur.high - r.high) * 1.1 +
+      Math.abs(cur.level - r.level) * 1.2
+    if (dist > 0.22) this.sectionChangeSince ??= this.frames
+    else this.sectionChangeSince = null
+    const sustainedChange =
+      this.sectionChangeSince !== null && (this.frames - this.sectionChangeSince) / this.fps > 1.2
+    const longHold = beat.beat - this.lastSectionBeat > 48 // ~12 bars fallback
+    if ((sustainedChange || longHold) && this.frames - this.lastSectionFrame > this.fps * 2) {
+      this.section += 1
+      this.sectionRef = cur
+      this.sectionChangeSince = null
+      this.lastSectionFrame = this.frames
+      this.lastSectionBeat = beat.beat
+    }
+
+    return {
+      level: this.energyLevel,
+      kick: this.kickConfidence,
+      fast: this.energyFast,
+      surge: this.surgeEnv,
+      section: this.section
+    }
   }
 }
