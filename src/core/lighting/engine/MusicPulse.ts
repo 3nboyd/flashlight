@@ -61,18 +61,21 @@ export class MusicPulse {
     this.bassSlow += (1 - Math.exp(-1 / (this.fps * 0.35))) * (features.bass - this.bassSlow)
     const excess = this.bassFast - this.bassSlow
 
-    // Confidence decays continuously (~1.1s), so it stays high only while
-    // on-grid transients keep arriving (a real, repeating kick).
-    this.kickConfidence *= Math.exp(-1 / (this.fps * 1.1))
+    // Confidence decays continuously (~1.8s), so it stays high through steady
+    // kicks and survives a single missed hit, but falls once they stop.
+    this.kickConfidence *= Math.exp(-1 / (this.fps * 1.8))
 
-    const refractoryOk = this.frames - this.lastOnsetFrame > this.fps * 0.11
-    const risingEdge = excess > 0.05 && this.prevExcess <= 0.05
+    const refractoryOk = this.frames - this.lastOnsetFrame > this.fps * 0.1
+    const risingEdge = excess > 0.03 && this.prevExcess <= 0.03
     if (risingEdge && refractoryOk) {
       this.lastOnsetFrame = this.frames
       const distToBeat = Math.min(beat.beatPhase, 1 - beat.beatPhase)
-      // Punchy AND on the beat grid -> looks like a kick drum, not a synth pad.
-      if (distToBeat < 0.17 && this.bassFast > 0.12) {
-        this.kickConfidence = Math.min(1, this.kickConfidence + 0.42)
+      // A kick is a RELATIVE punch - the fast bass leaps well above its own
+      // recent floor - so even a quiet kick on low input registers, while a
+      // sustained bass note (fast ~= slow) never does. Plus a tiny noise floor.
+      const punchy = this.bassFast > this.bassSlow * 1.5 && this.bassFast > 0.04
+      if (distToBeat < 0.19 && punchy) {
+        this.kickConfidence = Math.min(1, this.kickConfidence + 0.4)
       }
     }
     this.prevExcess = excess

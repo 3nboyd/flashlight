@@ -175,7 +175,7 @@ function adaptiveOutput(
   const spread = fixtureCount > 1 ? (fixtureIndex / fixtureCount) * 360 : 0
 
   // TRUE beat flash only for a consistent, on-grid kick drum (not bass energy).
-  if ((song.kick ?? 0) > 0.55) {
+  if ((song.kick ?? 0) > 0.5) {
     const sinceBeat = beat.beat % 1
     const inWhite = sinceBeat < 0.12
     const colorEnv = Math.max(0, 1 - sinceBeat / 0.32)
@@ -197,16 +197,18 @@ function adaptiveOutput(
     }
   }
 
-  // Everything else (melody, bass without a kick, synth): a moving pixel flow
-  // (pattern varies per section and per scene) whose brightness FLASHES on the
-  // live rhythm - a soft glow that tracks the mix plus a bright pop on each hit.
+  // Everything else (melody, bass without a kick, synth): the whole rig glows
+  // and flashes with the live rhythm, with a brighter moving accent sweeping
+  // across it. The whole-rig body means it never reads as a full "cut out"
+  // while music is playing - only a true lull (level gate above) goes dark.
   const section = Math.floor(beat.beat / 16) + (style === 'rainbow' ? 0 : style === 'solid' ? 1 : 2)
   const flow = flowEnv(pos, beat.beat, section)
   const glow = Math.min(1, level * 1.6)
   const hit = Math.min(1, Math.max(0, Math.max(audio.high, audio.rms * 0.9) - 0.05) * 3)
-  const beatEmph = 0.8 + 0.2 * Math.pow(1 - beat.beatPhase, 2)
-  const bright = Math.max(0.14, Math.max(glow * 0.6, hit)) * beatEmph
-  return { ...base, color: adaptiveColor(style, target, spread, beat, 0), dimmer: target.dimmer * flow * bright }
+  const energyBright = Math.max(0.2, Math.max(glow * 0.6, hit)) // responsive whole-rig level
+  const beatEmph = 0.82 + 0.18 * Math.pow(1 - beat.beatPhase, 2)
+  const bright = Math.min(1, (0.28 + 0.72 * flow) * energyBright * beatEmph)
+  return { ...base, color: adaptiveColor(style, target, spread, beat, 0), dimmer: target.dimmer * bright }
 }
 
 function applyEffect(
