@@ -21,11 +21,15 @@ import type { BeatPosition } from './BeatClock'
 export interface PulseState {
   level: number
   kick: number
+  /** Fast energy envelope (instant attack, ~45ms release) for tight cut-in /
+   *  cut-out response - scratching and stabs track the audio almost 1:1. */
+  fast: number
 }
 
 export class MusicPulse {
   private readonly fps: number
   private energyLevel = 0
+  private energyFast = 0
   private bassFast = 0
   private bassSlow = 0
   private prevExcess = 0
@@ -39,6 +43,7 @@ export class MusicPulse {
 
   reset(): void {
     this.energyLevel = 0
+    this.energyFast = 0
     this.bassFast = 0
     this.bassSlow = 0
     this.prevExcess = 0
@@ -55,6 +60,12 @@ export class MusicPulse {
     const energy = Math.max(features.rms, features.bass * 0.9)
     if (energy > this.energyLevel) this.energyLevel = energy
     else this.energyLevel += (1 - Math.exp(-1 / (this.fps * 0.12))) * (energy - this.energyLevel)
+
+    // Fast envelope: instant attack, ~45ms release, so a scratch cut drops it
+    // almost immediately and a cut-in snaps it back.
+    const fastEnergy = Math.max(features.rms, features.bass * 0.8, features.high * 0.7)
+    if (fastEnergy > this.energyFast) this.energyFast = fastEnergy
+    else this.energyFast += (1 - Math.exp(-1 / (this.fps * 0.045))) * (fastEnergy - this.energyFast)
 
     // Bass transient = fast bass envelope pushing above its slow floor.
     this.bassFast += (1 - Math.exp(-1 / (this.fps * 0.05))) * (features.bass - this.bassFast)
@@ -80,6 +91,6 @@ export class MusicPulse {
     }
     this.prevExcess = excess
 
-    return { level: this.energyLevel, kick: this.kickConfidence }
+    return { level: this.energyLevel, kick: this.kickConfidence, fast: this.energyFast }
   }
 }

@@ -87,9 +87,11 @@ export interface SongState {
    * so sustained bass / low melodies do not trigger it. See MusicPulse.
    */
   kick?: number
+  /** Fast energy envelope 0-1 for tight scratch / cut responsiveness. */
+  fast?: number
 }
 
-const STEADY_SONG: SongState = { phase: 'steady', buildProgress: 0, level: 0, kick: 0 }
+const STEADY_SONG: SongState = { phase: 'steady', buildProgress: 0, level: 0, kick: 0, fast: 0 }
 
 /** Effects that actively aim moving fixtures, so they should NOT park home. */
 const MOVEMENT_EFFECTS = new Set<EffectSettings['type']>([
@@ -110,7 +112,7 @@ type AdaptiveStyle = 'rainbow' | 'solid' | 'frost'
  * brightness for a pixel at normalized position `pos`.
  */
 function flowEnv(pos: number, beatVal: number, pattern: number): number {
-  switch (((pattern % 4) + 4) % 4) {
+  switch (((pattern % 6) + 6) % 6) {
     case 0: {
       // Side-to-side sweep (ping-pong).
       const phase = (beatVal / 4) % 2
@@ -128,11 +130,25 @@ function flowEnv(pos: number, beatVal: number, pattern: number): number {
       const c = 0.5 + 0.42 * Math.sin(beatVal * 0.22)
       return Math.pow(Math.max(0, 1 - Math.abs(pos - c) / 0.4), 1.8)
     }
-    default: {
+    case 3: {
       // Symmetric pair opening/closing from the center.
       const spread = (Math.sin(beatVal * 0.35) * 0.5 + 0.5) * 0.5
       const d = Math.abs(Math.abs(pos - 0.5) - spread)
       return Math.pow(Math.max(0, 1 - d / 0.16), 1.6)
+    }
+    case 4: {
+      // Pixel explosion: a bright pair of fronts bursts out from the center and
+      // fades, re-detonating every 2 beats.
+      const cycle = (beatVal / 2) % 1
+      const front = Math.abs(Math.abs(pos - 0.5) - cycle * 0.55)
+      return Math.pow(Math.max(0, 1 - front / 0.12), 1.6) * (1 - cycle)
+    }
+    default: {
+      // Snake: a bright head with a fading tail travelling across (wrapping).
+      const head = (beatVal / 3) % 1
+      const behind = (((head - pos) % 1) + 1) % 1
+      const tail = 0.32
+      return behind < tail ? Math.pow(1 - behind / tail, 1.4) : 0
     }
   }
 }
@@ -177,12 +193,22 @@ function adaptiveOutput(
   // TRUE beat flash only for a consistent, on-grid kick drum (not bass energy).
   if ((song.kick ?? 0) > 0.5) {
     const sinceBeat = beat.beat % 1
-    const inWhite = sinceBeat < 0.12
-    const colorEnv = Math.max(0, 1 - sinceBeat / 0.32)
+    const beatIndex = Math.floor(beat.beat)
+    const inWhite = sinceBeat < 0.11
+    // Punchy color envelope: sharp hit, deep black between (strong pulsing).
+    const colorEnv = Math.pow(Math.max(0, 1 - sinceBeat / 0.28), 1.7)
+    // A bright accent that jumps to a new spot each beat, so a sustained kick
+    // section keeps moving (chase feel) instead of a static repeating flash.
+    const accentPos = ((beatIndex * 3) % 8) / 7
+    const accent = Math.pow(Math.max(0, 1 - Math.abs(pos - accentPos) / 0.22), 1.6)
+    const body = inWhite ? 1 : colorEnv
+    // Every 4th beat, the whole rig punches full for an extra-strong downbeat.
+    const downbeat = beatIndex % 4 === 0 ? 1 : 0.6 + 0.4 * accent
+    const bright = Math.min(1, body * downbeat + accent * colorEnv * 0.5)
     return {
       ...base,
       color: adaptiveColor(style, target, spread, beat, inWhite ? 255 : 0),
-      dimmer: target.dimmer * (inWhite ? 1 : colorEnv)
+      dimmer: target.dimmer * bright
     }
   }
 
@@ -197,17 +223,17 @@ function adaptiveOutput(
     }
   }
 
-  // Everything else (melody, bass without a kick, synth): the whole rig glows
-  // and flashes with the live rhythm, with a brighter moving accent sweeping
-  // across it. The whole-rig body means it never reads as a full "cut out"
-  // while music is playing - only a true lull (level gate above) goes dark.
+  // Everything else (melody, bass without a kick, scratching, synth): the whole
+  // rig glows with a brighter moving accent, its brightness tracking the FAST
+  // energy envelope so cutting the sound cuts the light and a cut-in snaps it
+  // back. Only a sustained lull (level gate above) goes fully dark.
   const section = Math.floor(beat.beat / 16) + (style === 'rainbow' ? 0 : style === 'solid' ? 1 : 2)
   const flow = flowEnv(pos, beat.beat, section)
-  const glow = Math.min(1, level * 1.6)
-  const hit = Math.min(1, Math.max(0, Math.max(audio.high, audio.rms * 0.9) - 0.05) * 3)
-  const energyBright = Math.max(0.2, Math.max(glow * 0.6, hit)) // responsive whole-rig level
-  const beatEmph = 0.82 + 0.18 * Math.pow(1 - beat.beatPhase, 2)
-  const bright = Math.min(1, (0.28 + 0.72 * flow) * energyBright * beatEmph)
+  const responsive = song.fast ?? Math.max(audio.rms, audio.bass)
+  const body = Math.min(1, responsive * 1.9)
+  const hit = Math.min(1, Math.max(0, Math.max(audio.high, audio.rms * 0.9) - 0.04) * 3.2)
+  const energyBright = Math.max(body, hit) // no floor: follows cuts tightly
+  const bright = Math.min(1, (0.3 + 0.7 * flow) * energyBright)
   return { ...base, color: adaptiveColor(style, target, spread, beat, 0), dimmer: target.dimmer * bright }
 }
 

@@ -23,7 +23,11 @@ function createWindow(): void {
       preload: join(__dirname, '../preload/index.js'),
       sandbox: false,
       contextIsolation: true,
-      nodeIntegration: false
+      nodeIntegration: false,
+      // Keep the renderer (audio analysis, engine tick) running at full rate
+      // when the window is backgrounded/occluded - the DJ is looking at their
+      // deck software, not this app, and the lights must not stall.
+      backgroundThrottling: false
     }
   })
 

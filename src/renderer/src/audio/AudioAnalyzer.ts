@@ -20,8 +20,7 @@ export class AudioAnalyzer {
   private context: AudioContext | null = null
   private stream: MediaStream | null = null
   private analyser: AnalyserNode | null = null
-  private rafId: number | null = null
-  private lastFrameAt = 0
+  private timerId: ReturnType<typeof setInterval> | null = null
   private readonly onsetDetector = new SpectralFluxOnsetDetector()
 
   static async listInputDevices(): Promise<MediaDeviceInfo[]> {
@@ -62,15 +61,13 @@ export class AudioAnalyzer {
     const midEnd = Math.round(2000 / binHz)
     const highEnd = Math.min(freqBins.length, Math.round(16000 / binHz))
 
-    const loop = (): void => {
-      this.rafId = requestAnimationFrame(loop)
-      const now = performance.now()
-      // Throttle to ~40fps regardless of display refresh rate.
-      if (now - this.lastFrameAt < 24) return
-      this.lastFrameAt = now
-
+    const tick = (): void => {
       const analyser = this.analyser
       if (!analyser) return
+      const now = performance.now()
+      // The AudioContext can be suspended when the window is backgrounded on
+      // some platforms; keep it running so analysis never stalls.
+      if (this.context && this.context.state === 'suspended') void this.context.resume()
       analyser.getFloatFrequencyData(freqBins)
       analyser.getFloatTimeDomainData(timeDomain)
 
@@ -104,13 +101,17 @@ export class AudioAnalyzer {
         timestampMs: now
       })
     }
-    loop()
+    // Driven by a timer, NOT requestAnimationFrame: rAF pauses whenever the
+    // window is hidden/occluded, which stalled audio (and cut the lights) the
+    // moment the DJ looked away. With backgroundThrottling disabled, this keeps
+    // firing at ~40fps regardless of focus/visibility.
+    this.timerId = setInterval(tick, 24)
   }
 
   async stop(): Promise<void> {
-    if (this.rafId !== null) {
-      cancelAnimationFrame(this.rafId)
-      this.rafId = null
+    if (this.timerId !== null) {
+      clearInterval(this.timerId)
+      this.timerId = null
     }
     this.stream?.getTracks().forEach((t) => t.stop())
     this.stream = null
@@ -122,6 +123,6 @@ export class AudioAnalyzer {
   }
 
   isRunning(): boolean {
-    return this.rafId !== null
+    return this.timerId !== null
   }
 }

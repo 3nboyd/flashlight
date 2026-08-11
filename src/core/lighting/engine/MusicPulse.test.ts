@@ -64,6 +64,21 @@ describe('MusicPulse kick detection', () => {
     expect(kick).toBeLessThan(0.4)
   })
 
+  it('fast envelope drops on a cut and snaps back on cut-in, faster than level', () => {
+    const pulse = new MusicPulse(FPS)
+    const clock = clockAt(120)
+    let s = pulse.addFrame(frame({ rms: 0.6 }), clock.positionAt(0))
+    for (let i = 1; i < 6; i++) s = pulse.addFrame(frame({ rms: 0.6 }), clock.positionAt(i * 25))
+    expect(s.fast).toBeGreaterThan(0.4)
+    // Cut the sound for ~90ms (a scratch): fast should collapse well below level.
+    for (let i = 0; i < 4; i++) s = pulse.addFrame(frame({}), clock.positionAt(150 + i * 25))
+    expect(s.fast).toBeLessThan(0.15)
+    expect(s.fast).toBeLessThan(s.level) // fast reacts quicker than the slow level
+    // Cut back in: one loud frame snaps fast straight back up.
+    s = pulse.addFrame(frame({ rms: 0.6 }), clock.positionAt(260))
+    expect(s.fast).toBeGreaterThan(0.5)
+  })
+
   it('level tracks energy and releases toward zero on silence', () => {
     const pulse = new MusicPulse(FPS)
     const clock = clockAt(120)
