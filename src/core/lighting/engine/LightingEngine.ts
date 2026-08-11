@@ -89,9 +89,11 @@ export interface SongState {
   kick?: number
   /** Fast energy envelope 0-1 for tight scratch / cut responsiveness. */
   fast?: number
+  /** 0-1 decaying flash on a big hit out of relative quiet (peak marker). */
+  surge?: number
 }
 
-const STEADY_SONG: SongState = { phase: 'steady', buildProgress: 0, level: 0, kick: 0, fast: 0 }
+const STEADY_SONG: SongState = { phase: 'steady', buildProgress: 0, level: 0, kick: 0, fast: 0, surge: 0 }
 
 /** Effects that actively aim moving fixtures, so they should NOT park home. */
 const MOVEMENT_EFFECTS = new Set<EffectSettings['type']>([
@@ -189,6 +191,13 @@ function adaptiveOutput(
 
   const pos = fixtureCount > 1 ? fixtureIndex / (fixtureCount - 1) : 0.5
   const spread = fixtureCount > 1 ? (fixtureIndex / fixtureCount) * 360 : 0
+
+  // Peak marker: a big hit out of relative quiet strobes the whole rig white
+  // (with the white LEDs popping) for a brief moment, on top of whatever the
+  // scene is doing - marking drops, stabs, and silence->boom moments.
+  if ((song.surge ?? 0) > 0.12) {
+    return { ...base, color: WHITE, dimmer: target.dimmer * Math.max(0.7, song.surge ?? 0) }
+  }
 
   // TRUE beat flash only for a consistent, on-grid kick drum (not bass energy).
   if ((song.kick ?? 0) > 0.5) {

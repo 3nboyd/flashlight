@@ -139,6 +139,7 @@ export class LightingHost {
   private songKick = 0
   private songLevel = 0
   private songFast = 0
+  private songSurge = 0
   // Manual tap: drives tapPulse scenes. Each tap advances the color index and
   // restarts a decaying flash; the base look stays barely-visible between taps.
   private tapIndex = 0
@@ -533,9 +534,10 @@ export class LightingHost {
             buildProgress: this.songBuild,
             kick: this.songKick,
             level: this.songLevel,
-            fast: this.songFast
+            fast: this.songFast,
+            surge: this.songSurge
           }
-        : { phase: 'steady', buildProgress: 0, kick: 0, level: 0, fast: 0 },
+        : { phase: 'steady', buildProgress: 0, kick: 0, level: 0, fast: 0, surge: 0 },
       nowMs
     })
     this.applyIdentify(universes, nowMs)
@@ -578,9 +580,10 @@ export class LightingHost {
             buildProgress: this.songBuild,
             kick: this.songKick,
             level: this.songLevel,
-            fast: this.songFast
+            fast: this.songFast,
+            surge: this.songSurge
           }
-        : { phase: 'steady', buildProgress: 0, kick: 0, level: 0, fast: 0 },
+        : { phase: 'steady', buildProgress: 0, kick: 0, level: 0, fast: 0, surge: 0 },
       nowMs
     })
     this.applyIdentify(universes, nowMs)
@@ -670,6 +673,7 @@ export class LightingHost {
     this.songKick = p.kick
     this.songLevel = p.level
     this.songFast = p.fast
+    this.songSurge = p.surge
     if (p.level > 0.02) this.lastLevelLoudMs = this.lastAudioAtMs
 
     if (this.smartEnabled) {

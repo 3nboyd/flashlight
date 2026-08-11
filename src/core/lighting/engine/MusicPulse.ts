@@ -24,12 +24,19 @@ export interface PulseState {
   /** Fast energy envelope (instant attack, ~45ms release) for tight cut-in /
    *  cut-out response - scratching and stabs track the audio almost 1:1. */
   fast: number
+  /** 0-1 decaying flash fired when energy leaps well above its recent baseline
+   *  (a big hit out of relative quiet, a section kicking in, silence->boom).
+   *  Used to strobe a "peak marker" across the rig. */
+  surge: number
 }
 
 export class MusicPulse {
   private readonly fps: number
   private energyLevel = 0
   private energyFast = 0
+  private energyBaseline = 0
+  private surgeEnv = 0
+  private lastSurgeFrame = -Infinity
   private bassFast = 0
   private bassSlow = 0
   private prevExcess = 0
@@ -44,6 +51,9 @@ export class MusicPulse {
   reset(): void {
     this.energyLevel = 0
     this.energyFast = 0
+    this.energyBaseline = 0
+    this.surgeEnv = 0
+    this.lastSurgeFrame = -Infinity
     this.bassFast = 0
     this.bassSlow = 0
     this.prevExcess = 0
@@ -66,6 +76,20 @@ export class MusicPulse {
     const fastEnergy = Math.max(features.rms, features.bass * 0.8, features.high * 0.7)
     if (fastEnergy > this.energyFast) this.energyFast = fastEnergy
     else this.energyFast += (1 - Math.exp(-1 / (this.fps * 0.045))) * (fastEnergy - this.energyFast)
+
+    // Surge/peak marker: the fast envelope leaps well above a slow, lagging
+    // baseline (a loud hit out of relative quiet, a section kicking in, or
+    // silence->boom). A steady loud passage lets the baseline catch up, so it
+    // only fires on genuine jumps - not on every beat. Brief decaying flash.
+    this.surgeEnv *= Math.exp(-1 / (this.fps * 0.1))
+    const bigJump = this.energyFast - this.energyBaseline > 0.28 && this.energyFast > 0.3
+    if (bigJump && this.frames - this.lastSurgeFrame > this.fps * 0.5) {
+      this.surgeEnv = 1
+      this.lastSurgeFrame = this.frames
+    }
+    // Baseline lags real hits but catches a sustained level within the
+    // refractory window, so a steady loud passage only marks its onset.
+    this.energyBaseline += (1 - Math.exp(-1 / (this.fps * 0.2))) * (energy - this.energyBaseline)
 
     // Bass transient = fast bass envelope pushing above its slow floor.
     this.bassFast += (1 - Math.exp(-1 / (this.fps * 0.05))) * (features.bass - this.bassFast)
@@ -91,6 +115,6 @@ export class MusicPulse {
     }
     this.prevExcess = excess
 
-    return { level: this.energyLevel, kick: this.kickConfidence, fast: this.energyFast }
+    return { level: this.energyLevel, kick: this.kickConfidence, fast: this.energyFast, surge: this.surgeEnv }
   }
 }

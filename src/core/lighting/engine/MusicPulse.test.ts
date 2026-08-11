@@ -79,6 +79,24 @@ describe('MusicPulse kick detection', () => {
     expect(s.fast).toBeGreaterThan(0.5)
   })
 
+  it('surge fires on a big hit out of quiet, but not during steady loud music', () => {
+    const pulse = new MusicPulse(FPS)
+    const clock = clockAt(120)
+    // Quiet for ~0.5s, then a sudden loud hit.
+    let s = pulse.addFrame(frame({ rms: 0.02 }), clock.positionAt(0))
+    for (let i = 1; i < 20; i++) s = pulse.addFrame(frame({ rms: 0.02 }), clock.positionAt(i * 25))
+    s = pulse.addFrame(frame({ rms: 0.85, bass: 0.8 }), clock.positionAt(500))
+    expect(s.surge).toBeGreaterThan(0.7) // silence -> boom marks a peak
+
+    // Hold loud and steady for ~1s: the baseline catches up, no new surges.
+    let maxLater = 0
+    for (let i = 0; i < 40; i++) {
+      s = pulse.addFrame(frame({ rms: 0.8, bass: 0.75 }), clock.positionAt(525 + i * 25))
+      if (i > 12) maxLater = Math.max(maxLater, s.surge) // after the first flash decays
+    }
+    expect(maxLater).toBeLessThan(0.2) // steady loud does not keep strobing
+  })
+
   it('level tracks energy and releases toward zero on silence', () => {
     const pulse = new MusicPulse(FPS)
     const clock = clockAt(120)
