@@ -22,6 +22,7 @@ export const EFFECT_CATALOG: EffectInfo[] = [
   { type: 'static', label: 'Static', hint: 'Hold one color', usesPalette: false, isMovement: false },
   { type: 'beatPulse', label: 'Beat Pulse', hint: 'Punch on every beat', usesPalette: false, isMovement: false },
   { type: 'breathe', label: 'Breathe', hint: 'Slow swell', usesPalette: false, isMovement: false },
+  { type: 'filterSwell', label: 'Filter Swell', hint: 'Swell that reacts to the music', usesPalette: false, isMovement: false },
   { type: 'eighthBuild', label: 'Eighth Build', hint: '8th-note riser', usesPalette: false, isMovement: false },
   { type: 'strike', label: 'Strike', hint: 'Occasional hit + hold', usesPalette: false, isMovement: false },
   { type: 'tapPulse', label: 'Tap Pulse', hint: 'Blackout; flashes on each tap', usesPalette: true, isMovement: false },

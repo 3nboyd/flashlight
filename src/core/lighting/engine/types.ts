@@ -15,6 +15,7 @@ export type EffectType =
   | 'static'
   | 'beatPulse' // dimmer decays from full on every beat
   | 'breathe' // slow sine swell of intensity
+  | 'filterSwell' // audio-reactive swell: dim + responsive when quiet, full pronounced swell on beats/builds
   | 'eighthBuild' // 8th-note pulses that ramp brighter/tighter across the phrase
   | 'strike' // a hard hit every N beats that holds and fades (occasional beam)
   | 'tapPulse' // blackout base; each manual tap flashes a cycling color + white strobe
@@ -60,6 +61,17 @@ export interface EffectSettings {
    * so the color and the white strobe can run at different rates. Default 1.
    */
   flashBeats?: number
+  /**
+   * Adaptive scenes: which flow patterns (0-5, see FLOW_PATTERNS) are enabled
+   * for the no-kick parts. Undefined/empty = all of them.
+   */
+  patterns?: number[]
+  /**
+   * Adaptive scenes: how often the white-only LEDs strobe during the color
+   * pulse, in beats (1 = every beat, 2, 4 = once a bar on the downbeat; 0 =
+   * off). Default 4.
+   */
+  whiteBeats?: number
 }
 
 export interface SceneTarget {

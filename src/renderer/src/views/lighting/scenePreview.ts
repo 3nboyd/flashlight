@@ -19,6 +19,7 @@ const KIND_OF: Record<EffectType, PreviewKind> = {
   static: 'static',
   beatPulse: 'pulse',
   breathe: 'pulse',
+  filterSwell: 'pulse',
   eighthBuild: 'pulse',
   strike: 'pulse',
   tapPulse: 'strobe',

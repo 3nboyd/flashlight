@@ -5,6 +5,7 @@ import { builtinFixturesById } from '../fixtures/library'
 import type { PatchedFixture } from '../fixtures/types'
 import type { Scene, EffectSettings, Rgbw } from './types'
 import type { AudioFeatures } from '../audio/features'
+import { pickFlowPattern } from './flowPatterns'
 import { readFixtureVisualState } from '../visualizer/fixtureVisualState'
 
 const defs = builtinFixturesById()
@@ -481,6 +482,51 @@ describe('adaptive song-arc effects', () => {
     })
     expect(Math.max(...pixels)).toBeGreaterThan(60) // some pixels lit
     expect(Math.min(...pixels)).toBeLessThan(Math.max(...pixels) * 0.5) // a moving bright region, not uniform
+  })
+})
+
+describe('flow pattern selection', () => {
+  it('cycles only through the enabled patterns', () => {
+    expect(pickFlowPattern([1, 4], 0, 0)).toBe(1)
+    expect(pickFlowPattern([1, 4], 1, 0)).toBe(4)
+    expect(pickFlowPattern([1, 4], 2, 0)).toBe(1) // wraps within the enabled set
+    expect(pickFlowPattern(undefined, 3, 0)).toBe(3) // undefined = all patterns
+  })
+})
+
+describe('filterSwell (audio-reactive swell)', () => {
+  const fixtures = [patched('p', 'generic-rgb-4ch', 1)] // ch1 = dimmer
+  const scene = sceneWith({ type: 'filterSwell', beats: 4 })
+  const aud = (over: Partial<AudioFeatures>): AudioFeatures => ({
+    rms: 0,
+    bass: 0,
+    mid: 0,
+    high: 0,
+    onset: false,
+    timestampMs: 0,
+    ...over
+  })
+
+  it('is dim (not off) when quiet and swells much bigger on a driving beat', () => {
+    // beats=4 -> the swell peaks at beat 2 (1000ms at 120bpm).
+    const quiet = renderTick({
+      fixtures,
+      scene,
+      song: { phase: 'steady', buildProgress: 0, fast: 0, kick: 0 },
+      audio: aud({}),
+      beat: beatAt(1000),
+      nowMs: 1000
+    }).get(1)!
+    const driving = renderTick({
+      fixtures,
+      scene,
+      song: { phase: 'steady', buildProgress: 0, fast: 0.8, kick: 0.9 },
+      audio: aud({ rms: 0.6, bass: 0.6 }),
+      beat: beatAt(1000),
+      nowMs: 1000
+    }).get(1)!
+    expect(quiet.getChannel(1)).toBeGreaterThan(5) // dim, not off
+    expect(driving.getChannel(1)).toBeGreaterThan(quiet.getChannel(1) + 60) // much bigger swell
   })
 })
 

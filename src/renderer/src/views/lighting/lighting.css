@@ -911,6 +911,49 @@
   color: var(--text-secondary);
 }
 
+.pattern-picker {
+  margin-top: 12px;
+}
+
+.pattern-picker-head {
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.5px;
+  text-transform: uppercase;
+  color: var(--text-tertiary);
+  margin-bottom: 6px;
+}
+
+.pattern-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 4px 0;
+  font-size: 12px;
+  color: var(--text-secondary);
+  cursor: pointer;
+}
+
+.pattern-row .pattern-name {
+  width: 84px;
+  flex-shrink: 0;
+}
+
+.flow-preview {
+  display: flex;
+  gap: 2px;
+  flex: 1;
+  height: 14px;
+  align-items: stretch;
+}
+
+.flow-cell {
+  flex: 1;
+  border-radius: 2px;
+  background: var(--accent, #8b5cf6);
+  opacity: 0.1;
+}
+
 .slider-row label {
   width: 96px;
   color: var(--text-tertiary);

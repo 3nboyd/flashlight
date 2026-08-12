@@ -75,6 +75,8 @@ function effectPhrase(effect: EffectSettings): string {
       return 'pulsing on the beat'
     case 'breathe':
       return 'slow breathing'
+    case 'filterSwell':
+      return 'audio-reactive swell (dim when quiet, full on beats)'
     case 'eighthBuild':
       return '8th-note build-up'
     case 'strike':

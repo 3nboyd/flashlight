@@ -6,6 +6,7 @@ import type { BeatPosition } from './BeatClock'
 import type { LiveOverrides, Rgbw, Scene, SceneTarget, EffectSettings } from './types'
 import { DEFAULT_OVERRIDES } from './types'
 import type { SmartPhase } from './SmartMode'
+import { flowEnv, pickFlowPattern } from './flowPatterns'
 
 interface FixtureOutput {
   color: Rgbw
@@ -109,54 +110,6 @@ const MOVEMENT_EFFECTS = new Set<EffectSettings['type']>([
 
 type AdaptiveStyle = 'rainbow' | 'solid' | 'frost'
 
-/**
- * A cool position-aware "pixel flow" for the calm/melodic parts of an adaptive
- * scene: a bright region that travels across the rig, the pattern rotating per
- * section so different passages/drops get different motion. Returns 0-1
- * brightness for a pixel at normalized position `pos`.
- */
-function flowEnv(pos: number, beatVal: number, pattern: number): number {
-  switch (((pattern % 6) + 6) % 6) {
-    case 0: {
-      // Side-to-side sweep (ping-pong).
-      const phase = (beatVal / 4) % 2
-      const head = phase < 1 ? phase : 2 - phase
-      return Math.pow(Math.max(0, 1 - Math.abs(pos - head) / 0.3), 1.5)
-    }
-    case 1: {
-      // Running chase that wraps around the ends.
-      const head = (beatVal / 3) % 1
-      const raw = Math.abs(pos - head)
-      return Math.pow(Math.max(0, 1 - Math.min(raw, 1 - raw) / 0.22), 1.6)
-    }
-    case 2: {
-      // A soft glow roaming back and forth.
-      const c = 0.5 + 0.42 * Math.sin(beatVal * 0.22)
-      return Math.pow(Math.max(0, 1 - Math.abs(pos - c) / 0.4), 1.8)
-    }
-    case 3: {
-      // Symmetric pair opening/closing from the center.
-      const spread = (Math.sin(beatVal * 0.35) * 0.5 + 0.5) * 0.5
-      const d = Math.abs(Math.abs(pos - 0.5) - spread)
-      return Math.pow(Math.max(0, 1 - d / 0.16), 1.6)
-    }
-    case 4: {
-      // Pixel explosion: a bright pair of fronts bursts out from the center and
-      // fades, re-detonating every 2 beats.
-      const cycle = (beatVal / 2) % 1
-      const front = Math.abs(Math.abs(pos - 0.5) - cycle * 0.55)
-      return Math.pow(Math.max(0, 1 - front / 0.12), 1.6) * (1 - cycle)
-    }
-    default: {
-      // Snake: a bright head with a fading tail travelling across (wrapping).
-      const head = (beatVal / 3) % 1
-      const behind = (((head - pos) % 1) + 1) % 1
-      const tail = 0.32
-      return behind < tail ? Math.pow(1 - behind / tail, 1.4) : 0
-    }
-  }
-}
-
 function adaptiveColor(style: AdaptiveStyle, target: SceneTarget, spread: number, beat: BeatPosition, w: number): Rgbw {
   if (style === 'rainbow') {
     const c = hueToRgb(Math.floor(beat.beat) * 65 + spread)
@@ -185,7 +138,8 @@ function adaptiveOutput(
   fixtureCount: number,
   beat: BeatPosition,
   audio: AudioFeatures,
-  song: SongState
+  song: SongState,
+  effect: EffectSettings
 ): FixtureOutput {
   // Dark only on a real lull (smoothed level, so gaps between hits don't cut).
   const level = song.level ?? Math.max(audio.rms, audio.bass)
@@ -204,14 +158,18 @@ function adaptiveOutput(
     return { ...base, color, dimmer: target.dimmer * Math.max(0.7, surge) }
   }
 
-  // TRUE beat flash only for a consistent, on-grid kick drum (not bass energy).
-  if ((song.kick ?? 0) > 0.5) {
+  // Hard pulse as soon as a kick lands (one on-grid kick clears this), so the
+  // front of a drop pulses immediately; the stickiness keeps it going.
+  if ((song.kick ?? 0) > 0.38) {
     const sinceBeat = beat.beat % 1
     const beatIndex = Math.floor(beat.beat)
     // DEEP pulse: full on the hit, fading hard to black well before the next
     // beat, so there's dramatic on/off contrast rather than a constant wash.
     const pulse = Math.pow(Math.max(0, 1 - sinceBeat / 0.42), 2.4)
-    const inWhite = sinceBeat < 0.1 // white LEDs strobe on the hit
+    // White-only LEDs strobe once every `whiteBeats` on the downbeat (default a
+    // bar), separate from the per-beat color pulse - tunable in the editor.
+    const whiteBeats = Math.max(0, effect.whiteBeats ?? 4)
+    const inWhite = whiteBeats > 0 && beat.beat % whiteBeats < 0.1
     // A bright accent band that jumps each beat, so a sustained kick section
     // keeps moving instead of the exact same flash every time.
     const accentPos = ((beatIndex * 3) % 8) / 7
@@ -240,8 +198,9 @@ function adaptiveOutput(
   // region lit so it reads as a cool pattern, not a full wash. Its brightness
   // tracks the FAST energy envelope, so it flashes with the sound and cuts to
   // black the instant the sound cuts (scratching, stabs, silence gaps).
-  const section = (song.section ?? 0) + (style === 'rainbow' ? 0 : style === 'solid' ? 1 : 2)
-  const flow = flowEnv(pos, beat.beat, section)
+  const styleOffset = style === 'rainbow' ? 0 : style === 'solid' ? 1 : 2
+  const pattern = pickFlowPattern(effect.patterns, song.section ?? 0, styleOffset)
+  const flow = flowEnv(pos, beat.beat, pattern)
   const responsive = song.fast ?? Math.max(audio.rms, audio.bass)
   const drive = Math.min(1, responsive * 2.2)
   const hit = Math.min(1, Math.max(0, Math.max(audio.high, audio.rms * 0.9) - 0.04) * 3.2)
@@ -285,6 +244,21 @@ function applyEffect(
       // Slow sine swell across the cycle - never fully dark.
       const swell = 0.5 - 0.5 * Math.cos((beat.beat / beats) * 2 * Math.PI)
       return { ...base, dimmer: target.dimmer * (0.25 + 0.75 * swell) }
+    }
+    case 'filterSwell': {
+      // A breathing swell that responds to the music: much dimmer (but not off)
+      // and quick to react when it's quiet, growing through a build, and a full,
+      // pronounced swell when a beat is driving.
+      const swell = Math.pow(0.5 - 0.5 * Math.cos((beat.beat / beats) * 2 * Math.PI), 1.5)
+      const responsive = song.fast ?? Math.max(audio.rms, audio.bass)
+      const energy = Math.min(1, responsive * 2.2 * mod.reactivity)
+      const build = song.phase === 'build' ? song.buildProgress : 0
+      const drive = Math.max(energy, (song.kick ?? 0) > 0.4 ? 1 : 0, build)
+      // Trough and peak both rise with drive, so quiet stays low-contrast and
+      // dim while a driving beat gives a big, full swell.
+      const lo = 0.08 + 0.15 * drive
+      const hi = 0.22 + 0.78 * drive
+      return { ...base, dimmer: target.dimmer * (lo + (hi - lo) * swell) }
     }
     case 'eighthBuild': {
       // 8th-note pulses whose brightness floor rises and whose decay sharpens
@@ -533,11 +507,11 @@ function applyEffect(
     // contrast pulse through a build, and a hard beat flash once the kick drives.
     // Each carries a different visual style and its own flow pattern.
     case 'songRainbow':
-      return adaptiveOutput('rainbow', base, target, fixtureIndex, fixtureCount, beat, audio, song)
+      return adaptiveOutput('rainbow', base, target, fixtureIndex, fixtureCount, beat, audio, song, effect)
     case 'songRed':
-      return adaptiveOutput('solid', base, target, fixtureIndex, fixtureCount, beat, audio, song)
+      return adaptiveOutput('solid', base, target, fixtureIndex, fixtureCount, beat, audio, song, effect)
     case 'songFrost':
-      return adaptiveOutput('frost', base, target, fixtureIndex, fixtureCount, beat, audio, song)
+      return adaptiveOutput('frost', base, target, fixtureIndex, fixtureCount, beat, audio, song, effect)
     case 'melodyBeat': {
       // A smart, silence-aware scene. In quiet or purely melodic passages it
       // stays black and fires quick flashes that track the live rhythm (as

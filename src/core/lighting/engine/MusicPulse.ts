@@ -99,8 +99,10 @@ export class MusicPulse {
     // silence->boom). A steady loud passage lets the baseline catch up, so it
     // only fires on genuine jumps - not on every beat. Brief decaying flash.
     this.surgeEnv *= Math.exp(-1 / (this.fps * 0.1))
-    const bigJump = this.energyFast - this.energyBaseline > 0.28 && this.energyFast > 0.3
-    if (bigJump && this.frames - this.lastSurgeFrame > this.fps * 0.5) {
+    // Only a genuinely big jump marks a peak (raised threshold + longer gap so
+    // it isn't strobing on every stab).
+    const bigJump = this.energyFast - this.energyBaseline > 0.36 && this.energyFast > 0.38
+    if (bigJump && this.frames - this.lastSurgeFrame > this.fps * 0.8) {
       this.surgeEnv = 1
       this.lastSurgeFrame = this.frames
     }

@@ -7,6 +7,38 @@ import { StageVisualizer } from './StageVisualizer'
 import { FixtureIcon, KIND_LABELS } from './FixtureIcons'
 import { EFFECT_CATALOG, EffectIcon } from './EffectIcons'
 import { describeScene, groupLabel as describeTargetGroup } from './sceneDescribe'
+import { FLOW_PATTERNS, flowEnv, allFlowPatterns } from '@core/lighting/engine/flowPatterns'
+
+const ADAPTIVE_EFFECTS: EffectType[] = ['songRainbow', 'songRed', 'songFrost']
+
+/** A tiny animated strip that plays one flow pattern, for the pattern picker. */
+function FlowPatternPreview({ pattern }: { pattern: number }): JSX.Element {
+  const ref = useRef<HTMLDivElement>(null)
+  useEffect(() => {
+    const host = ref.current
+    if (!host) return
+    const cells = Array.from(host.children) as HTMLElement[]
+    const start = performance.now()
+    let raf = 0
+    const draw = (): void => {
+      const t = ((performance.now() - start) / 1000) * 2 // ~2 beats/sec
+      cells.forEach((cell, i) => {
+        const pos = cells.length > 1 ? i / (cells.length - 1) : 0.5
+        cell.style.opacity = String(0.1 + 0.9 * flowEnv(pos, t, pattern))
+      })
+      raf = requestAnimationFrame(draw)
+    }
+    draw()
+    return () => cancelAnimationFrame(raf)
+  }, [pattern])
+  return (
+    <div className="flow-preview" ref={ref} aria-hidden>
+      {Array.from({ length: 16 }, (_, i) => (
+        <span key={i} className="flow-cell" />
+      ))}
+    </div>
+  )
+}
 
 /**
  * Full-screen scene editor. The live stage renders on the left with the
@@ -367,6 +399,56 @@ export function SceneEditorModal({ scene, onChange, onClose }: SceneEditorModalP
                         <option value={4}>Every 4 beats</option>
                       </select>
                     </div>
+                  )}
+
+                  {ADAPTIVE_EFFECTS.includes(effectType) && (
+                    <>
+                      <div className="slider-row">
+                        <label>White strobe (on the beat)</label>
+                        <select
+                          value={target.effect?.whiteBeats ?? 4}
+                          onChange={(e) =>
+                            target.effect &&
+                            updateTarget(index, {
+                              effect: { ...target.effect, whiteBeats: Number(e.target.value) }
+                            })
+                          }
+                        >
+                          <option value={0}>Off</option>
+                          <option value={1}>Every beat</option>
+                          <option value={2}>Every 2 beats</option>
+                          <option value={4}>Every 4 (downbeat)</option>
+                          <option value={8}>Every 8 beats</option>
+                        </select>
+                      </div>
+                      <div className="pattern-picker">
+                        <div className="pattern-picker-head">Flow patterns (the no-bass parts)</div>
+                        {FLOW_PATTERNS.map((p) => {
+                          const enabled = target.effect?.patterns ?? allFlowPatterns()
+                          const checked = enabled.includes(p.index)
+                          return (
+                            <label key={p.index} className="pattern-row">
+                              <input
+                                type="checkbox"
+                                checked={checked}
+                                onChange={(e) => {
+                                  if (!target.effect) return
+                                  const set = new Set(enabled)
+                                  if (e.target.checked) set.add(p.index)
+                                  else set.delete(p.index)
+                                  const next = allFlowPatterns().filter((i) => set.has(i))
+                                  updateTarget(index, {
+                                    effect: { ...target.effect, patterns: next.length ? next : [p.index] }
+                                  })
+                                }}
+                              />
+                              <span className="pattern-name">{p.name}</span>
+                              <FlowPatternPreview pattern={p.index} />
+                            </label>
+                          )
+                        })}
+                      </div>
+                    </>
                   )}
 
                   {usesMovement && (

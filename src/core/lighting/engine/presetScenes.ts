@@ -199,7 +199,7 @@ export const PRESET_LIBRARY: PresetCategory[] = [
       { group: 'all', color: { r: 0, g: 200, b: 255 }, dimmer: 1, effect: { type: 'eighthBuild' } }
     ]),
     scene('preset-filter-swell', 'Filter Swell', '#a78bfa', [
-      { group: 'all', color: { r: 150, g: 80, b: 255 }, dimmer: 0.9, effect: { type: 'breathe', beats: 8 } }
+      { group: 'all', color: { r: 150, g: 80, b: 255 }, dimmer: 1, effect: { type: 'filterSwell', beats: 8 } }
     ]),
     scene('preset-snare-rush', 'Snare Rush', '#fb7185', [
       { group: 'all', color: { r: 255, g: 40, b: 60 }, dimmer: 1, effect: { type: 'eighthBuild' } },
