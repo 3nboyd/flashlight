@@ -92,6 +92,8 @@ const api = {
       ipcRenderer.invoke('lighting:setSmartMode', enabled),
     manualPulse: (): Promise<LightingStatus> => ipcRenderer.invoke('lighting:manualPulse'),
     clearManual: (): Promise<LightingStatus> => ipcRenderer.invoke('lighting:clearManual'),
+    previewFlowPattern: (pattern: number): Promise<void> =>
+      ipcRenderer.invoke('lighting:previewFlowPattern', pattern),
     getOutputDiagnostics: (): Promise<OutputDiagnostics> =>
       ipcRenderer.invoke('lighting:getOutputDiagnostics'),
     scanArtNet: (): Promise<DiscoveredNode[]> => ipcRenderer.invoke('lighting:scanArtNet'),

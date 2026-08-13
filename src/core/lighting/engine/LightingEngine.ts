@@ -202,8 +202,12 @@ function adaptiveOutput(
   const pattern = pickFlowPattern(effect.patterns, song.section ?? 0, styleOffset)
   const flow = flowEnv(pos, beat.beat, pattern)
   const responsive = song.fast ?? Math.max(audio.rms, audio.bass)
-  const drive = Math.min(1, responsive * 2.2)
-  const hit = Math.min(1, Math.max(0, Math.max(audio.high, audio.rms * 0.9) - 0.04) * 3.2)
+  // Brightness scales with loudness with an expansive curve, so small/ambient
+  // audio stays near-dark and only real level lifts it - louder = brighter.
+  const drive = Math.min(1, Math.pow(responsive, 1.5) * 2.6)
+  // Flash on a distinct transient, but with a higher floor so quiet ambient
+  // noise doesn't set it off.
+  const hit = Math.min(1, Math.max(0, Math.max(audio.high, audio.rms * 0.9) - 0.1) * 3)
   const bright = flow * Math.max(drive, hit)
   return { ...base, color: adaptiveColor(style, target, spread, beat, 0), dimmer: target.dimmer * bright }
 }
@@ -246,19 +250,25 @@ function applyEffect(
       return { ...base, dimmer: target.dimmer * (0.25 + 0.75 * swell) }
     }
     case 'filterSwell': {
-      // A breathing swell that responds to the music: much dimmer (but not off)
-      // and quick to react when it's quiet, growing through a build, and a full,
-      // pronounced swell when a beat is driving.
-      const swell = Math.pow(0.5 - 0.5 * Math.cos((beat.beat / beats) * 2 * Math.PI), 1.5)
-      const responsive = song.fast ?? Math.max(audio.rms, audio.bass)
-      const energy = Math.min(1, responsive * 2.2 * mod.reactivity)
+      // Three states:
+      //  - no music        -> pretty dim, barely breathing
+      //  - audio, no kick   -> big dramatic swell, deep dims to bright (slow)
+      //  - full kick beat   -> a big swell IN TIME with the beat, every 4 beats
+      const level = song.level ?? Math.max(audio.rms, audio.bass)
       const build = song.phase === 'build' ? song.buildProgress : 0
-      const drive = Math.max(energy, (song.kick ?? 0) > 0.4 ? 1 : 0, build)
-      // Trough and peak both rise with drive, so quiet stays low-contrast and
-      // dim while a driving beat gives a big, full swell.
-      const lo = 0.08 + 0.15 * drive
-      const hi = 0.22 + 0.78 * drive
-      return { ...base, dimmer: target.dimmer * (lo + (hi - lo) * swell) }
+      if (level < 0.03) {
+        const s = 0.5 - 0.5 * Math.cos((beat.beat / beats) * 2 * Math.PI)
+        return { ...base, dimmer: target.dimmer * (0.05 + 0.07 * s) }
+      }
+      if ((song.kick ?? 0) > 0.38) {
+        // Beat-locked: a full swell cycling every 4 beats, in time and faster.
+        const s = Math.pow(0.5 - 0.5 * Math.cos((beat.beat / 4) * 2 * Math.PI), 1.3)
+        return { ...base, dimmer: target.dimmer * (0.18 + 0.82 * s) }
+      }
+      // Audio but no full kick: big pronounced swell over `beats`, deep troughs.
+      const s = Math.pow(0.5 - 0.5 * Math.cos((beat.beat / beats) * 2 * Math.PI), 1.7)
+      const reach = Math.max(0.7, Math.min(1, level * 2.5 * mod.reactivity), build)
+      return { ...base, dimmer: target.dimmer * (0.05 + 0.9 * reach * s) }
     }
     case 'eighthBuild': {
       // 8th-note pulses whose brightness floor rises and whose decay sharpens

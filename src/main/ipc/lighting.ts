@@ -64,6 +64,9 @@ export function registerLightingHandlers(): void {
     lighting.clearManual()
     return lighting.getStatus()
   })
+  ipcMain.handle('lighting:previewFlowPattern', async (_e, pattern: number) => {
+    lighting.previewFlowPattern(pattern)
+  })
   ipcMain.handle('lighting:getOutputDiagnostics', async () => lighting.getOutputDiagnostics())
   ipcMain.handle('lighting:scanArtNet', async () => lighting.scanArtNet())
   ipcMain.handle('lighting:identifyFixture', async (_e, patchId: string | null) => {

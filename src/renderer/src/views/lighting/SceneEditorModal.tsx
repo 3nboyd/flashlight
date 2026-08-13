@@ -422,29 +422,41 @@ export function SceneEditorModal({ scene, onChange, onClose }: SceneEditorModalP
                         </select>
                       </div>
                       <div className="pattern-picker">
-                        <div className="pattern-picker-head">Flow patterns (the no-bass parts)</div>
+                        <div className="pattern-picker-head">
+                          Flow patterns (the no-bass parts) - Play to see it on the rig
+                        </div>
                         {FLOW_PATTERNS.map((p) => {
                           const enabled = target.effect?.patterns ?? allFlowPatterns()
                           const checked = enabled.includes(p.index)
                           return (
-                            <label key={p.index} className="pattern-row">
-                              <input
-                                type="checkbox"
-                                checked={checked}
-                                onChange={(e) => {
-                                  if (!target.effect) return
-                                  const set = new Set(enabled)
-                                  if (e.target.checked) set.add(p.index)
-                                  else set.delete(p.index)
-                                  const next = allFlowPatterns().filter((i) => set.has(i))
-                                  updateTarget(index, {
-                                    effect: { ...target.effect, patterns: next.length ? next : [p.index] }
-                                  })
-                                }}
-                              />
-                              <span className="pattern-name">{p.name}</span>
+                            <div key={p.index} className="pattern-row">
+                              <label className="pattern-check">
+                                <input
+                                  type="checkbox"
+                                  checked={checked}
+                                  onChange={(e) => {
+                                    if (!target.effect) return
+                                    const set = new Set(enabled)
+                                    if (e.target.checked) set.add(p.index)
+                                    else set.delete(p.index)
+                                    const next = allFlowPatterns().filter((i) => set.has(i))
+                                    updateTarget(index, {
+                                      effect: { ...target.effect, patterns: next.length ? next : [p.index] }
+                                    })
+                                  }}
+                                />
+                                <span className="pattern-name">{p.name}</span>
+                              </label>
                               <FlowPatternPreview pattern={p.index} />
-                            </label>
+                              <button
+                                type="button"
+                                className="text-button pattern-play"
+                                title="Play this pattern on the rig for a few seconds"
+                                onClick={() => window.djCompanion.lighting.previewFlowPattern(p.index)}
+                              >
+                                ▶ Play
+                              </button>
+                            </div>
                           )
                         })}
                       </div>

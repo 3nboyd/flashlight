@@ -1,7 +1,7 @@
 import { readFile, writeFile, mkdir, rm } from 'fs/promises'
 import { join } from 'path'
 import { networkInterfaces } from 'os'
-import { renderTick } from '@core/lighting/engine/LightingEngine'
+import { renderTick, type SongState } from '@core/lighting/engine/LightingEngine'
 import type { Universe } from '@core/lighting/dmx/Universe'
 import { BeatClock } from '@core/lighting/engine/BeatClock'
 import {
@@ -141,6 +141,9 @@ export class LightingHost {
   private songFast = 0
   private songSurge = 0
   private songSection = 0
+  // A short-lived "demo" that plays one flow pattern on the rig so the DJ can
+  // see what each pattern looks like from the scene editor.
+  private flowPreview: { pattern: number; untilMs: number } | null = null
   // Manual tap: drives tapPulse scenes. Each tap advances the color index and
   // restarts a decaying flash; the base look stays barely-visible between taps.
   private tapIndex = 0
@@ -421,6 +424,50 @@ export class LightingHost {
     return positions
   }
 
+  /** Start a ~6s on-rig demo of a single flow pattern (for the scene editor). */
+  previewFlowPattern(pattern: number): void {
+    this.flowPreview = { pattern, untilMs: Date.now() + 6000 }
+  }
+
+  /** Effective scene this tick: the flow demo (if active) overrides the scene. */
+  private sceneFor(nowMs: number): Scene | null {
+    if (this.flowPreview && nowMs >= this.flowPreview.untilMs) this.flowPreview = null
+    if (this.flowPreview) {
+      return {
+        id: '__flow_demo__',
+        name: 'Flow demo',
+        uiColor: '#a78bfa',
+        targets: [
+          {
+            group: 'all',
+            color: { r: 120, g: 60, b: 255 },
+            dimmer: 1,
+            effect: { type: 'songRainbow', patterns: [this.flowPreview.pattern] }
+          }
+        ]
+      }
+    }
+    return this.currentScene(nowMs)
+  }
+
+  /** Song state this tick: forced to a lit, no-kick "flow" state during a demo. */
+  private songFor(audioFresh: boolean): SongState {
+    if (this.flowPreview) {
+      return { phase: 'steady', buildProgress: 0, kick: 0, level: 1, fast: 1, surge: 0, section: 0 }
+    }
+    return audioFresh
+      ? {
+          phase: this.songPhase,
+          buildProgress: this.songBuild,
+          kick: this.songKick,
+          level: this.songLevel,
+          fast: this.songFast,
+          surge: this.songSurge,
+          section: this.songSection
+        }
+      : { phase: 'steady', buildProgress: 0, kick: 0, level: 0, fast: 0, surge: 0, section: this.songSection }
+  }
+
   private currentScene(nowMs: number): Scene | null {
     // Smart mode owns scene selection while enabled (it sets activeSceneId
     // directly), so autopilot rotation is suspended.
@@ -523,23 +570,13 @@ export class LightingHost {
     const overrides = this.effectiveOverrides()
     const universes = renderTick({
       fixtures: this.resolveFixtures(),
-      scene: this.currentScene(nowMs),
+      scene: this.sceneFor(nowMs),
       overrides,
       beat: this.clock.positionAt(this.movementClockMs(nowMs, overrides)),
       audio: audioFresh ? this.audio : SILENT_FEATURES,
       positions: this.stageXPositions(),
       tap: this.tapState(nowMs),
-      song: audioFresh
-        ? {
-            phase: this.songPhase,
-            buildProgress: this.songBuild,
-            kick: this.songKick,
-            level: this.songLevel,
-            fast: this.songFast,
-            surge: this.songSurge,
-            section: this.songSection
-          }
-        : { phase: 'steady', buildProgress: 0, kick: 0, level: 0, fast: 0, surge: 0, section: this.songSection },
+      song: this.songFor(audioFresh),
       nowMs
     })
     this.applyIdentify(universes, nowMs)
@@ -570,23 +607,13 @@ export class LightingHost {
     const audioFresh = nowMs - this.lastAudioAtMs < 500
     const universes = renderTick({
       fixtures: this.resolveFixtures(),
-      scene: this.currentScene(nowMs),
+      scene: this.sceneFor(nowMs),
       overrides: this.effectiveOverrides(),
       beat: this.clock.positionAt(nowMs),
       audio: audioFresh ? this.audio : SILENT_FEATURES,
       positions: this.stageXPositions(),
       tap: this.tapState(nowMs),
-      song: audioFresh
-        ? {
-            phase: this.songPhase,
-            buildProgress: this.songBuild,
-            kick: this.songKick,
-            level: this.songLevel,
-            fast: this.songFast,
-            surge: this.songSurge,
-            section: this.songSection
-          }
-        : { phase: 'steady', buildProgress: 0, kick: 0, level: 0, fast: 0, surge: 0, section: this.songSection },
+      song: this.songFor(audioFresh),
       nowMs
     })
     this.applyIdentify(universes, nowMs)

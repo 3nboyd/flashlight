@@ -102,7 +102,7 @@ export class MusicPulse {
     // Only a genuinely big jump marks a peak (raised threshold + longer gap so
     // it isn't strobing on every stab).
     const bigJump = this.energyFast - this.energyBaseline > 0.36 && this.energyFast > 0.38
-    if (bigJump && this.frames - this.lastSurgeFrame > this.fps * 0.8) {
+    if (bigJump && this.frames - this.lastSurgeFrame > this.fps * 1.0) {
       this.surgeEnv = 1
       this.lastSurgeFrame = this.frames
     }
