@@ -32,6 +32,9 @@ export interface PulseState {
    *  shifts (a new element / frequency change, sustained), or after a long hold
    *  - so a scene holds one look through a groove instead of churning effects. */
   section: number
+  /** 0-1 how rhythmic/percussive the audio is (onset density): high = a groove
+   *  with a beat, low = ambient/wash. Distinguishes groove from ambient looks. */
+  rhythm: number
 }
 
 export class MusicPulse {
@@ -50,6 +53,7 @@ export class MusicPulse {
   private section = 0
   private lastSectionFrame = -Infinity
   private lastSectionBeat = 0
+  private onsetRate = 0
   private bassFast = 0
   private bassSlow = 0
   private prevExcess = 0
@@ -71,6 +75,7 @@ export class MusicPulse {
     this.sectionChangeSince = null
     this.lastSectionFrame = -Infinity
     this.lastSectionBeat = 0
+    this.onsetRate = 0
     this.bassFast = 0
     this.bassSlow = 0
     this.prevExcess = 0
@@ -156,12 +161,15 @@ export class MusicPulse {
       Math.abs(cur.mid - r.mid) +
       Math.abs(cur.high - r.high) * 1.1 +
       Math.abs(cur.level - r.level) * 1.2
-    if (dist > 0.22) this.sectionChangeSince ??= this.frames
+    if (dist > 0.28) this.sectionChangeSince ??= this.frames
     else this.sectionChangeSince = null
     const sustainedChange =
       this.sectionChangeSince !== null && (this.frames - this.sectionChangeSince) / this.fps > 1.2
-    const longHold = beat.beat - this.lastSectionBeat > 48 // ~12 bars fallback
-    if ((sustainedChange || longHold) && this.frames - this.lastSectionFrame > this.fps * 2) {
+    const longHold = beat.beat - this.lastSectionBeat > 64 // ~16 bars fallback
+    // Quantize changes to a bar line ("come in on the beat"), but a very big
+    // jump (a drop) may land anywhere. Never change more than every ~2s.
+    const onBar = beat.barPhase < 0.2 || dist > 0.5
+    if ((sustainedChange || longHold) && onBar && this.frames - this.lastSectionFrame > this.fps * 2) {
       this.section += 1
       this.sectionRef = cur
       this.sectionChangeSince = null
@@ -169,12 +177,17 @@ export class MusicPulse {
       this.lastSectionBeat = beat.beat
     }
 
+    // Rhythmicity: onset density (fraction of frames with an onset), ~1.5s EMA.
+    this.onsetRate += (1 - Math.exp(-1 / (this.fps * 1.5))) * ((features.onset ? 1 : 0) - this.onsetRate)
+    const rhythm = Math.min(1, this.onsetRate * 12)
+
     return {
       level: this.energyLevel,
       kick: this.kickConfidence,
       fast: this.energyFast,
       surge: this.surgeEnv,
-      section: this.section
+      section: this.section,
+      rhythm
     }
   }
 }

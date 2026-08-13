@@ -6,7 +6,7 @@ import type { BeatPosition } from './BeatClock'
 import type { LiveOverrides, Rgbw, Scene, SceneTarget, EffectSettings } from './types'
 import { DEFAULT_OVERRIDES } from './types'
 import type { SmartPhase } from './SmartMode'
-import { flowEnv, pickFlowPattern } from './flowPatterns'
+import { flowEnv, pickFlowForContext } from './flowPatterns'
 
 interface FixtureOutput {
   color: Rgbw
@@ -94,9 +94,20 @@ export interface SongState {
   surge?: number
   /** Counter that advances only on a real musical change (holds the look). */
   section?: number
+  /** 0-1 rhythmicity (onset density): high = groove, low = ambient. */
+  rhythm?: number
 }
 
-const STEADY_SONG: SongState = { phase: 'steady', buildProgress: 0, level: 0, kick: 0, fast: 0, surge: 0, section: 0 }
+const STEADY_SONG: SongState = {
+  phase: 'steady',
+  buildProgress: 0,
+  level: 0,
+  kick: 0,
+  fast: 0,
+  surge: 0,
+  section: 0,
+  rhythm: 0
+}
 
 /** Effects that actively aim moving fixtures, so they should NOT park home. */
 const MOVEMENT_EFFECTS = new Set<EffectSettings['type']>([
@@ -158,8 +169,9 @@ function adaptiveOutput(
     return { ...base, color, dimmer: target.dimmer * Math.max(0.7, surge) }
   }
 
-  // Hard pulse as soon as a kick lands (one on-grid kick clears this), so the
-  // front of a drop pulses immediately; the stickiness keeps it going.
+  // DROP: as soon as a kick lands, the whole rig hard-pulses. This is the most
+  // common look. At the start of each phrase it bursts as an EXPLOSION from the
+  // center (if enabled); otherwise it is a full-rig pulse with a moving accent.
   if ((song.kick ?? 0) > 0.38) {
     const sinceBeat = beat.beat % 1
     const beatIndex = Math.floor(beat.beat)
@@ -170,15 +182,20 @@ function adaptiveOutput(
     // bar), separate from the per-beat color pulse - tunable in the editor.
     const whiteBeats = Math.max(0, effect.whiteBeats ?? 4)
     const inWhite = whiteBeats > 0 && beat.beat % whiteBeats < 0.1
-    // A bright accent band that jumps each beat, so a sustained kick section
-    // keeps moving instead of the exact same flash every time.
-    const accentPos = ((beatIndex * 3) % 8) / 7
-    const accent = Math.pow(Math.max(0, 1 - Math.abs(pos - accentPos) / 0.26), 1.5)
-    const bright = pulse * (0.7 + 0.3 * accent)
+    const explosionOn = !effect.patterns || effect.patterns.includes(4)
+    const phraseStart = beat.barIndex % 8 < 2
+    let spatial: number
+    if (explosionOn && phraseStart) {
+      const front = Math.abs(Math.abs(pos - 0.5) - sinceBeat * 0.6)
+      spatial = Math.max(0.4, Math.pow(Math.max(0, 1 - front / 0.16), 1.5))
+    } else {
+      const accentPos = ((beatIndex * 3) % 8) / 7
+      spatial = 0.7 + 0.3 * Math.pow(Math.max(0, 1 - Math.abs(pos - accentPos) / 0.26), 1.5)
+    }
     return {
       ...base,
       color: adaptiveColor(style, target, spread, beat, inWhite ? 255 : 0),
-      dimmer: target.dimmer * bright
+      dimmer: target.dimmer * pulse * spatial
     }
   }
 
@@ -199,7 +216,11 @@ function adaptiveOutput(
   // tracks the FAST energy envelope, so it flashes with the sound and cuts to
   // black the instant the sound cuts (scratching, stabs, silence gaps).
   const styleOffset = style === 'rainbow' ? 0 : style === 'solid' ? 1 : 2
-  const pattern = pickFlowPattern(effect.patterns, song.section ?? 0, styleOffset)
+  // Choose the pattern by musical context: a rhythmic groove gets sweep/chase/
+  // explosion/snake, an ambient wash gets roam (symmetric only when quiet). The
+  // section only advances on a real change, so it holds a look through a groove.
+  const context = (song.rhythm ?? 0) > 0.35 ? 'groove' : 'ambient'
+  const pattern = pickFlowForContext(effect.patterns, (song.section ?? 0) + styleOffset, context, level < 0.32)
   const flow = flowEnv(pos, beat.beat, pattern)
   const responsive = song.fast ?? Math.max(audio.rms, audio.bass)
   // Brightness scales with loudness with an expansive curve, so small/ambient

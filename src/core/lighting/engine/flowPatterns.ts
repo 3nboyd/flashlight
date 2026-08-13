@@ -9,16 +9,43 @@
 export interface FlowPattern {
   index: number
   name: string
+  /** Human label for when this pattern is used (shown in the editor). */
+  context: string
 }
 
 export const FLOW_PATTERNS: FlowPattern[] = [
-  { index: 0, name: 'Side Sweep' },
-  { index: 1, name: 'Chase' },
-  { index: 2, name: 'Roam' },
-  { index: 3, name: 'Symmetric' },
-  { index: 4, name: 'Explosion' },
-  { index: 5, name: 'Snake' }
+  { index: 0, name: 'Side Sweep', context: 'Grooves / quiet bass' },
+  { index: 1, name: 'Chase', context: 'Grooves (never drops)' },
+  { index: 2, name: 'Roam', context: 'Ambient / no rhythm' },
+  { index: 3, name: 'Symmetric', context: 'Quiet moments only' },
+  { index: 4, name: 'Explosion', context: 'Drops & phrase starts' },
+  { index: 5, name: 'Snake', context: 'Grooves (w/ strobe)' }
 ]
+
+export type FlowContext = 'groove' | 'ambient'
+
+// Weighted preference pools (repetition = how often a pattern is picked), tuned
+// to the DJ's stated priorities: sweep dominates rhythmic grooves with quiet/no
+// bass, explosion is common, chase/snake fill in; roam owns ambient/no-rhythm
+// passages and symmetric only shows in quiet moments (never when loud).
+const GROOVE_POOL = [0, 0, 0, 4, 4, 1, 5] // sweep x3, explosion x2, chase, snake
+const AMBIENT_POOL = [2, 2, 2, 3] // roam x3, symmetric x1
+const AMBIENT_LOUD_POOL = [2] // roam only - symmetric excluded when loud
+
+/** Pick a no-kick flow pattern for the current musical context, honoring the
+ *  scene's enabled set. `quiet` allows symmetric in ambient passages. */
+export function pickFlowForContext(
+  enabled: number[] | undefined,
+  section: number,
+  context: FlowContext,
+  quiet: boolean
+): number {
+  const en = new Set(enabled && enabled.length > 0 ? enabled : allFlowPatterns())
+  const pool = context === 'ambient' ? (quiet ? AMBIENT_POOL : AMBIENT_LOUD_POOL) : GROOVE_POOL
+  const filtered = pool.filter((p) => en.has(p))
+  const candidates = filtered.length > 0 ? filtered : [...en]
+  return candidates[(((section % candidates.length) + candidates.length) % candidates.length)]
+}
 
 export const FLOW_PATTERN_COUNT = FLOW_PATTERNS.length
 

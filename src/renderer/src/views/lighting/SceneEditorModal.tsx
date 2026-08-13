@@ -445,7 +445,10 @@ export function SceneEditorModal({ scene, onChange, onClose }: SceneEditorModalP
                                     })
                                   }}
                                 />
-                                <span className="pattern-name">{p.name}</span>
+                                <span className="pattern-name">
+                                  {p.name}
+                                  <span className="pattern-context">{p.context}</span>
+                                </span>
                               </label>
                               <FlowPatternPreview pattern={p.index} />
                               <button

@@ -141,6 +141,7 @@ export class LightingHost {
   private songFast = 0
   private songSurge = 0
   private songSection = 0
+  private songRhythm = 0
   // A short-lived "demo" that plays one flow pattern on the rig so the DJ can
   // see what each pattern looks like from the scene editor.
   private flowPreview: { pattern: number; untilMs: number } | null = null
@@ -453,7 +454,7 @@ export class LightingHost {
   /** Song state this tick: forced to a lit, no-kick "flow" state during a demo. */
   private songFor(audioFresh: boolean): SongState {
     if (this.flowPreview) {
-      return { phase: 'steady', buildProgress: 0, kick: 0, level: 1, fast: 1, surge: 0, section: 0 }
+      return { phase: 'steady', buildProgress: 0, kick: 0, level: 1, fast: 1, surge: 0, section: 0, rhythm: 1 }
     }
     return audioFresh
       ? {
@@ -463,9 +464,19 @@ export class LightingHost {
           level: this.songLevel,
           fast: this.songFast,
           surge: this.songSurge,
-          section: this.songSection
+          section: this.songSection,
+          rhythm: this.songRhythm
         }
-      : { phase: 'steady', buildProgress: 0, kick: 0, level: 0, fast: 0, surge: 0, section: this.songSection }
+      : {
+          phase: 'steady',
+          buildProgress: 0,
+          kick: 0,
+          level: 0,
+          fast: 0,
+          surge: 0,
+          section: this.songSection,
+          rhythm: 0
+        }
   }
 
   private currentScene(nowMs: number): Scene | null {
@@ -705,6 +716,7 @@ export class LightingHost {
     this.songFast = p.fast
     this.songSurge = p.surge
     this.songSection = p.section
+    this.songRhythm = p.rhythm
     if (p.level > 0.02) this.lastLevelLoudMs = this.lastAudioAtMs
 
     if (this.smartEnabled) {

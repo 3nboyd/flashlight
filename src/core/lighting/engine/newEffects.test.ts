@@ -5,7 +5,7 @@ import { builtinFixturesById } from '../fixtures/library'
 import type { PatchedFixture } from '../fixtures/types'
 import type { Scene, EffectSettings, Rgbw } from './types'
 import type { AudioFeatures } from '../audio/features'
-import { pickFlowPattern } from './flowPatterns'
+import { pickFlowPattern, pickFlowForContext } from './flowPatterns'
 import { readFixtureVisualState } from '../visualizer/fixtureVisualState'
 
 const defs = builtinFixturesById()
@@ -491,6 +491,22 @@ describe('flow pattern selection', () => {
     expect(pickFlowPattern([1, 4], 1, 0)).toBe(4)
     expect(pickFlowPattern([1, 4], 2, 0)).toBe(1) // wraps within the enabled set
     expect(pickFlowPattern(undefined, 3, 0)).toBe(3) // undefined = all patterns
+  })
+
+  it('picks by musical context, honoring the DJ preferences', () => {
+    // Groove pool never yields roam(2)/symmetric(3); ambient favors roam.
+    const groove = Array.from({ length: 12 }, (_, s) => pickFlowForContext(undefined, s, 'groove', false))
+    expect(groove).not.toContain(2)
+    expect(groove).not.toContain(3)
+    expect(groove).toContain(0) // side sweep present in grooves
+    expect(groove).toContain(4) // explosion present in grooves
+    // Ambient + loud excludes symmetric (roam only); quiet allows symmetric.
+    const ambientLoud = Array.from({ length: 8 }, (_, s) => pickFlowForContext(undefined, s, 'ambient', false))
+    expect(new Set(ambientLoud)).toEqual(new Set([2]))
+    const ambientQuiet = Array.from({ length: 8 }, (_, s) => pickFlowForContext(undefined, s, 'ambient', true))
+    expect(ambientQuiet).toContain(3) // symmetric allowed when quiet
+    // Only-enabled patterns are respected even against the context pool.
+    expect(pickFlowForContext([5], 0, 'groove', false)).toBe(5)
   })
 })
 
