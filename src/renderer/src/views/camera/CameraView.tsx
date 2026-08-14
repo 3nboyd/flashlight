@@ -57,20 +57,27 @@ function CameraTile({
   useEffect(() => {
     let stream: MediaStream | null = null
     let cancelled = false
+    const attach = (s: MediaStream): void => {
+      if (cancelled) {
+        s.getTracks().forEach((t) => t.stop())
+        return
+      }
+      stream = s
+      if (videoRef.current) {
+        videoRef.current.srcObject = s
+        void videoRef.current.play()
+      }
+    }
     navigator.mediaDevices
-      .getUserMedia({ video: { deviceId: { exact: deviceId }, width: 1280, height: 720 }, audio: false })
-      .then((s) => {
-        if (cancelled) {
-          s.getTracks().forEach((t) => t.stop())
-          return
-        }
-        stream = s
-        if (videoRef.current) {
-          videoRef.current.srcObject = s
-          void videoRef.current.play()
-        }
-      })
-      .catch(() => onStatus?.('Camera access denied or unavailable.'))
+      .getUserMedia({ video: { deviceId: { exact: deviceId }, width: { ideal: 1280 }, height: { ideal: 720 } }, audio: false })
+      .then(attach)
+      .catch(() =>
+        // Fall back to any camera if the exact device is unavailable/stale.
+        navigator.mediaDevices
+          .getUserMedia({ video: true, audio: false })
+          .then(attach)
+          .catch((err) => onStatus?.(`Camera unavailable: ${err?.name ?? err}`))
+      )
     return () => {
       cancelled = true
       stream?.getTracks().forEach((t) => t.stop())

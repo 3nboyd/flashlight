@@ -1,4 +1,4 @@
-import { app, shell, BrowserWindow, ipcMain } from 'electron'
+import { app, shell, BrowserWindow, ipcMain, session } from 'electron'
 import { join } from 'path'
 import { registerSettingsHandlers } from './ipc/settings'
 import { registerBackupHandlers } from './ipc/backup'
@@ -30,6 +30,13 @@ function createWindow(): void {
       backgroundThrottling: false
     }
   })
+
+  // Grant camera/microphone to our own renderer (getUserMedia). The OS-level
+  // (macOS TCC) prompt still gates real access on first use.
+  const allow = (permission: string): boolean =>
+    ['media', 'camera', 'microphone', 'audioCapture', 'videoCapture'].includes(permission)
+  session.defaultSession.setPermissionRequestHandler((_wc, permission, cb) => cb(allow(permission)))
+  session.defaultSession.setPermissionCheckHandler((_wc, permission) => allow(permission))
 
   mainWindow.on('ready-to-show', () => {
     mainWindow.show()

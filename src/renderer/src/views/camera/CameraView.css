@@ -130,18 +130,22 @@
   display: grid;
   gap: 4px;
   padding: 4px;
+  min-height: 0;
+  grid-auto-rows: 1fr;
 }
 
 .cam-grid.count-1 {
   grid-template-columns: 1fr;
+  grid-template-rows: 1fr;
 }
 .cam-grid.count-2 {
   grid-template-columns: 1fr 1fr;
+  grid-template-rows: 1fr;
 }
 .cam-grid.count-3,
 .cam-grid.count-4 {
   grid-template-columns: 1fr 1fr;
-  grid-auto-rows: 1fr;
+  grid-template-rows: 1fr 1fr;
 }
 
 .cam-tile {
