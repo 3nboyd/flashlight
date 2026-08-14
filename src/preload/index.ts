@@ -110,6 +110,11 @@ const api = {
     deleteStage: (id: string): Promise<LightingProject> => ipcRenderer.invoke('lighting:deleteStage', id),
     sendAudioFeatures: (features: AudioFeatures & { flux?: number }): void =>
       ipcRenderer.send('lighting:audioFeatures', features)
+  },
+  output: {
+    open: (): Promise<boolean> => ipcRenderer.invoke('output:open'),
+    close: (): Promise<boolean> => ipcRenderer.invoke('output:close'),
+    isOpen: (): Promise<boolean> => ipcRenderer.invoke('output:isOpen')
   }
 }
 

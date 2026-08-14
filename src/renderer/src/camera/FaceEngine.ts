@@ -8,6 +8,7 @@ import { FaceLandmarker, FilesetResolver } from '@mediapipe/tasks-vision'
 export interface FacePoint {
   x: number
   y: number
+  z: number // relative depth (roughly in image-width units), for 3D looks
 }
 
 export interface FaceFrame {
@@ -49,7 +50,7 @@ export class FaceEngine {
     const res = this.landmarker.detectForVideo(video, ts)
     const f = res.faceLandmarks?.[0]
     if (!f || f.length === 0) return { present: false, landmarks: [] }
-    return { present: true, landmarks: f.map((p) => ({ x: p.x, y: p.y })) }
+    return { present: true, landmarks: f.map((p) => ({ x: p.x, y: p.y, z: p.z ?? 0 })) }
   }
 
   close(): void {

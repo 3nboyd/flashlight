@@ -1,0 +1,30 @@
+.output-view {
+  position: fixed;
+  inset: 0;
+  background: #000;
+  overflow: hidden;
+}
+
+.cam-video-hidden {
+  display: none;
+}
+
+.output-canvas {
+  position: absolute;
+  inset: 0;
+  width: 100vw;
+  height: 100vh;
+  display: block;
+}
+
+.output-empty {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: #7a7a88;
+  font:
+    500 16px/1.4 system-ui,
+    sans-serif;
+}

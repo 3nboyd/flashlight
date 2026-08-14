@@ -1,32 +1,20 @@
 import { useCallback, useEffect, useRef, useState, type JSX } from 'react'
-import { PoseEngine } from '../../camera/PoseEngine'
-import { FaceEngine } from '../../camera/FaceEngine'
-import { PoseFeatures, type PoseFeatureState } from '../../camera/PoseFeatures'
-import { VISUALS, getVisual, type VisualInput, type AudioReact } from '../../camera/VisualEngine'
+import { CameraCanvas, ZERO_FEAT, ZERO_AUDIO } from '../../camera/CameraCanvas'
+import { VISUALS, getVisual, type AudioReact } from '../../camera/VisualEngine'
+import type { PoseFeatureState } from '../../camera/PoseFeatures'
 import './CameraView.css'
 
 const STORE_KEY = 'djc.camera.enabled'
 const VISUAL_KEY = 'djc.camera.visual'
+const PRIMARY_KEY = 'djc.camera.primary'
 
-const ZERO_FEAT: PoseFeatureState = {
-  present: 0,
-  handsUp: 0,
-  armSpread: 0,
-  motion: 0,
-  handPulse: 0,
-  jump: 0,
-  centerX: 0.5,
-  centerY: 0.5
-}
-
-const ZERO_AUDIO: AudioReact = { level: 0, kick: 0, fast: 0, surge: 0 }
-
-/** One live camera tile: hidden <video> source, visible <canvas> rendering the
- *  active visual. The primary tile runs pose/face detection + the chosen effect. */
+/** One live camera tile wrapping the shared canvas. */
 function CameraTile({
   deviceId,
   primary,
   visualId,
+  showSkeleton,
+  showFaceMesh,
   beatRef,
   audioRef,
   onFeatures,
@@ -35,128 +23,25 @@ function CameraTile({
   deviceId: string
   primary: boolean
   visualId: string
+  showSkeleton: boolean
+  showFaceMesh: boolean
   beatRef: React.MutableRefObject<number>
   audioRef: React.MutableRefObject<AudioReact>
   onFeatures?: (f: PoseFeatureState) => void
   onStatus?: (s: string) => void
 }): JSX.Element {
-  const videoRef = useRef<HTMLVideoElement>(null)
-  const canvasRef = useRef<HTMLCanvasElement>(null)
-  const visualIdRef = useRef(visualId)
-  visualIdRef.current = visualId
-
-  // Capture the camera stream into the hidden video element.
-  useEffect(() => {
-    let stream: MediaStream | null = null
-    let cancelled = false
-    const attach = (s: MediaStream): void => {
-      if (cancelled) return s.getTracks().forEach((t) => t.stop())
-      stream = s
-      if (videoRef.current) {
-        videoRef.current.srcObject = s
-        void videoRef.current.play()
-      }
-    }
-    navigator.mediaDevices
-      .getUserMedia({
-        video: { deviceId: { exact: deviceId }, width: { ideal: 1280 }, height: { ideal: 720 } },
-        audio: false
-      })
-      .then(attach)
-      .catch(() =>
-        navigator.mediaDevices
-          .getUserMedia({ video: true, audio: false })
-          .then(attach)
-          .catch((err) => onStatus?.(`Camera unavailable: ${err?.name ?? err}`))
-      )
-    return () => {
-      cancelled = true
-      stream?.getTracks().forEach((t) => t.stop())
-    }
-  }, [deviceId, onStatus])
-
-  // Render loop: draw the active visual; lazily load detection when needed.
-  useEffect(() => {
-    let raf = 0
-    const features = new PoseFeatures(30)
-    let pose: PoseEngine | null = null
-    let face: FaceEngine | null = null
-    let poseLoading = false
-    let faceLoading = false
-    let lastFeat = ZERO_FEAT
-
-    const loop = (): void => {
-      raf = requestAnimationFrame(loop)
-      const video = videoRef.current
-      const canvas = canvasRef.current
-      if (!canvas) return
-      const w = canvas.clientWidth || 640
-      const h = canvas.clientHeight || 360
-      if (canvas.width !== w || canvas.height !== h) {
-        canvas.width = w
-        canvas.height = h
-      }
-      const ctx = canvas.getContext('2d')
-      if (!ctx) return
-
-      const visual = getVisual(visualIdRef.current)
-      const ready = video != null && video.readyState >= 2
-
-      let poseFrame = null
-      if (visual.needsPose) {
-        if (!pose && !poseLoading) {
-          poseLoading = true
-          onStatus?.('Loading body model…')
-          pose = new PoseEngine()
-          pose
-            .init()
-            .then(() => onStatus?.(''))
-            .catch((err) => onStatus?.(`Body detection failed: ${err?.message ?? err}`))
-        }
-        if (pose?.ready && ready) {
-          poseFrame = pose.detect(video, performance.now())
-          if (poseFrame) {
-            lastFeat = features.addFrame(poseFrame)
-            onFeatures?.(lastFeat)
-          }
-        }
-      }
-
-      let faceFrame = null
-      if (visual.needsFace) {
-        if (!face && !faceLoading) {
-          faceLoading = true
-          face = new FaceEngine()
-          face.init().catch((err) => onStatus?.(`Face detection failed: ${err?.message ?? err}`))
-        }
-        if (face?.ready && ready) faceFrame = face.detect(video, performance.now())
-      }
-
-      const input: VisualInput = {
-        video,
-        pose: poseFrame,
-        face: faceFrame,
-        features: lastFeat,
-        timeMs: performance.now(),
-        beatPhase: beatRef.current,
-        audio: audioRef.current,
-        w,
-        h
-      }
-      visual.render(ctx, input)
-    }
-    loop()
-    return () => {
-      cancelAnimationFrame(raf)
-      pose?.close()
-      face?.close()
-    }
-  }, [beatRef, audioRef, onFeatures, onStatus])
-
   return (
     <div className="cam-tile">
-      <video ref={videoRef} className="cam-video-hidden" muted playsInline />
-      <canvas ref={canvasRef} className="cam-canvas" />
+      <CameraCanvas
+        deviceId={deviceId}
+        visualId={visualId}
+        showSkeleton={primary && showSkeleton}
+        showFaceMesh={primary && showFaceMesh}
+        beatRef={beatRef}
+        audioRef={audioRef}
+        onFeatures={primary ? onFeatures : undefined}
+        onStatus={onStatus}
+      />
       {primary && <span className="cam-badge">Effect</span>}
     </div>
   )
@@ -182,11 +67,14 @@ export function CameraView(): JSX.Element {
       return []
     }
   })
-  const [primary, setPrimary] = useState<string | null>(null)
+  const [primary, setPrimary] = useState<string | null>(() => localStorage.getItem(PRIMARY_KEY))
   const [visual, setVisual] = useState<string>(() => localStorage.getItem(VISUAL_KEY) ?? 'camera')
   const [feat, setFeat] = useState<PoseFeatureState>(ZERO_FEAT)
   const [status, setStatus] = useState('')
   const [needsPermission, setNeedsPermission] = useState(true)
+  const [showSkeleton, setShowSkeleton] = useState(false)
+  const [showFaceMesh, setShowFaceMesh] = useState(false)
+  const [outputOpen, setOutputOpen] = useState(false)
   const beatRef = useRef(0)
   const audioRef = useRef<AudioReact>({ ...ZERO_AUDIO })
 
@@ -226,6 +114,18 @@ export function CameraView(): JSX.Element {
     return () => clearInterval(id)
   }, [])
 
+  // Track whether the projector output window is open.
+  useEffect(() => {
+    let alive = true
+    window.djCompanion.output
+      ?.isOpen()
+      .then((v) => alive && setOutputOpen(v))
+      .catch(() => undefined)
+    return () => {
+      alive = false
+    }
+  }, [])
+
   useEffect(() => {
     localStorage.setItem(STORE_KEY, JSON.stringify(enabled))
     if (primary && !enabled.includes(primary)) setPrimary(enabled[0] ?? null)
@@ -233,6 +133,9 @@ export function CameraView(): JSX.Element {
   }, [enabled, primary])
 
   useEffect(() => localStorage.setItem(VISUAL_KEY, visual), [visual])
+  useEffect(() => {
+    if (primary) localStorage.setItem(PRIMARY_KEY, primary)
+  }, [primary])
 
   const requestPermission = async (): Promise<void> => {
     try {
@@ -245,12 +148,26 @@ export function CameraView(): JSX.Element {
     }
   }
 
+  const toggleOutput = async (): Promise<void> => {
+    try {
+      if (outputOpen) {
+        await window.djCompanion.output?.close()
+        setOutputOpen(false)
+      } else {
+        await window.djCompanion.output?.open()
+        setOutputOpen(true)
+      }
+    } catch (err) {
+      setStatus(`Output window error: ${(err as Error)?.message ?? err}`)
+    }
+  }
+
   const toggle = (id: string): void =>
     setEnabled((cur) => (cur.includes(id) ? cur.filter((x) => x !== id) : [...cur, id]))
 
   const onFeatures = useCallback((f: PoseFeatureState) => setFeat({ ...f }), [])
   const activeVisual = getVisual(visual)
-  const tracksBody = activeVisual.needsPose || activeVisual.needsFace
+  const tracksBody = activeVisual.needsPose || activeVisual.needsFace || showSkeleton || showFaceMesh
 
   return (
     <div className="view camera-view">
@@ -292,6 +209,14 @@ export function CameraView(): JSX.Element {
           )}
           {status && <p className="settings-hint">{status}</p>}
 
+          <h3 style={{ marginTop: 8 }}>Output</h3>
+          <button className={`cam-output-btn${outputOpen ? ' active' : ''}`} onClick={toggleOutput}>
+            {outputOpen ? 'Close projector output' : 'Open projector output'}
+          </button>
+          <p className="settings-hint">
+            Sends the current effect full-screen to a second display (projector / stage TV).
+          </p>
+
           <h3 style={{ marginTop: 8 }}>Body features</h3>
           <Meter label="Present" value={feat.present} />
           <Meter label="Hands up" value={feat.handsUp} />
@@ -300,7 +225,9 @@ export function CameraView(): JSX.Element {
           <Meter label="Hand pulse" value={feat.handPulse} />
           <Meter label="Jump" value={feat.jump} />
           {!tracksBody && (
-            <p className="settings-hint">Pick a body effect (Neon Stickman / Face Mesh / Sketch) to see these move.</p>
+            <p className="settings-hint">
+              Pick a body effect (Neon Stickman / Spinning Face) or a debug overlay to see these move.
+            </p>
           )}
         </aside>
 
@@ -316,12 +243,26 @@ export function CameraView(): JSX.Element {
                     deviceId={id}
                     primary={primary === id}
                     visualId={primary === id ? visual : 'camera'}
+                    showSkeleton={showSkeleton}
+                    showFaceMesh={showFaceMesh}
                     beatRef={beatRef}
                     audioRef={audioRef}
                     onFeatures={onFeatures}
                     onStatus={setStatus}
                   />
                 ))}
+              </div>
+            )}
+            {enabled.length > 0 && (
+              <div className="cam-debug">
+                <label className="cam-debug-toggle">
+                  <input type="checkbox" checked={showSkeleton} onChange={(e) => setShowSkeleton(e.target.checked)} />
+                  Show skeleton
+                </label>
+                <label className="cam-debug-toggle">
+                  <input type="checkbox" checked={showFaceMesh} onChange={(e) => setShowFaceMesh(e.target.checked)} />
+                  Show face mesh
+                </label>
               </div>
             )}
           </div>
