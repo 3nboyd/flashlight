@@ -541,8 +541,8 @@ describe('filterSwell (audio-reactive swell)', () => {
       beat: beatAt(1000),
       nowMs: 1000
     }).get(1)!
-    expect(quiet.getChannel(1)).toBeGreaterThan(5) // dim, not off
-    expect(driving.getChannel(1)).toBeGreaterThan(quiet.getChannel(1) + 60) // much bigger swell
+    expect(quiet.getChannel(1)).toBeLessThan(12) // near-black with no music
+    expect(driving.getChannel(1)).toBeGreaterThan(200) // full swell on a driving beat
   })
 })
 

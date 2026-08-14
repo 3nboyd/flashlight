@@ -401,12 +401,49 @@ export function SceneEditorModal({ scene, onChange, onClose }: SceneEditorModalP
                     </div>
                   )}
 
+                  {effectType === 'filterSwell' && (
+                    <>
+                      <div className="slider-row">
+                        <label>Swell depth (contrast)</label>
+                        <input
+                          type="range"
+                          min={20}
+                          max={100}
+                          value={Math.round((target.effect?.amplitude ?? 1) * 100)}
+                          onChange={(e) =>
+                            target.effect &&
+                            updateTarget(index, {
+                              effect: { ...target.effect, amplitude: Number(e.target.value) / 100 }
+                            })
+                          }
+                        />
+                        <span className="slider-value">{Math.round((target.effect?.amplitude ?? 1) * 100)}%</span>
+                      </div>
+                      <div className="slider-row">
+                        <label>Quiet floor (no music)</label>
+                        <input
+                          type="range"
+                          min={0}
+                          max={40}
+                          value={Math.round((target.effect?.size ?? 0.015) * 100)}
+                          onChange={(e) =>
+                            target.effect &&
+                            updateTarget(index, {
+                              effect: { ...target.effect, size: Number(e.target.value) / 100 }
+                            })
+                          }
+                        />
+                        <span className="slider-value">{Math.round((target.effect?.size ?? 0.015) * 100)}%</span>
+                      </div>
+                    </>
+                  )}
+
                   {ADAPTIVE_EFFECTS.includes(effectType) && (
                     <>
                       <div className="slider-row">
-                        <label>White strobe (on the beat)</label>
+                        <label>White strobe (on the downbeat)</label>
                         <select
-                          value={target.effect?.whiteBeats ?? 4}
+                          value={target.effect?.whiteBeats ?? 8}
                           onChange={(e) =>
                             target.effect &&
                             updateTarget(index, {
@@ -418,7 +455,9 @@ export function SceneEditorModal({ scene, onChange, onClose }: SceneEditorModalP
                           <option value={1}>Every beat</option>
                           <option value={2}>Every 2 beats</option>
                           <option value={4}>Every 4 (downbeat)</option>
-                          <option value={8}>Every 8 beats</option>
+                          <option value={8}>Every 8 (2 bars)</option>
+                          <option value={16}>Every 16 (4 bars)</option>
+                          <option value={32}>Every 32 (8 bars)</option>
                         </select>
                       </div>
                       <div className="pattern-picker">

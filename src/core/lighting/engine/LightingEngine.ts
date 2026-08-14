@@ -178,9 +178,9 @@ function adaptiveOutput(
     // DEEP pulse: full on the hit, fading hard to black well before the next
     // beat, so there's dramatic on/off contrast rather than a constant wash.
     const pulse = Math.pow(Math.max(0, 1 - sinceBeat / 0.42), 2.4)
-    // White-only LEDs strobe once every `whiteBeats` on the downbeat (default a
-    // bar), separate from the per-beat color pulse - tunable in the editor.
-    const whiteBeats = Math.max(0, effect.whiteBeats ?? 4)
+    // White-only LEDs strobe once every `whiteBeats` on the downbeat (default
+    // every 2 bars), separate from the per-beat color pulse - tunable in editor.
+    const whiteBeats = Math.max(0, effect.whiteBeats ?? 8)
     const inWhite = whiteBeats > 0 && beat.beat % whiteBeats < 0.1
     const explosionOn = !effect.patterns || effect.patterns.includes(4)
     const phraseStart = beat.barIndex % 8 < 2
@@ -271,25 +271,21 @@ function applyEffect(
       return { ...base, dimmer: target.dimmer * (0.25 + 0.75 * swell) }
     }
     case 'filterSwell': {
-      // Three states:
-      //  - no music        -> pretty dim, barely breathing
-      //  - audio, no kick   -> big dramatic swell, deep dims to bright (slow)
-      //  - full kick beat   -> a big swell IN TIME with the beat, every 4 beats
+      // A big, high-contrast swell that reacts to loudness. Near-black with no
+      // music; deep troughs and pronounced peaks otherwise; locks to a 4-beat
+      // cycle on a driving kick. Fully tunable: `size` = quiet floor (no-music
+      // brightness), `amplitude` = swell depth, `beats` = swell length.
       const level = song.level ?? Math.max(audio.rms, audio.bass)
+      const floor = effect.size ?? 0.015 // brightness with no music (very low)
+      const depth = effect.amplitude ?? 1 // swell depth / peak scale
       const build = song.phase === 'build' ? song.buildProgress : 0
-      if (level < 0.03) {
-        const s = 0.5 - 0.5 * Math.cos((beat.beat / beats) * 2 * Math.PI)
-        return { ...base, dimmer: target.dimmer * (0.05 + 0.07 * s) }
-      }
-      if ((song.kick ?? 0) > 0.38) {
-        // Beat-locked: a full swell cycling every 4 beats, in time and faster.
-        const s = Math.pow(0.5 - 0.5 * Math.cos((beat.beat / 4) * 2 * Math.PI), 1.3)
-        return { ...base, dimmer: target.dimmer * (0.18 + 0.82 * s) }
-      }
-      // Audio but no full kick: big pronounced swell over `beats`, deep troughs.
-      const s = Math.pow(0.5 - 0.5 * Math.cos((beat.beat / beats) * 2 * Math.PI), 1.7)
-      const reach = Math.max(0.7, Math.min(1, level * 2.5 * mod.reactivity), build)
-      return { ...base, dimmer: target.dimmer * (0.05 + 0.9 * reach * s) }
+      if (level < 0.03) return { ...base, dimmer: target.dimmer * floor }
+      const cycleBeats = (song.kick ?? 0) > 0.38 ? 4 : beats
+      // Steep power -> more time spent dim, dramatic contrast (overdone swell).
+      const s = Math.pow(0.5 - 0.5 * Math.cos((beat.beat / cycleBeats) * 2 * Math.PI), 2.2)
+      // Peak scales strongly with loudness, so quiet passages stay much dimmer.
+      const peak = Math.max(floor, Math.min(1, depth * (Math.pow(level * mod.reactivity, 1.2) * 3.6 + build)))
+      return { ...base, dimmer: target.dimmer * (floor + (peak - floor) * s) }
     }
     case 'eighthBuild': {
       // 8th-note pulses whose brightness floor rises and whose decay sharpens
