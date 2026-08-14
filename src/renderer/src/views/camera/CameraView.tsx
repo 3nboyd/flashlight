@@ -1,7 +1,8 @@
 import { useCallback, useEffect, useRef, useState, type JSX } from 'react'
 import { PoseEngine } from '../../camera/PoseEngine'
+import { FaceEngine } from '../../camera/FaceEngine'
 import { PoseFeatures, type PoseFeatureState } from '../../camera/PoseFeatures'
-import { VISUALS, getVisual, type VisualInput } from '../../camera/VisualEngine'
+import { VISUALS, getVisual, type VisualInput, type AudioReact } from '../../camera/VisualEngine'
 import './CameraView.css'
 
 const STORE_KEY = 'djc.camera.enabled'
@@ -13,35 +14,36 @@ const ZERO_FEAT: PoseFeatureState = {
   armSpread: 0,
   motion: 0,
   handPulse: 0,
+  jump: 0,
   centerX: 0.5,
   centerY: 0.5
 }
 
+const ZERO_AUDIO: AudioReact = { level: 0, kick: 0, fast: 0, surge: 0 }
+
 /** One live camera tile: hidden <video> source, visible <canvas> rendering the
- *  active visual. The primary tile runs pose detection + the chosen effect. */
+ *  active visual. The primary tile runs pose/face detection + the chosen effect. */
 function CameraTile({
   deviceId,
   primary,
   visualId,
-  detectOn,
   beatRef,
+  audioRef,
   onFeatures,
   onStatus
 }: {
   deviceId: string
   primary: boolean
   visualId: string
-  detectOn: boolean
   beatRef: React.MutableRefObject<number>
+  audioRef: React.MutableRefObject<AudioReact>
   onFeatures?: (f: PoseFeatureState) => void
   onStatus?: (s: string) => void
 }): JSX.Element {
   const videoRef = useRef<HTMLVideoElement>(null)
   const canvasRef = useRef<HTMLCanvasElement>(null)
   const visualIdRef = useRef(visualId)
-  const detectOnRef = useRef(detectOn)
   visualIdRef.current = visualId
-  detectOnRef.current = detectOn
 
   // Capture the camera stream into the hidden video element.
   useEffect(() => {
@@ -56,7 +58,10 @@ function CameraTile({
       }
     }
     navigator.mediaDevices
-      .getUserMedia({ video: { deviceId: { exact: deviceId }, width: { ideal: 1280 }, height: { ideal: 720 } }, audio: false })
+      .getUserMedia({
+        video: { deviceId: { exact: deviceId }, width: { ideal: 1280 }, height: { ideal: 720 } },
+        audio: false
+      })
       .then(attach)
       .catch(() =>
         navigator.mediaDevices
@@ -70,12 +75,14 @@ function CameraTile({
     }
   }, [deviceId, onStatus])
 
-  // Render loop: draw the active visual; lazily load pose detection when needed.
+  // Render loop: draw the active visual; lazily load detection when needed.
   useEffect(() => {
     let raf = 0
     const features = new PoseFeatures(30)
-    let engine: PoseEngine | null = null
-    let engineLoading = false
+    let pose: PoseEngine | null = null
+    let face: FaceEngine | null = null
+    let poseLoading = false
+    let faceLoading = false
     let lastFeat = ZERO_FEAT
 
     const loop = (): void => {
@@ -92,44 +99,59 @@ function CameraTile({
       const ctx = canvas.getContext('2d')
       if (!ctx) return
 
-      let pose = null
-      if (detectOnRef.current) {
-        if (!engine && !engineLoading) {
-          engineLoading = true
-          onStatus?.('Loading detection model…')
-          engine = new PoseEngine()
-          engine
+      const visual = getVisual(visualIdRef.current)
+      const ready = video != null && video.readyState >= 2
+
+      let poseFrame = null
+      if (visual.needsPose) {
+        if (!pose && !poseLoading) {
+          poseLoading = true
+          onStatus?.('Loading body model…')
+          pose = new PoseEngine()
+          pose
             .init()
             .then(() => onStatus?.(''))
-            .catch((err) => onStatus?.(`Detection failed: ${err?.message ?? err}`))
+            .catch((err) => onStatus?.(`Body detection failed: ${err?.message ?? err}`))
         }
-        if (engine?.ready && video && video.readyState >= 2) {
-          pose = engine.detect(video, performance.now())
-          if (pose) {
-            lastFeat = features.addFrame(pose)
+        if (pose?.ready && ready) {
+          poseFrame = pose.detect(video, performance.now())
+          if (poseFrame) {
+            lastFeat = features.addFrame(poseFrame)
             onFeatures?.(lastFeat)
           }
         }
       }
 
+      let faceFrame = null
+      if (visual.needsFace) {
+        if (!face && !faceLoading) {
+          faceLoading = true
+          face = new FaceEngine()
+          face.init().catch((err) => onStatus?.(`Face detection failed: ${err?.message ?? err}`))
+        }
+        if (face?.ready && ready) faceFrame = face.detect(video, performance.now())
+      }
+
       const input: VisualInput = {
         video,
-        pose,
+        pose: poseFrame,
+        face: faceFrame,
         features: lastFeat,
         timeMs: performance.now(),
         beatPhase: beatRef.current,
-        audio: Math.max(lastFeat.motion, lastFeat.handPulse),
+        audio: audioRef.current,
         w,
         h
       }
-      getVisual(visualIdRef.current).render(ctx, input)
+      visual.render(ctx, input)
     }
     loop()
     return () => {
       cancelAnimationFrame(raf)
-      engine?.close()
+      pose?.close()
+      face?.close()
     }
-  }, [beatRef, onFeatures, onStatus])
+  }, [beatRef, audioRef, onFeatures, onStatus])
 
   return (
     <div className="cam-tile">
@@ -166,6 +188,7 @@ export function CameraView(): JSX.Element {
   const [status, setStatus] = useState('')
   const [needsPermission, setNeedsPermission] = useState(true)
   const beatRef = useRef(0)
+  const audioRef = useRef<AudioReact>({ ...ZERO_AUDIO })
 
   const refresh = useCallback(async () => {
     try {
@@ -184,16 +207,22 @@ export function CameraView(): JSX.Element {
     return () => navigator.mediaDevices.removeEventListener('devicechange', refresh)
   }, [refresh])
 
-  // Poll the lighting clock so visuals stay beat-synced with the music.
+  // Poll the lighting clock + audio features so visuals stay music-reactive.
   useEffect(() => {
     const id = setInterval(async () => {
       try {
         const s = await window.djCompanion.lighting.getStatus()
         beatRef.current = s.beatPhase ?? 0
+        audioRef.current = {
+          level: s.audioLevel ?? 0,
+          kick: s.audioKick ?? 0,
+          fast: s.audioFast ?? 0,
+          surge: s.audioSurge ?? 0
+        }
       } catch {
         /* lighting not ready */
       }
-    }, 60)
+    }, 45)
     return () => clearInterval(id)
   }, [])
 
@@ -221,7 +250,7 @@ export function CameraView(): JSX.Element {
 
   const onFeatures = useCallback((f: PoseFeatureState) => setFeat({ ...f }), [])
   const activeVisual = getVisual(visual)
-  const detectPrimary = activeVisual.needsPerson
+  const tracksBody = activeVisual.needsPose || activeVisual.needsFace
 
   return (
     <div className="view camera-view">
@@ -269,8 +298,9 @@ export function CameraView(): JSX.Element {
           <Meter label="Arm spread" value={feat.armSpread} />
           <Meter label="Motion" value={feat.motion} />
           <Meter label="Hand pulse" value={feat.handPulse} />
-          {!detectPrimary && (
-            <p className="settings-hint">Pick a body effect (Wireframe / Geometric) to see these move.</p>
+          <Meter label="Jump" value={feat.jump} />
+          {!tracksBody && (
+            <p className="settings-hint">Pick a body effect (Neon Stickman / Face Mesh / Sketch) to see these move.</p>
           )}
         </aside>
 
@@ -286,8 +316,8 @@ export function CameraView(): JSX.Element {
                     deviceId={id}
                     primary={primary === id}
                     visualId={primary === id ? visual : 'camera'}
-                    detectOn={primary === id && detectPrimary}
                     beatRef={beatRef}
+                    audioRef={audioRef}
                     onFeatures={onFeatures}
                     onStatus={setStatus}
                   />
@@ -305,7 +335,7 @@ export function CameraView(): JSX.Element {
                 onClick={() => setVisual(v.id)}
               >
                 {v.name}
-                {v.needsPerson && <span className="cam-fx-tag">body</span>}
+                {(v.needsPose || v.needsFace) && <span className="cam-fx-tag">body</span>}
               </button>
             ))}
           </div>

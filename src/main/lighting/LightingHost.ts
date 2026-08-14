@@ -90,6 +90,11 @@ export interface LightingStatus {
   smartBuildProgress: number
   /** Manual trigger currently overriding color/movement. */
   manualActive: boolean
+  /** Live audio features (0-1) for camera visuals to react to. */
+  audioLevel: number
+  audioKick: number
+  audioFast: number
+  audioSurge: number
 }
 
 /**
@@ -770,7 +775,11 @@ export class LightingHost {
       smartEnabled: this.smartEnabled,
       smartPhase: this.smartPhase,
       smartBuildProgress: this.smartBuildProgress,
-      manualActive: this.isManualActive()
+      manualActive: this.isManualActive(),
+      audioLevel: this.songLevel,
+      audioKick: this.songKick,
+      audioFast: this.songFast,
+      audioSurge: this.songSurge
     }
   }
 
