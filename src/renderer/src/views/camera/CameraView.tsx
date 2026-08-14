@@ -1,9 +1,11 @@
 import { useCallback, useEffect, useRef, useState, type JSX } from 'react'
-import { PoseEngine, POSE_BONES, type PoseFrame } from '../../camera/PoseEngine'
+import { PoseEngine } from '../../camera/PoseEngine'
 import { PoseFeatures, type PoseFeatureState } from '../../camera/PoseFeatures'
+import { VISUALS, getVisual, type VisualInput } from '../../camera/VisualEngine'
 import './CameraView.css'
 
 const STORE_KEY = 'djc.camera.enabled'
+const VISUAL_KEY = 'djc.camera.visual'
 
 const ZERO_FEAT: PoseFeatureState = {
   present: 0,
@@ -15,53 +17,38 @@ const ZERO_FEAT: PoseFeatureState = {
   centerY: 0.5
 }
 
-/** Draws the detected skeleton onto the overlay canvas (normalized -> pixels). */
-function drawSkeleton(ctx: CanvasRenderingContext2D, frame: PoseFrame, w: number, h: number): void {
-  ctx.clearRect(0, 0, w, h)
-  if (!frame.present) return
-  const lm = frame.landmarks
-  ctx.lineWidth = Math.max(2, w / 260)
-  ctx.strokeStyle = 'rgba(56, 189, 248, 0.9)'
-  ctx.beginPath()
-  for (const [a, b] of POSE_BONES) {
-    if (lm[a].visibility < 0.35 || lm[b].visibility < 0.35) continue
-    ctx.moveTo(lm[a].x * w, lm[a].y * h)
-    ctx.lineTo(lm[b].x * w, lm[b].y * h)
-  }
-  ctx.stroke()
-  ctx.fillStyle = 'rgba(244, 114, 182, 0.95)'
-  const r = Math.max(3, w / 180)
-  for (const p of lm) {
-    if (p.visibility < 0.35) continue
-    ctx.beginPath()
-    ctx.arc(p.x * w, p.y * h, r, 0, Math.PI * 2)
-    ctx.fill()
-  }
-}
-
-/** One live camera tile. When `detect`, runs pose detection + skeleton overlay. */
+/** One live camera tile: hidden <video> source, visible <canvas> rendering the
+ *  active visual. The primary tile runs pose detection + the chosen effect. */
 function CameraTile({
   deviceId,
-  detect,
+  primary,
+  visualId,
+  detectOn,
+  beatRef,
   onFeatures,
   onStatus
 }: {
   deviceId: string
-  detect: boolean
+  primary: boolean
+  visualId: string
+  detectOn: boolean
+  beatRef: React.MutableRefObject<number>
   onFeatures?: (f: PoseFeatureState) => void
   onStatus?: (s: string) => void
 }): JSX.Element {
   const videoRef = useRef<HTMLVideoElement>(null)
   const canvasRef = useRef<HTMLCanvasElement>(null)
+  const visualIdRef = useRef(visualId)
+  const detectOnRef = useRef(detectOn)
+  visualIdRef.current = visualId
+  detectOnRef.current = detectOn
 
+  // Capture the camera stream into the hidden video element.
   useEffect(() => {
     let stream: MediaStream | null = null
     let cancelled = false
     const attach = (s: MediaStream): void => {
-      if (cancelled) {
-        s.getTracks().forEach((t) => t.stop())
-        return
-      }
+      if (cancelled) return s.getTracks().forEach((t) => t.stop())
       stream = s
       if (videoRef.current) {
         videoRef.current.srcObject = s
@@ -72,7 +59,6 @@ function CameraTile({
       .getUserMedia({ video: { deviceId: { exact: deviceId }, width: { ideal: 1280 }, height: { ideal: 720 } }, audio: false })
       .then(attach)
       .catch(() =>
-        // Fall back to any camera if the exact device is unavailable/stale.
         navigator.mediaDevices
           .getUserMedia({ video: true, audio: false })
           .then(attach)
@@ -84,49 +70,72 @@ function CameraTile({
     }
   }, [deviceId, onStatus])
 
+  // Render loop: draw the active visual; lazily load pose detection when needed.
   useEffect(() => {
-    if (!detect) return
     let raf = 0
-    let stopped = false
-    const canvasEl = canvasRef.current
-    const engine = new PoseEngine()
     const features = new PoseFeatures(30)
-    onStatus?.('Loading detection model…')
-    engine
-      .init()
-      .then(() => {
-        if (stopped) return
-        onStatus?.('')
-        const loop = (): void => {
-          raf = requestAnimationFrame(loop)
-          const video = videoRef.current
-          const canvas = canvasRef.current
-          if (!video || !canvas || video.readyState < 2) return
-          if (canvas.width !== video.videoWidth) {
-            canvas.width = video.videoWidth
-            canvas.height = video.videoHeight
-          }
-          const frame = engine.detect(video, performance.now())
-          if (!frame) return
-          const ctx = canvas.getContext('2d')
-          if (ctx) drawSkeleton(ctx, frame, canvas.width, canvas.height)
-          onFeatures?.(features.addFrame(frame))
+    let engine: PoseEngine | null = null
+    let engineLoading = false
+    let lastFeat = ZERO_FEAT
+
+    const loop = (): void => {
+      raf = requestAnimationFrame(loop)
+      const video = videoRef.current
+      const canvas = canvasRef.current
+      if (!canvas) return
+      const w = canvas.clientWidth || 640
+      const h = canvas.clientHeight || 360
+      if (canvas.width !== w || canvas.height !== h) {
+        canvas.width = w
+        canvas.height = h
+      }
+      const ctx = canvas.getContext('2d')
+      if (!ctx) return
+
+      let pose = null
+      if (detectOnRef.current) {
+        if (!engine && !engineLoading) {
+          engineLoading = true
+          onStatus?.('Loading detection model…')
+          engine = new PoseEngine()
+          engine
+            .init()
+            .then(() => onStatus?.(''))
+            .catch((err) => onStatus?.(`Detection failed: ${err?.message ?? err}`))
         }
-        loop()
-      })
-      .catch((err) => onStatus?.(`Detection failed to load: ${err?.message ?? err}`))
-    return () => {
-      stopped = true
-      cancelAnimationFrame(raf)
-      engine.close()
-      if (canvasEl) canvasEl.getContext('2d')?.clearRect(0, 0, canvasEl.width, canvasEl.height)
+        if (engine?.ready && video && video.readyState >= 2) {
+          pose = engine.detect(video, performance.now())
+          if (pose) {
+            lastFeat = features.addFrame(pose)
+            onFeatures?.(lastFeat)
+          }
+        }
+      }
+
+      const input: VisualInput = {
+        video,
+        pose,
+        features: lastFeat,
+        timeMs: performance.now(),
+        beatPhase: beatRef.current,
+        audio: Math.max(lastFeat.motion, lastFeat.handPulse),
+        w,
+        h
+      }
+      getVisual(visualIdRef.current).render(ctx, input)
     }
-  }, [detect, onFeatures, onStatus])
+    loop()
+    return () => {
+      cancelAnimationFrame(raf)
+      engine?.close()
+    }
+  }, [beatRef, onFeatures, onStatus])
 
   return (
     <div className="cam-tile">
-      <video ref={videoRef} className="cam-video" muted playsInline />
-      <canvas ref={canvasRef} className="cam-overlay" />
+      <video ref={videoRef} className="cam-video-hidden" muted playsInline />
+      <canvas ref={canvasRef} className="cam-canvas" />
+      {primary && <span className="cam-badge">Effect</span>}
     </div>
   )
 }
@@ -152,10 +161,11 @@ export function CameraView(): JSX.Element {
     }
   })
   const [primary, setPrimary] = useState<string | null>(null)
-  const [detect, setDetect] = useState(false)
+  const [visual, setVisual] = useState<string>(() => localStorage.getItem(VISUAL_KEY) ?? 'camera')
   const [feat, setFeat] = useState<PoseFeatureState>(ZERO_FEAT)
   const [status, setStatus] = useState('')
   const [needsPermission, setNeedsPermission] = useState(true)
+  const beatRef = useRef(0)
 
   const refresh = useCallback(async () => {
     try {
@@ -174,11 +184,26 @@ export function CameraView(): JSX.Element {
     return () => navigator.mediaDevices.removeEventListener('devicechange', refresh)
   }, [refresh])
 
+  // Poll the lighting clock so visuals stay beat-synced with the music.
+  useEffect(() => {
+    const id = setInterval(async () => {
+      try {
+        const s = await window.djCompanion.lighting.getStatus()
+        beatRef.current = s.beatPhase ?? 0
+      } catch {
+        /* lighting not ready */
+      }
+    }, 60)
+    return () => clearInterval(id)
+  }, [])
+
   useEffect(() => {
     localStorage.setItem(STORE_KEY, JSON.stringify(enabled))
     if (primary && !enabled.includes(primary)) setPrimary(enabled[0] ?? null)
     if (!primary && enabled.length > 0) setPrimary(enabled[0])
   }, [enabled, primary])
+
+  useEffect(() => localStorage.setItem(VISUAL_KEY, visual), [visual])
 
   const requestPermission = async (): Promise<void> => {
     try {
@@ -195,14 +220,16 @@ export function CameraView(): JSX.Element {
     setEnabled((cur) => (cur.includes(id) ? cur.filter((x) => x !== id) : [...cur, id]))
 
   const onFeatures = useCallback((f: PoseFeatureState) => setFeat({ ...f }), [])
+  const activeVisual = getVisual(visual)
+  const detectPrimary = activeVisual.needsPerson
 
   return (
     <div className="view camera-view">
       <div className="view-header">
         <h1>Camera</h1>
         <p className="view-sub">
-          Live cameras and the body-detection engine. Preview the skeleton the engine sees; visual
-          effects and recording build on this.
+          Live cameras, body detection, and visual effects. Effects run on the primary camera and
+          react to your movement and the music.
         </p>
       </div>
 
@@ -224,51 +251,64 @@ export function CameraView(): JSX.Element {
                   {enabled.includes(d.deviceId) && (
                     <button
                       className={`cam-primary-btn${primary === d.deviceId ? ' active' : ''}`}
-                      title="Detect on this camera"
+                      title="Run the effect on this camera"
                       onClick={() => setPrimary(d.deviceId)}
                     >
-                      {primary === d.deviceId ? 'Detecting' : 'Detect'}
+                      {primary === d.deviceId ? 'Primary' : 'Set primary'}
                     </button>
                   )}
                 </label>
               ))}
             </div>
           )}
-
-          <label className="cam-toggle">
-            <input type="checkbox" checked={detect} onChange={(e) => setDetect(e.target.checked)} disabled={!primary} />
-            Body detection {primary ? '' : '(enable a camera first)'}
-          </label>
           {status && <p className="settings-hint">{status}</p>}
 
-          {detect && (
-            <div className="cam-features">
-              <h3>Body features</h3>
-              <Meter label="Present" value={feat.present} />
-              <Meter label="Hands up" value={feat.handsUp} />
-              <Meter label="Arm spread" value={feat.armSpread} />
-              <Meter label="Motion" value={feat.motion} />
-              <Meter label="Hand pulse" value={feat.handPulse} />
-            </div>
+          <h3 style={{ marginTop: 8 }}>Body features</h3>
+          <Meter label="Present" value={feat.present} />
+          <Meter label="Hands up" value={feat.handsUp} />
+          <Meter label="Arm spread" value={feat.armSpread} />
+          <Meter label="Motion" value={feat.motion} />
+          <Meter label="Hand pulse" value={feat.handPulse} />
+          {!detectPrimary && (
+            <p className="settings-hint">Pick a body effect (Wireframe / Geometric) to see these move.</p>
           )}
         </aside>
 
-        <div className="camera-stage">
-          {enabled.length === 0 ? (
-            <div className="camera-empty">Enable a camera to preview it here.</div>
-          ) : (
-            <div className={`cam-grid count-${Math.min(enabled.length, 4)}`}>
-              {enabled.map((id) => (
-                <CameraTile
-                  key={id}
-                  deviceId={id}
-                  detect={detect && primary === id}
-                  onFeatures={onFeatures}
-                  onStatus={setStatus}
-                />
-              ))}
-            </div>
-          )}
+        <div className="camera-main">
+          <div className="camera-stage">
+            {enabled.length === 0 ? (
+              <div className="camera-empty">Enable a camera to preview it here.</div>
+            ) : (
+              <div className={`cam-grid count-${Math.min(enabled.length, 4)}`}>
+                {enabled.map((id) => (
+                  <CameraTile
+                    key={id}
+                    deviceId={id}
+                    primary={primary === id}
+                    visualId={primary === id ? visual : 'camera'}
+                    detectOn={primary === id && detectPrimary}
+                    beatRef={beatRef}
+                    onFeatures={onFeatures}
+                    onStatus={setStatus}
+                  />
+                ))}
+              </div>
+            )}
+          </div>
+
+          <div className="cam-hud">
+            <span className="cam-hud-label">Effect</span>
+            {VISUALS.map((v) => (
+              <button
+                key={v.id}
+                className={`cam-fx-btn${visual === v.id ? ' active' : ''}`}
+                onClick={() => setVisual(v.id)}
+              >
+                {v.name}
+                {v.needsPerson && <span className="cam-fx-tag">body</span>}
+              </button>
+            ))}
+          </div>
         </div>
       </div>
     </div>
