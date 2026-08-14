@@ -214,6 +214,12 @@ export interface LightingProject {
   /** When true (default), Blackout stays engaged after switching scenes; when
    *  false, triggering a scene clears blackout like any other look. */
   blackoutHolds?: boolean
+  /** Favorite colors that MIDI color controls cycle through (button = next,
+   *  0-1 knob = position in the list). */
+  favoriteColors?: Rgbw[]
+  /** When true, a MIDI-picked color persists across scene switches; when false
+   *  (default), switching scenes reverts to each scene's own default color. */
+  rememberColor?: boolean
   /** Set dressing on the visualizer stage (trusses, speakers, booth…). */
   stageProps: StageProp[]
   /** User-defined fixture profiles, merged over the built-in library. */
@@ -237,6 +243,16 @@ export function defaultLightingProject(): LightingProject {
     scenes: [],
     trashScenes: [],
     blackoutHolds: true,
+    favoriteColors: [
+      { r: 255, g: 0, b: 0 },
+      { r: 255, g: 120, b: 0 },
+      { r: 255, g: 255, b: 255 },
+      { r: 0, g: 200, b: 80 },
+      { r: 0, g: 120, b: 255 },
+      { r: 150, g: 0, b: 255 },
+      { r: 255, g: 0, b: 160 }
+    ],
+    rememberColor: false,
     stageProps: [{ id: 'booth-default', type: 'booth', x: 0.5 }],
     customFixtures: [],
     padSceneIds: new Array(16).fill(null),

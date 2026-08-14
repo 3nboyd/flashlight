@@ -639,6 +639,11 @@ export class LightingHost {
 
   triggerScene(sceneId: string | null): void {
     this.activeSceneId = sceneId
+    // Unless "remember color" is on, a scene switch reverts to each scene's own
+    // default color (clears any MIDI-picked color override).
+    if (!this.project.rememberColor && this.overrides.colorOverride) {
+      this.overrides = { ...this.overrides, colorOverride: null }
+    }
   }
 
   setOverrides(partial: Partial<LiveOverrides>): LiveOverrides {

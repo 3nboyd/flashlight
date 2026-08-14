@@ -48,8 +48,18 @@ const LEARNABLE_CONTROLS: { label: string; action: ControlAction }[] = [
   { label: 'Pan (left/right)', action: { kind: 'pan' } },
   { label: 'Tilt (up/down)', action: { kind: 'tilt' } },
   { label: 'Movement speed', action: { kind: 'speed' } },
-  { label: 'Light sensitivity', action: { kind: 'reactivity' } }
+  { label: 'Light sensitivity', action: { kind: 'reactivity' } },
+  { label: 'Color (scroll favorites)', action: { kind: 'colorPick' } }
 ]
+
+function favRgbToHex(c: { r: number; g: number; b: number }): string {
+  const h = (n: number): string => Math.max(0, Math.min(255, Math.round(n))).toString(16).padStart(2, '0')
+  return `#${h(c.r)}${h(c.g)}${h(c.b)}`
+}
+function favHexToRgb(hex: string): { r: number; g: number; b: number } {
+  const n = parseInt(hex.slice(1), 16)
+  return { r: (n >> 16) & 255, g: (n >> 8) & 255, b: n & 255 }
+}
 
 function describeAction(action: PadAction): string {
   switch (action.kind) {
@@ -1433,8 +1443,64 @@ export function SetupPanel({ view }: { view: SetupView }): JSX.Element {
                     })}
                   </div>
 
+                  <div className="midi-block-title">Favorite colors</div>
+                  <span className="settings-hint" style={{ margin: '0 0 8px' }}>
+                    Assign Color + / Color - to pads (buttons step through these) and Color (scroll
+                    favorites) to a knob above. Recolors the live scene.
+                  </span>
+                  <div className="fav-color-row">
+                    {(project.favoriteColors ?? []).map((c, i) => (
+                      <div key={i} className="fav-color">
+                        <input
+                          type="color"
+                          value={favRgbToHex(c)}
+                          onChange={(e) => {
+                            const rgb = favHexToRgb(e.target.value)
+                            updateProject((p) => {
+                              const favs = [...(p.favoriteColors ?? [])]
+                              favs[i] = rgb
+                              return { ...p, favoriteColors: favs }
+                            })
+                          }}
+                        />
+                        <button
+                          className="midi-unbind"
+                          title="Remove color"
+                          onClick={() =>
+                            updateProject((p) => ({
+                              ...p,
+                              favoriteColors: (p.favoriteColors ?? []).filter((_, j) => j !== i)
+                            }))
+                          }
+                        >
+                          ✕
+                        </button>
+                      </div>
+                    ))}
+                    <button
+                      className="secondary-button"
+                      onClick={() =>
+                        updateProject((p) => ({
+                          ...p,
+                          favoriteColors: [...(p.favoriteColors ?? []), { r: 255, g: 255, b: 255 }]
+                        }))
+                      }
+                    >
+                      + Add
+                    </button>
+                  </div>
+                  <label className="limit-invert" style={{ marginTop: 8, display: 'inline-flex' }}>
+                    <input
+                      type="checkbox"
+                      checked={project.rememberColor === true}
+                      onChange={(e) => updateProject((p) => ({ ...p, rememberColor: e.target.checked }))}
+                    />{' '}
+                    Remember last color across scene changes (default off)
+                  </label>
+
                   <button
                     className="text-button danger"
+                    style={{ display: 'block', marginTop: 10 }}
                     onClick={() => {
                       midiPads.unbindAll()
                       setMidiMapVersion((v) => v + 1)

@@ -958,6 +958,34 @@
   flex-shrink: 0;
 }
 
+.fav-color-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+}
+
+.fav-color {
+  position: relative;
+  display: inline-flex;
+}
+
+.fav-color input[type='color'] {
+  width: 34px;
+  height: 28px;
+  padding: 0;
+  border: 1px solid var(--border-strong);
+  border-radius: 6px;
+  background: none;
+  cursor: pointer;
+}
+
+.fav-color .midi-unbind {
+  position: absolute;
+  top: -6px;
+  right: -6px;
+}
+
 .flow-preview {
   display: flex;
   gap: 2px;

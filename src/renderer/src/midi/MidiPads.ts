@@ -21,6 +21,7 @@ export type ControlAction =
   | { kind: 'tilt' }
   | { kind: 'speed' }
   | { kind: 'reactivity' }
+  | { kind: 'colorPick' }
 
 export type ControlKind = ControlAction['kind']
 

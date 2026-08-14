@@ -12,6 +12,8 @@ export type PadFunctionKind =
   | 'tap'
   | 'resync'
   | 'autopilot'
+  | 'colorNext'
+  | 'colorPrev'
 
 export interface PadFunctionInfo {
   kind: PadFunctionKind
@@ -29,7 +31,9 @@ export const PAD_FUNCTIONS: PadFunctionInfo[] = [
   { kind: 'manual', label: 'Tap Pulse', hint: 'Tap to flash a Tap Pulse scene (cycles color)', uiColor: '#f472b6', momentary: false },
   { kind: 'tap', label: 'Tap Tempo', hint: 'Tap along to set BPM', uiColor: '#38bdf8', momentary: false },
   { kind: 'resync', label: 'Sync 1', hint: 'Snap the downbeat to now', uiColor: '#22d3ee', momentary: false },
-  { kind: 'autopilot', label: 'Autopilot', hint: 'Toggle automatic scene changes', uiColor: '#a78bfa', momentary: false }
+  { kind: 'autopilot', label: 'Autopilot', hint: 'Toggle automatic scene changes', uiColor: '#a78bfa', momentary: false },
+  { kind: 'colorNext', label: 'Color +', hint: 'Next favorite color', uiColor: '#f59e0b', momentary: false },
+  { kind: 'colorPrev', label: 'Color -', hint: 'Previous favorite color', uiColor: '#f59e0b', momentary: false }
 ]
 
 const PREFIX = 'fn:'

@@ -89,9 +89,30 @@ export function PerformPanel(): JSX.Element {
 
   // A pad assigned a control function. `on` is press/hold (true) or release
   // (false); momentary functions use both, the rest act on press only.
+  // Cycles the live color override through the project's favorite colors, driven
+  // by MIDI buttons (next/prev) and knobs (position). The host reverts it on a
+  // scene switch unless "remember color" is on.
+  const colorIdxRef = useRef(-1)
+  const applyFavColor = useCallback(
+    (idx: number) => {
+      const favs = useLightingStore.getState().project.favoriteColors ?? []
+      if (favs.length === 0) return
+      const i = ((idx % favs.length) + favs.length) % favs.length
+      colorIdxRef.current = i
+      setOverrides({ colorOverride: favs[i] })
+    },
+    [setOverrides]
+  )
+
   const firePadFunction = useCallback(
     (kind: PadFunctionKind, on: boolean) => {
       switch (kind) {
+        case 'colorNext':
+          if (on) applyFavColor(colorIdxRef.current + 1)
+          break
+        case 'colorPrev':
+          if (on) applyFavColor(colorIdxRef.current - 1)
+          break
         case 'strobe':
           setOverrides({ strobe: on })
           break
@@ -119,7 +140,7 @@ export function PerformPanel(): JSX.Element {
           break
       }
     },
-    [setOverrides, refreshStatus, updateProject]
+    [setOverrides, refreshStatus, updateProject, applyFavColor]
   )
 
   const handleMidiAction = useCallback(
@@ -202,9 +223,14 @@ export function PerformPanel(): JSX.Element {
         case 'reactivity':
           setOverrides({ reactivity: v * 2 })
           break
+        case 'colorPick': {
+          const favs = useLightingStore.getState().project.favoriteColors ?? []
+          if (favs.length > 0) applyFavColor(Math.round(v * (favs.length - 1)))
+          break
+        }
       }
     },
-    [setOverrides]
+    [setOverrides, applyFavColor]
   )
 
   useEffect(() => {
