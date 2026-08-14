@@ -13,11 +13,13 @@ export type Section = 'music' | 'lighting' | 'camera' | 'settings'
 
 export type MusicViewId = 'library' | 'explorer' | 'rename' | 'backups'
 export type LightingViewId = 'perform' | 'setup' | 'settings'
+export type CameraViewId = 'preview'
 
 export interface NavState {
   section: Section
   musicView: MusicViewId
   lightingView: LightingViewId
+  cameraView: CameraViewId
   /** Section anchor to scroll to within the current lighting view. */
   lightingSection: string | null
 }
@@ -44,8 +46,7 @@ const RAIL_ITEMS: { id: Section; label: string; icon: JSX.Element; disabled?: bo
   {
     id: 'camera',
     label: 'Camera',
-    icon: <Icon path="M4 8h3l2-2h6l2 2h3v11H4V8Zm8 9a3.5 3.5 0 1 0 0-7 3.5 3.5 0 0 0 0 7Z" />,
-    disabled: true
+    icon: <Icon path="M4 8h3l2-2h6l2 2h3v11H4V8Zm8 9a3.5 3.5 0 1 0 0-7 3.5 3.5 0 0 0 0 7Z" />
   }
 ]
 
@@ -114,6 +115,19 @@ export function Sidebar({ nav, onChange }: SidebarProps): JSX.Element {
               <span>{item.label}</span>
             </button>
           ))}
+        </nav>
+      )}
+
+      {nav.section === 'camera' && (
+        <nav className="nav-context">
+          <div className="nav-context-title">Camera</div>
+          <button
+            className={`sidebar-nav-item${nav.cameraView === 'preview' ? ' active' : ''}`}
+            onClick={() => onChange({ ...nav, cameraView: 'preview' })}
+          >
+            <Icon path="M4 8h3l2-2h6l2 2h3v11H4V8Zm8 9a3.5 3.5 0 1 0 0-7 3.5 3.5 0 0 0 0 7Z" size={18} />
+            <span>Preview + detection</span>
+          </button>
         </nav>
       )}
 

@@ -6,6 +6,7 @@ import { FileExplorerView } from './views/FileExplorerView'
 import { RenameView } from './views/RenameView'
 import { BackupsView } from './views/BackupsView'
 import { LightingView } from './views/lighting/LightingView'
+import { CameraView } from './views/camera/CameraView'
 import { useSettingsStore } from './state/settingsStore'
 import './styles/views.css'
 
@@ -27,6 +28,7 @@ function App(): JSX.Element {
     section: 'music',
     musicView: 'library',
     lightingView: 'perform',
+    cameraView: 'preview',
     lightingSection: null
   })
   const { load, loaded } = useSettingsStore()
@@ -46,6 +48,7 @@ function App(): JSX.Element {
       {nav.section === 'lighting' && (
         <LightingView mode={nav.lightingView} scrollSection={nav.lightingSection} />
       )}
+      {nav.section === 'camera' && <CameraView />}
       {nav.section === 'settings' && <SettingsView />}
     </div>
   )
