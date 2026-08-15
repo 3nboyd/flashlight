@@ -1150,6 +1150,14 @@ function drawFixtureBody(
   } else if (state.kind === 'fog') {
     ctx.fillRect(fx - s * 1.3, fy - s * 0.7, s * 2.6, s * 0.7)
     ctx.strokeRect(fx - s * 1.3, fy - s * 0.7, s * 2.6, s * 0.7)
+  } else if (state.kind === 'screen') {
+    // A 16:9 flatscreen glowing its live color (the glow pass tints it).
+    const w = s * 3
+    const h = (w * 9) / 16
+    ctx.beginPath()
+    ctx.roundRect(fx - w / 2, fy - h / 2, w, h, 2)
+    ctx.fill()
+    ctx.stroke()
   } else {
     ctx.save()
     ctx.translate(fx, fy)

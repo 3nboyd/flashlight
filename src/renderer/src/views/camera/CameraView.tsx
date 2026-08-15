@@ -9,8 +9,14 @@ const STORE_KEY = 'djc.camera.enabled'
 const VISUAL_KEY = 'djc.camera.visual'
 const PRIMARY_KEY = 'djc.camera.primary'
 const FX_KEY = 'djc.camera.fx'
+const MODE_KEY = 'djc.output.mode'
+const LOOK_KEY = 'djc.output.screenLook'
+const SOURCE_KEY = 'djc.output.screenSource'
+const OVERLAY_KEY = 'djc.output.overlay'
+const OVERLAY_OP_KEY = 'djc.output.overlayOpacity'
 
 type FxParams = Record<string, Record<string, number>>
+type ScreenInfo = { patchId: string; label: string }
 
 /** One live camera tile wrapping the shared canvas. */
 function CameraTile({
@@ -95,6 +101,16 @@ export function CameraView(): JSX.Element {
   const [showSkeleton, setShowSkeleton] = useState(false)
   const [showFaceMesh, setShowFaceMesh] = useState(false)
   const [outputOpen, setOutputOpen] = useState(false)
+  const [outMode, setOutMode] = useState<string>(() => localStorage.getItem(MODE_KEY) ?? 'camera')
+  const [screenLook, setScreenLook] = useState<string>(() => localStorage.getItem(LOOK_KEY) ?? 'flat')
+  const [screenSource, setScreenSource] = useState<string>(
+    () => localStorage.getItem(SOURCE_KEY) ?? 'auto'
+  )
+  const [overlay, setOverlay] = useState<string>(() => localStorage.getItem(OVERLAY_KEY) ?? 'none')
+  const [overlayOp, setOverlayOp] = useState<number>(() =>
+    Number(localStorage.getItem(OVERLAY_OP_KEY) ?? '0.6')
+  )
+  const [screens, setScreens] = useState<ScreenInfo[]>([])
   const beatRef = useRef(0)
   const audioRef = useRef<AudioReact>({ ...ZERO_AUDIO })
   const lightRef = useRef<{ r: number; g: number; b: number }>({ r: 0, g: 0, b: 0 })
@@ -151,6 +167,35 @@ export function CameraView(): JSX.Element {
       alive = false
     }
   }, [])
+
+  // Poll the patched TV/screen fixtures (slow; the list rarely changes).
+  useEffect(() => {
+    let last = ''
+    const id = setInterval(async () => {
+      try {
+        const s = await window.djCompanion.lighting.getStatus()
+        const list: ScreenInfo[] = (s.screens ?? []).map((x) => ({
+          patchId: x.patchId,
+          label: x.label
+        }))
+        const key = JSON.stringify(list)
+        if (key !== last) {
+          last = key
+          setScreens(list)
+        }
+      } catch {
+        /* lighting not ready */
+      }
+    }, 1500)
+    return () => clearInterval(id)
+  }, [])
+
+  // Stage-screen settings: persist AND notify the projector window (a separate
+  // window receives the storage event; the setItem here won't fire it locally).
+  const putOut = (key: string, value: string, set: (v: string) => void): void => {
+    set(value)
+    localStorage.setItem(key, value)
+  }
 
   useEffect(() => {
     localStorage.setItem(STORE_KEY, JSON.stringify(enabled))
@@ -265,8 +310,82 @@ export function CameraView(): JSX.Element {
             {outputOpen ? 'Close projector output' : 'Open projector output'}
           </button>
           <p className="settings-hint">
-            Sends the current effect full-screen to a second display (projector / stage TV).
+            Full-screen on a second display (projector / stage TV). This screen bus is separate
+            from what you record.
           </p>
+
+          <label className="cam-out-row">
+            <span>Show</span>
+            <select value={outMode} onChange={(e) => putOut(MODE_KEY, e.target.value, setOutMode)}>
+              <option value="camera">Camera effect</option>
+              <option value="screen">Stage screen (lighting)</option>
+            </select>
+          </label>
+
+          {outMode === 'screen' && (
+            <>
+              <label className="cam-out-row">
+                <span>Look</span>
+                <select
+                  value={screenLook}
+                  onChange={(e) => putOut(LOOK_KEY, e.target.value, setScreenLook)}
+                >
+                  <option value="flat">Flat fill</option>
+                  <option value="radial">Radial / circular</option>
+                </select>
+              </label>
+              <label className="cam-out-row">
+                <span>Color from</span>
+                <select
+                  value={screenSource}
+                  onChange={(e) => putOut(SOURCE_KEY, e.target.value, setScreenSource)}
+                >
+                  <option value="auto">Whole rig (average)</option>
+                  {screens.map((s) => (
+                    <option key={s.patchId} value={s.patchId}>
+                      {s.label}
+                    </option>
+                  ))}
+                </select>
+              </label>
+              <label className="cam-out-row">
+                <span>Overlay FX</span>
+                <select
+                  value={overlay}
+                  onChange={(e) => putOut(OVERLAY_KEY, e.target.value, setOverlay)}
+                >
+                  <option value="none">None</option>
+                  {VISUALS.filter((v) => v.id !== 'camera').map((v) => (
+                    <option key={v.id} value={v.id}>
+                      {v.name}
+                    </option>
+                  ))}
+                </select>
+              </label>
+              {overlay !== 'none' && (
+                <label className="cam-out-row">
+                  <span>Overlay mix</span>
+                  <input
+                    type="range"
+                    min={0}
+                    max={1}
+                    step={0.05}
+                    value={overlayOp}
+                    onChange={(e) => {
+                      setOverlayOp(Number(e.target.value))
+                      localStorage.setItem(OVERLAY_OP_KEY, e.target.value)
+                    }}
+                  />
+                </label>
+              )}
+              {screens.length === 0 && (
+                <p className="settings-hint">
+                  Tip: patch a &quot;TV / LED Screen&quot; fixture in Lighting Setup to drive a
+                  specific screen; otherwise the whole-rig color is used.
+                </p>
+              )}
+            </>
+          )}
 
           <h3 style={{ marginTop: 8 }}>Recording</h3>
           <RecordingPanel getCanvas={() => primaryCanvasRef.current} />

@@ -169,6 +169,27 @@
   border-color: transparent;
 }
 
+.cam-out-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  margin-top: 6px;
+  font-size: 12px;
+  color: var(--text-secondary, #9a9aa8);
+}
+
+.cam-out-row > span {
+  flex: 0 0 auto;
+}
+
+.cam-out-row > select,
+.cam-out-row > input[type='range'] {
+  flex: 1 1 auto;
+  min-width: 0;
+  max-width: 60%;
+}
+
 .cam-rec {
   display: flex;
   flex-direction: column;

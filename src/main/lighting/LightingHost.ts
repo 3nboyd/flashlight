@@ -98,6 +98,18 @@ export interface LightingStatus {
   /** Dominant lit color of the rig right now (0-255), for camera effects to
    *  match. {0,0,0} when the rig is dark. */
   lightColor: { r: number; g: number; b: number }
+  /** Live color of each patched TV/screen fixture, for the Stage Screen output. */
+  screens: ScreenColor[]
+}
+
+/** One TV/screen fixture's live color (r/g/b 0-255, intensity 0-1). */
+export interface ScreenColor {
+  patchId: string
+  label: string
+  r: number
+  g: number
+  b: number
+  intensity: number
 }
 
 /**
@@ -147,6 +159,7 @@ export class LightingHost {
   private songKick = 0
   private songLevel = 0
   private lightColor: { r: number; g: number; b: number } = { r: 0, g: 0, b: 0 }
+  private screens: ScreenColor[] = []
   private songFast = 0
   private songSurge = 0
   private songSection = 0
@@ -615,8 +628,10 @@ export class LightingHost {
     }
   }
 
-  /** Average lit color across all fixtures (weighted by intensity), so camera
-   *  effects can match the rig. Dark rig -> {0,0,0}. */
+  /** Average lit color across all fixtures (weighted by intensity, 0-255), so
+   *  camera effects can match the rig, plus each TV/screen fixture's own live
+   *  color for the Stage Screen output. Dark rig -> {0,0,0}.
+   *  (readFixtureVisualState returns 0-1 channels; we scale to 0-255 here.) */
   private updateLightColor(universes: Map<number, Universe>): void {
     let R = 0
     let G = 0
@@ -629,20 +644,51 @@ export class LightingHost {
       B += b * i
       wsum += i
     }
+    const screens: ScreenColor[] = []
     for (const fixture of this.resolveFixtures()) {
       const uni = universes.get(fixture.patch.universe)
       if (!uni) continue
       const st = readFixtureVisualState(uni.toBuffer(), fixture)
+      // Representative color for the whole fixture (average its segments).
+      let fr = st.r
+      let fg = st.g
+      let fb = st.b
+      let fi = st.intensity
       if (st.segments && st.segments.length > 0) {
-        for (const s of st.segments) add(s.r, s.g, s.b, s.intensity)
-      } else {
-        add(st.r, st.g, st.b, st.intensity)
+        fr = fg = fb = fi = 0
+        for (const s of st.segments) {
+          fr += s.r
+          fg += s.g
+          fb += s.b
+          fi += s.intensity
+        }
+        const n = st.segments.length
+        fr /= n
+        fg /= n
+        fb /= n
+        fi /= n
+      }
+      add(fr, fg, fb, fi)
+      if (fixture.definition.kind === 'screen') {
+        screens.push({
+          patchId: fixture.patch.id,
+          label: fixture.patch.label,
+          r: Math.round(fr * 255),
+          g: Math.round(fg * 255),
+          b: Math.round(fb * 255),
+          intensity: fi
+        })
       }
     }
     this.lightColor =
       wsum > 0
-        ? { r: Math.round(R / wsum), g: Math.round(G / wsum), b: Math.round(B / wsum) }
+        ? {
+            r: Math.round((R / wsum) * 255),
+            g: Math.round((G / wsum) * 255),
+            b: Math.round((B / wsum) * 255)
+          }
         : { r: 0, g: 0, b: 0 }
+    this.screens = screens
   }
 
   /** OS2L wins while beats are flowing; audio analysis next; tap/manual otherwise. */
@@ -820,7 +866,8 @@ export class LightingHost {
       audioKick: this.songKick,
       audioFast: this.songFast,
       audioSurge: this.songSurge,
-      lightColor: this.lightColor
+      lightColor: this.lightColor,
+      screens: this.screens
     }
   }
 

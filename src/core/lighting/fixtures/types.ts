@@ -57,6 +57,7 @@ export type FixtureKind =
   | 'scanner' // mirror scanner
   | 'uv' // UV cannon/blacklight
   | 'fog' // DMX-triggered fog machine
+  | 'screen' // TV / LED screen driven as an RGBW light + video surface
   | 'other'
 
 /** Number of color/tilt segments a definition carries (1 for single-head fixtures). */

@@ -298,6 +298,13 @@ export const BUILTIN_FIXTURES: FixtureDefinition[] = [
     name: 'Fog Machine (1ch: Output)',
     kind: 'fog',
     channels: [{ role: 'dimmer' }]
+  },
+  // ---- Screens / TVs (RGBW light + video surface) ----
+  {
+    id: 'screen-rgbw',
+    name: 'TV / LED Screen (RGBW)',
+    kind: 'screen',
+    channels: [{ role: 'dimmer' }, ...rgbw()]
   }
 ]
 

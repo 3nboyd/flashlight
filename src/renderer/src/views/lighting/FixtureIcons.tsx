@@ -117,6 +117,13 @@ export const FIXTURE_ICONS: Record<FixtureKind, (props: IconProps) => JSX.Elemen
       <path d="M12 5.5a6.5 6.5 0 0 1 0 13" fill="currentColor" fillOpacity="0.25" stroke="none" />
     </Svg>
   ),
+  screen: (p) => (
+    <Svg {...p}>
+      {/* Flatscreen TV on a stand */}
+      <rect x="3" y="5" width="18" height="11" rx="1.5" />
+      <path d="M9 20h6M12 16v4" />
+    </Svg>
+  ),
   other: (p) => (
     <Svg {...p}>
       <rect x="6" y="6" width="12" height="12" rx="2" />
@@ -143,5 +150,6 @@ export const KIND_LABELS: Record<FixtureKind, string> = {
   uv: 'UV',
   fog: 'Fog',
   dimmer: 'Dimmer',
+  screen: 'TV / Screen',
   other: 'Other'
 }
