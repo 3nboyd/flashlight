@@ -264,7 +264,7 @@ export function CameraView(): JSX.Element {
           <Meter label="Jump" value={feat.jump} />
           {!tracksBody && (
             <p className="settings-hint">
-              Pick a body effect (Neon Stickman / Spinning Head) or a debug overlay to see these move.
+              Pick a body effect (Neon Stickman) or a debug overlay to see these move.
             </p>
           )}
         </aside>
