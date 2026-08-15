@@ -46,6 +46,7 @@ export function OutputView(): JSX.Element {
   )
   const beatRef = useRef(0)
   const audioRef = useRef<AudioReact>({ ...ZERO_AUDIO })
+  const lightRef = useRef<{ r: number; g: number; b: number }>({ r: 0, g: 0, b: 0 })
 
   // Follow the operator's effect + camera + settings choices live.
   useEffect(() => {
@@ -74,6 +75,7 @@ export function OutputView(): JSX.Element {
           fast: s.audioFast ?? 0,
           surge: s.audioSurge ?? 0
         }
+        if (s.lightColor) lightRef.current = s.lightColor
       } catch {
         /* lighting not ready */
       }
@@ -91,6 +93,7 @@ export function OutputView(): JSX.Element {
           params={params}
           beatRef={beatRef}
           audioRef={audioRef}
+          lightRef={lightRef}
           className="output-canvas"
         />
       ) : (

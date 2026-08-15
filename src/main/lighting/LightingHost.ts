@@ -15,7 +15,7 @@ import { PRESET_SCENES, PRESET_CATEGORY_BY_ID, defaultSmartPools } from '@core/l
 import { SmartModeEngine, type SmartPhase } from '@core/lighting/engine/SmartMode'
 import { MusicPulse } from '@core/lighting/engine/MusicPulse'
 import { fixturesById } from '@core/lighting/fixtures/library'
-import { resolveStagePositions } from '@core/lighting/visualizer/fixtureVisualState'
+import { resolveStagePositions, readFixtureVisualState } from '@core/lighting/visualizer/fixtureVisualState'
 import type { PatchedFixture } from '@core/lighting/fixtures/types'
 import type { AudioFeatures } from '@core/lighting/audio/features'
 import { SILENT_FEATURES } from '@core/lighting/audio/features'
@@ -95,6 +95,9 @@ export interface LightingStatus {
   audioKick: number
   audioFast: number
   audioSurge: number
+  /** Dominant lit color of the rig right now (0-255), for camera effects to
+   *  match. {0,0,0} when the rig is dark. */
+  lightColor: { r: number; g: number; b: number }
 }
 
 /**
@@ -143,6 +146,7 @@ export class LightingHost {
   private readonly pulse = new MusicPulse(40)
   private songKick = 0
   private songLevel = 0
+  private lightColor: { r: number; g: number; b: number } = { r: 0, g: 0, b: 0 }
   private songFast = 0
   private songSurge = 0
   private songSection = 0
@@ -601,6 +605,7 @@ export class LightingHost {
       nowMs
     })
     this.applyIdentify(universes, nowMs)
+    this.updateLightColor(universes)
     for (const [universe, data] of universes) {
       // A USB interface is a single DMX line: emit only its configured universe.
       if (this.project.output.protocol === 'enttec' && universe !== this.project.output.usbUniverse) {
@@ -608,6 +613,36 @@ export class LightingHost {
       }
       this.sender.sendUniverse(universe, data.toBuffer())
     }
+  }
+
+  /** Average lit color across all fixtures (weighted by intensity), so camera
+   *  effects can match the rig. Dark rig -> {0,0,0}. */
+  private updateLightColor(universes: Map<number, Universe>): void {
+    let R = 0
+    let G = 0
+    let B = 0
+    let wsum = 0
+    const add = (r: number, g: number, b: number, i: number): void => {
+      if (i <= 0.01) return
+      R += r * i
+      G += g * i
+      B += b * i
+      wsum += i
+    }
+    for (const fixture of this.resolveFixtures()) {
+      const uni = universes.get(fixture.patch.universe)
+      if (!uni) continue
+      const st = readFixtureVisualState(uni.toBuffer(), fixture)
+      if (st.segments && st.segments.length > 0) {
+        for (const s of st.segments) add(s.r, s.g, s.b, s.intensity)
+      } else {
+        add(st.r, st.g, st.b, st.intensity)
+      }
+    }
+    this.lightColor =
+      wsum > 0
+        ? { r: Math.round(R / wsum), g: Math.round(G / wsum), b: Math.round(B / wsum) }
+        : { r: 0, g: 0, b: 0 }
   }
 
   /** OS2L wins while beats are flowing; audio analysis next; tap/manual otherwise. */
@@ -784,7 +819,8 @@ export class LightingHost {
       audioLevel: this.songLevel,
       audioKick: this.songKick,
       audioFast: this.songFast,
-      audioSurge: this.songSurge
+      audioSurge: this.songSurge,
+      lightColor: this.lightColor
     }
   }
 

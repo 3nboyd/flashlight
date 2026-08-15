@@ -22,6 +22,7 @@ function CameraTile({
   showFaceMesh,
   beatRef,
   audioRef,
+  lightRef,
   onFeatures,
   onStatus,
   onCanvasReady
@@ -34,6 +35,7 @@ function CameraTile({
   showFaceMesh: boolean
   beatRef: React.MutableRefObject<number>
   audioRef: React.MutableRefObject<AudioReact>
+  lightRef: React.MutableRefObject<{ r: number; g: number; b: number }>
   onFeatures?: (f: PoseFeatureState) => void
   onStatus?: (s: string) => void
   onCanvasReady?: (el: HTMLCanvasElement | null) => void
@@ -48,6 +50,7 @@ function CameraTile({
         showFaceMesh={primary && showFaceMesh}
         beatRef={beatRef}
         audioRef={audioRef}
+        lightRef={lightRef}
         onFeatures={primary ? onFeatures : undefined}
         onStatus={onStatus}
         onCanvasReady={primary ? onCanvasReady : undefined}
@@ -94,6 +97,7 @@ export function CameraView(): JSX.Element {
   const [outputOpen, setOutputOpen] = useState(false)
   const beatRef = useRef(0)
   const audioRef = useRef<AudioReact>({ ...ZERO_AUDIO })
+  const lightRef = useRef<{ r: number; g: number; b: number }>({ r: 0, g: 0, b: 0 })
   const primaryCanvasRef = useRef<HTMLCanvasElement | null>(null)
   const setPrimaryCanvas = useCallback((el: HTMLCanvasElement | null) => {
     primaryCanvasRef.current = el
@@ -128,6 +132,7 @@ export function CameraView(): JSX.Element {
           fast: s.audioFast ?? 0,
           surge: s.audioSurge ?? 0
         }
+        if (s.lightColor) lightRef.current = s.lightColor
       } catch {
         /* lighting not ready */
       }
@@ -297,6 +302,7 @@ export function CameraView(): JSX.Element {
                     showFaceMesh={showFaceMesh}
                     beatRef={beatRef}
                     audioRef={audioRef}
+                    lightRef={lightRef}
                     onFeatures={onFeatures}
                     onStatus={setStatus}
                     onCanvasReady={setPrimaryCanvas}

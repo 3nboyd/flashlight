@@ -28,6 +28,8 @@ export interface VisualInput {
   beatPhase: number
   /** Live music features for audio reactivity. */
   audio: AudioReact
+  /** Dominant lit color of the rig right now (0-255); {0,0,0} when dark. */
+  light: { r: number; g: number; b: number }
   /** Per-effect user settings (e.g. intensity), keyed by param id. */
   params: Record<string, number>
   w: number
@@ -329,11 +331,21 @@ const sketch: VisualModule = {
     const out = octx.createImageData(sw, sh)
     const o = out.data
     const gain = 1.1 + 1.6 * input.audio.level + 1.2 * input.audio.kick
-    const hue = (input.timeMs / 45) % 360
-    const rad = (hue * Math.PI) / 180
-    const tintR = 180 + 75 * Math.sin(rad)
-    const tintG = 180 + 75 * Math.sin(rad + 2.1)
-    const tintB = 180 + 75 * Math.sin(rad + 4.2)
+    // Ink color tracks the live lighting; when the rig is dark, fall back to a
+    // clean white/gray so the sketch is always legible.
+    const lc = input.light
+    const lit = lc.r + lc.g + lc.b > 40
+    let tintR = 210
+    let tintG = 214
+    let tintB = 220
+    if (lit) {
+      // Normalize toward full brightness so dim rig colors still read as ink.
+      const max = Math.max(lc.r, lc.g, lc.b, 1)
+      const scale = 235 / max
+      tintR = Math.min(255, 30 + lc.r * scale)
+      tintG = Math.min(255, 30 + lc.g * scale)
+      tintB = Math.min(255, 30 + lc.b * scale)
+    }
     for (let y = 1; y < sh - 1; y++) {
       for (let x = 1; x < sw - 1; x++) {
         const i = y * sw + x

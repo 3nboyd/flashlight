@@ -22,6 +22,7 @@ export const ZERO_FEAT: PoseFeatureState = {
 }
 
 export const ZERO_AUDIO: AudioReact = { level: 0, kick: 0, fast: 0, surge: 0 }
+const BLACK = { r: 0, g: 0, b: 0 }
 
 /**
  * A self-contained camera surface: captures one device into a hidden <video>,
@@ -34,6 +35,7 @@ export function CameraCanvas({
   visualId,
   beatRef,
   audioRef,
+  lightRef,
   params,
   showSkeleton = false,
   showFaceMesh = false,
@@ -46,6 +48,8 @@ export function CameraCanvas({
   visualId: string
   beatRef: React.MutableRefObject<number>
   audioRef: React.MutableRefObject<AudioReact>
+  /** Live dominant lighting color (0-255) for effects that match the rig. */
+  lightRef?: React.MutableRefObject<{ r: number; g: number; b: number }>
   /** Per-effect settings for the active visual (e.g. { intensity: 1 }). */
   params?: Record<string, number>
   showSkeleton?: boolean
@@ -170,6 +174,7 @@ export function CameraCanvas({
         timeMs: performance.now(),
         beatPhase: beatRef.current,
         audio: audioRef.current,
+        light: lightRef?.current ?? BLACK,
         params: paramsRef.current,
         w,
         h
@@ -184,7 +189,7 @@ export function CameraCanvas({
       pose?.close()
       face?.close()
     }
-  }, [beatRef, audioRef, onFeatures, onStatus])
+  }, [beatRef, audioRef, lightRef, onFeatures, onStatus])
 
   return (
     <>
