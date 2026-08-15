@@ -111,6 +111,21 @@ function drawVideoCover(ctx: CanvasRenderingContext2D, input: VisualInput): Rect
   return r
 }
 
+/** object-fit: contain - the whole frame, uncropped, letterboxed on black. */
+function drawVideoContain(ctx: CanvasRenderingContext2D, input: VisualInput): void {
+  ctx.fillStyle = '#000'
+  ctx.fillRect(0, 0, input.w, input.h)
+  const v = input.video
+  if (!v || v.readyState < 2) return
+  const vw = v.videoWidth
+  const vh = v.videoHeight
+  if (!vw || !vh) return
+  const scale = Math.min(input.w / vw, input.h / vh)
+  const dw = vw * scale
+  const dh = vh * scale
+  ctx.drawImage(v, (input.w - dw) / 2, (input.h - dh) / 2, dw, dh)
+}
+
 const mapX = (r: Rect, x: number): number => r.dx + x * r.dw
 const mapY = (r: Rect, y: number): number => r.dy + y * r.dh
 
@@ -156,8 +171,10 @@ const camera: VisualModule = {
   usesCamera: true,
   needsPose: false,
   needsFace: false,
+  // Show the true frame, uncropped (a horizontal cam stays horizontal), so a
+  // multi-cam grid reads as a natural collage rather than cropped squares.
   render: (ctx, input) => {
-    drawVideoCover(ctx, input)
+    drawVideoContain(ctx, input)
   }
 }
 
