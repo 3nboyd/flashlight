@@ -7,6 +7,7 @@ import { framingSignal } from '../../camera/framing'
 import { CameraDirector, type CameraSignal } from '@core/camera/CameraDirector'
 import { CAMERA_ROLES, DEFAULT_CAMERA_ROLE, type CameraRole } from '@core/camera/roles'
 import { RecordingPanel } from './RecordingPanel'
+import { midiPads } from '../lighting/runtime'
 import './CameraView.css'
 
 const STORE_KEY = 'djc.camera.enabled'
@@ -15,6 +16,7 @@ const PRIMARY_KEY = 'djc.camera.primary'
 const FX_KEY = 'djc.camera.fx'
 const CONFIGS_KEY = 'djc.camera.configs'
 const AUTO_KEY = 'djc.camera.autodirector'
+const CAM_MIDI_KEY = 'djc.camera.midi'
 const MODE_KEY = 'djc.output.mode'
 const LOOK_KEY = 'djc.output.screenLook'
 const SOURCE_KEY = 'djc.output.screenSource'
@@ -24,6 +26,11 @@ const OVERLAY_OP_KEY = 'djc.output.overlayOpacity'
 type FxParams = Record<string, Record<string, number>>
 type ScreenInfo = { patchId: string; label: string }
 type CameraConfig = { role: CameraRole; effect: string }
+/** A MIDI note bound to a camera action: cut the program to a camera, or toggle
+ *  the auto-director. */
+type CamMidiAction = { kind: 'cut'; deviceId: string } | { kind: 'auto' }
+const sameMidiAction = (a: CamMidiAction, b: CamMidiAction): boolean =>
+  a.kind === b.kind && (a.kind !== 'cut' || a.deviceId === (b as { deviceId: string }).deviceId)
 const ROLE_LABEL: Record<CameraRole, string> = Object.fromEntries(
   CAMERA_ROLES.map((r) => [r.role, r.label])
 ) as Record<CameraRole, string>
@@ -121,6 +128,14 @@ export function CameraView(): JSX.Element {
   const [focused, setFocused] = useState<string | null>(null)
   const [auto, setAuto] = useState<boolean>(() => localStorage.getItem(AUTO_KEY) === '1')
   const [programId, setProgramId] = useState<string | null>(null)
+  const [camMidi, setCamMidi] = useState<Record<number, CamMidiAction>>(() => {
+    try {
+      return JSON.parse(localStorage.getItem(CAM_MIDI_KEY) ?? '{}') as Record<number, CamMidiAction>
+    } catch {
+      return {}
+    }
+  })
+  const [midiLearn, setMidiLearn] = useState<CamMidiAction | null>(null)
   const [fxParams, setFxParams] = useState<FxParams>(() => {
     try {
       return JSON.parse(localStorage.getItem(FX_KEY) ?? '{}') as FxParams
@@ -157,8 +172,10 @@ export function CameraView(): JSX.Element {
   const configsRef = useRef<Record<string, CameraConfig>>({})
   const autoRef = useRef(false)
   const manualIdRef = useRef<string | null>(null)
+  const camMidiRef = useRef<Record<number, CamMidiAction>>({})
   programIdRef.current = programId
   autoRef.current = auto
+  camMidiRef.current = camMidi
 
   const getConfig = useCallback(
     (id: string): CameraConfig => configs[id] ?? { role: DEFAULT_CAMERA_ROLE, effect: 'camera' },
@@ -331,6 +348,26 @@ export function CameraView(): JSX.Element {
     return () => cancelAnimationFrame(raf)
   }, [])
 
+  // Per-camera MIDI: listen for bound notes and act (cut program / toggle auto).
+  useEffect(() => localStorage.setItem(CAM_MIDI_KEY, JSON.stringify(camMidi)), [camMidi])
+  useEffect(() => {
+    void midiPads.ensureStarted()
+    const off = midiPads.addNoteListener((note, _vel, isNoteOn) => {
+      if (!isNoteOn) return
+      const a = camMidiRef.current[note]
+      if (!a) return
+      if (a.kind === 'auto') {
+        setAuto((v) => !v)
+      } else {
+        if (!enabledRef.current.includes(a.deviceId)) return
+        setAuto(false)
+        manualIdRef.current = a.deviceId
+        setProgramId(a.deviceId)
+      }
+    })
+    return off
+  }, [])
+
   const requestPermission = async (): Promise<void> => {
     try {
       const s = await navigator.mediaDevices.getUserMedia({ video: true })
@@ -386,6 +423,63 @@ export function CameraView(): JSX.Element {
       setProgramId(id)
     }
   }, [])
+
+  const midiNoteFor = (action: CamMidiAction): number | null => {
+    const entry = Object.entries(camMidi).find(([, a]) => sameMidiAction(a, action))
+    return entry ? Number(entry[0]) : null
+  }
+  const bindCamMidi = (note: number, action: CamMidiAction): void => {
+    setCamMidi((prev) => {
+      const next: Record<number, CamMidiAction> = {}
+      for (const [n, a] of Object.entries(prev)) {
+        if (Number(n) === note) continue // this note is being reassigned
+        if (sameMidiAction(a, action)) continue // move this action off its old note
+        next[Number(n)] = a
+      }
+      next[note] = action
+      return next
+    })
+  }
+  const clearCamMidi = (action: CamMidiAction): void => {
+    setCamMidi((prev) => {
+      const next: Record<number, CamMidiAction> = {}
+      for (const [n, a] of Object.entries(prev)) if (!sameMidiAction(a, action)) next[Number(n)] = a
+      return next
+    })
+  }
+  const learnCamMidi = (action: CamMidiAction): void => {
+    if (midiLearn && sameMidiAction(midiLearn, action)) {
+      midiPads.cancelLearn()
+      setMidiLearn(null)
+      return
+    }
+    setMidiLearn(action)
+    void midiPads.ensureStarted()
+    midiPads.learnOnce((note) => {
+      bindCamMidi(note, action)
+      setMidiLearn(null)
+    })
+  }
+  const midiRow = (name: string, action: CamMidiAction): JSX.Element => {
+    const note = midiNoteFor(action)
+    const learning = !!midiLearn && sameMidiAction(midiLearn, action)
+    return (
+      <div className="cam-midi-row" key={action.kind === 'cut' ? action.deviceId : 'auto'}>
+        <span className="cam-midi-name">{name}</span>
+        <button
+          className={`cam-midi-learn${learning ? ' learning' : ''}`}
+          onClick={() => learnCamMidi(action)}
+        >
+          {learning ? 'Press a pad…' : note != null ? `Note ${note}` : 'Learn'}
+        </button>
+        {note != null && !learning && (
+          <button className="cam-midi-clear" onClick={() => clearCamMidi(action)} title="Clear binding">
+            ✕
+          </button>
+        )}
+      </div>
+    )
+  }
 
   const focusedEffect = focused ? getConfig(focused).effect : 'camera'
   const activeVisual = getVisual(focusedEffect)
@@ -496,6 +590,20 @@ export function CameraView(): JSX.Element {
               ? 'The director cuts the recording between cameras by role, framing, and the music. The laptop cam is only used when you turn to the decks.'
               : 'Manual: click a camera tile to cut the recording to it.'}
           </p>
+          {enabled.length > 0 && (
+            <div className="cam-midi">
+              {enabled.map((id) =>
+                midiRow(`Cut to ${devices.find((d) => d.deviceId === id)?.label || 'camera'}`, {
+                  kind: 'cut',
+                  deviceId: id
+                })
+              )}
+              {midiRow('Toggle auto-director', { kind: 'auto' })}
+              <p className="settings-hint">
+                Learn a pad for each. A pad-cut takes over from auto until you re-enable it.
+              </p>
+            </div>
+          )}
 
           <h3 style={{ marginTop: 8 }}>Output (background)</h3>
           <button className={`cam-output-btn${outputOpen ? ' active' : ''}`} onClick={toggleOutput}>

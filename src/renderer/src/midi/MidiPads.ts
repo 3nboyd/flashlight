@@ -48,6 +48,16 @@ export class MidiPads {
   private learnControlCallback: ((cc: number) => void) | null = null
   private events: MidiEvents | null = null
   private onChange: ((mapping: MidiMapping) => void) | null = null
+  // Raw note taps, independent of the lighting action mapping - used by the
+  // camera view for its own note bindings without clobbering `events`.
+  private noteListeners = new Set<(note: number, velocity: number, isNoteOn: boolean) => void>()
+
+  /** Subscribe to every note on/off (not consumed by learn). Returns an
+   *  unsubscribe fn. Fires regardless of the lighting mapping. */
+  addNoteListener(fn: (note: number, velocity: number, isNoteOn: boolean) => void): () => void {
+    this.noteListeners.add(fn)
+    return () => this.noteListeners.delete(fn)
+  }
 
   /** Register a persistence sink (the store writes the mapping into the
    *  project). Fired whenever a binding changes, not on setMapping(). */
@@ -67,26 +77,41 @@ export class MidiPads {
     this.onChange?.({ notes: { ...this.mapping.notes }, controls: { ...this.mapping.controls } })
   }
 
-  async start(events: MidiEvents): Promise<boolean> {
-    this.events = events
+  private attachInputs(): void {
+    if (!this.access) return
+    for (const input of this.access.inputs.values()) {
+      input.onmidimessage = (msg) => this.handleMessage(msg)
+    }
+    this.events?.onDevicesChanged?.(
+      [...this.access.inputs.values()].map((i) => i.name ?? 'MIDI device')
+    )
+  }
+
+  private async acquire(): Promise<boolean> {
+    if (this.access) return true
     if (!navigator.requestMIDIAccess) return false
     try {
       this.access = await navigator.requestMIDIAccess({ sysex: false })
     } catch {
       return false
     }
-    const attach = (): void => {
-      if (!this.access) return
-      for (const input of this.access.inputs.values()) {
-        input.onmidimessage = (msg) => this.handleMessage(msg)
-      }
-      this.events?.onDevicesChanged?.(
-        [...this.access.inputs.values()].map((i) => i.name ?? 'MIDI device')
-      )
-    }
-    this.access.onstatechange = attach
-    attach()
+    this.access.onstatechange = () => this.attachInputs()
+    this.attachInputs()
     return true
+  }
+
+  async start(events: MidiEvents): Promise<boolean> {
+    this.events = events
+    const ok = await this.acquire()
+    if (ok) this.attachInputs()
+    return ok
+  }
+
+  /** Begin listening without registering lighting event handlers, so other
+   *  views (camera) can use note taps + learn even when no lighting panel is
+   *  mounted. Never clears an existing `events`. */
+  async ensureStarted(): Promise<boolean> {
+    return this.acquire()
   }
 
   private handleMessage(msg: MIDIMessageEvent): void {
@@ -124,6 +149,9 @@ export class MidiPads {
       else this.events?.onLearn?.(note)
       return
     }
+
+    // Raw taps (camera bindings etc.) see every note, independent of mapping.
+    this.noteListeners.forEach((fn) => fn(note, velocity, isNoteOn))
 
     const action = this.mapping.notes[note]
     if (action) {
