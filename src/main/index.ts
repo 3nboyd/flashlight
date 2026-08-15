@@ -32,10 +32,15 @@ function createWindow(): void {
     }
   })
 
-  // Grant camera/microphone to our own renderer (getUserMedia). The OS-level
-  // (macOS TCC) prompt still gates real access on first use.
+  // Grant the permissions our own renderer needs: camera/microphone for
+  // getUserMedia and MIDI for the pad controller. A request handler is an
+  // all-or-nothing gate - anything we do NOT return true for is denied, so MIDI
+  // must be listed here explicitly or Web MIDI stops working. The OS-level
+  // (macOS TCC) prompt still gates real camera/mic access on first use.
   const allow = (permission: string): boolean =>
-    ['media', 'camera', 'microphone', 'audioCapture', 'videoCapture'].includes(permission)
+    ['media', 'camera', 'microphone', 'audioCapture', 'videoCapture', 'midi', 'midiSysex'].includes(
+      permission
+    )
   session.defaultSession.setPermissionRequestHandler((_wc, permission, cb) => cb(allow(permission)))
   session.defaultSession.setPermissionCheckHandler((_wc, permission) => allow(permission))
 
