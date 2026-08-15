@@ -561,8 +561,13 @@ export class LightingHost {
 
     // Silence freeze: only when audio is actually being streamed (so OS2L- or
     // manual-only rigs are unaffected), and its smoothed level has gone quiet.
+    // When OS2L is streaming a steady beat grid it is the authority for time, so
+    // we never freeze on audio-level dips there - otherwise sparse/jittery audio
+    // frames (e.g. the renderer busy with camera detection) trip this 80ms gate
+    // between kicks and make the on-beat pulse stutter/flicker.
+    const os2lDriving = this.currentBeatSource(nowMs) === 'os2l'
     const audioPresent = nowMs - this.lastAudioAtMs < 500
-    const musicSilent = audioPresent && nowMs - this.lastLevelLoudMs > 80
+    const musicSilent = !os2lDriving && audioPresent && nowMs - this.lastLevelLoudMs > 80
 
     if (!darkFrozen && !musicSilent) {
       this.frozenBeatAtMs = null
