@@ -50,22 +50,55 @@ const FLOOR_Y = 0.82
 const PROP_CHOICES: { type: StagePropType; label: string; hint: string }[] = [
   { type: 'vtruss', label: 'Vertical Truss', hint: 'Mount fixtures up its side' },
   { type: 'speaker', label: 'Speaker Stack', hint: 'Drop one on another to stack higher' },
+  { type: 'screen', label: 'Screen / TV', hint: 'Glows with the color of your lights' },
   { type: 'booth', label: 'DJ Booth', hint: 'Set dressing' },
   { type: 'riser', label: 'Riser', hint: 'Low platform' }
 ]
 
 /** Back-to-front draw order; hit-testing runs front-to-back (reverse). */
-const PROP_DEPTH: Record<StagePropType, number> = { booth: 0, riser: 1, speaker: 2, vtruss: 3 }
+const PROP_DEPTH: Record<StagePropType, number> = {
+  booth: 0,
+  riser: 1,
+  screen: 1.5,
+  speaker: 2,
+  vtruss: 3
+}
 
 const PROP_LABELS: Record<StagePropType, string> = {
   vtruss: 'Vertical Truss',
   speaker: 'Speaker Stack',
+  screen: 'Screen / TV',
   booth: 'DJ Booth',
   riser: 'Riser'
 }
 
 function speakerMetrics(width: number, height: number): { w: number; boxH: number } {
   return { w: Math.min(width * 0.085, 92), boxH: height * 0.115 }
+}
+
+interface Box {
+  x: number
+  y: number
+  w: number
+  h: number
+}
+/** 16:9 stage screen on a stand, standing on the floor, centered at px. */
+function screenGeom(
+  px: number,
+  width: number,
+  height: number,
+  floorY: number
+): { inner: Box; bezel: Box; standH: number } {
+  const screenW = Math.min(width * 0.22, 220)
+  const screenH = (screenW * 9) / 16
+  const standH = height * 0.06
+  const bezel = Math.max(3, screenW * 0.03)
+  const top = floorY - standH - screenH
+  return {
+    inner: { x: px - screenW / 2, y: top, w: screenW, h: screenH },
+    bezel: { x: px - screenW / 2 - bezel, y: top - bezel, w: screenW + 2 * bezel, h: screenH + 2 * bezel },
+    standH
+  }
 }
 
 export function StageVisualizer({
@@ -211,6 +244,9 @@ export function StageVisualizer({
           const { w, boxH } = speakerMetrics(width, h)
           const stackH = boxH * (prop.stack ?? 2)
           if (Math.abs(mx - px) < w * 0.6 && my > floorY - stackH - 6 && my < floorY + 6) return prop.id
+        } else if (prop.type === 'screen') {
+          const b = screenGeom(px, width, h, floorY).bezel
+          if (mx > b.x && mx < b.x + b.w && my > b.y && my < b.y + b.h) return prop.id
         } else if (Math.abs(mx - px) < width * 0.07 && my > floorY - h * 0.18 && my < floorY + 6) {
           return prop.id
         }
@@ -521,6 +557,48 @@ function renderStage(
     }
   }
 
+  // --- stage screens reflect the rig (average lit color, pulsing with it) ---
+  const screenProps = rc.props.filter((p) => p.type === 'screen')
+  if (screenProps.length > 0) {
+    let R = 0
+    let G = 0
+    let B = 0
+    let wsum = 0
+    for (const { state } of states) {
+      const i = state.intensity
+      if (i <= 0.01) continue
+      R += state.r * i
+      G += state.g * i
+      B += state.b * i
+      wsum += i
+    }
+    const lit = states.length > 0 ? Math.min(1, (wsum / states.length) * 1.6) : 0
+    const cr = wsum > 0 ? Math.round(R / wsum) : 0
+    const cg = wsum > 0 ? Math.round(G / wsum) : 0
+    const cb = wsum > 0 ? Math.round(B / wsum) : 0
+    ctx.globalCompositeOperation = 'lighter'
+    for (const prop of screenProps) {
+      const { inner } = screenGeom(prop.x * width, width, height, floorY)
+      const a = 0.16 + 0.72 * lit
+      const grad = ctx.createLinearGradient(inner.x, inner.y, inner.x, inner.y + inner.h)
+      grad.addColorStop(0, `rgba(${cr},${cg},${cb},${(a * 0.55).toFixed(3)})`)
+      grad.addColorStop(0.5, `rgba(${cr},${cg},${cb},${a.toFixed(3)})`)
+      grad.addColorStop(1, `rgba(${cr},${cg},${cb},${(a * 0.4).toFixed(3)})`)
+      ctx.fillStyle = grad
+      ctx.fillRect(inner.x, inner.y, inner.w, inner.h)
+      // Faint scanlines so it reads as a screen.
+      ctx.strokeStyle = `rgba(255,255,255,${(0.03 + 0.05 * lit).toFixed(3)})`
+      ctx.lineWidth = 1
+      for (let y = inner.y + 2; y < inner.y + inner.h; y += 3) {
+        ctx.beginPath()
+        ctx.moveTo(inner.x, y)
+        ctx.lineTo(inner.x + inner.w, y)
+        ctx.stroke()
+      }
+    }
+    ctx.globalCompositeOperation = 'source-over'
+  }
+
   // --- light pass (additive) ---
   ctx.globalCompositeOperation = 'lighter'
   states.forEach(({ state, pos }, index) => {
@@ -681,6 +759,25 @@ function drawProp(
       ctx.roundRect(px - w / 2, floorY - h, w, h, 2)
       ctx.fill()
       ctx.stroke()
+      break
+    }
+    case 'screen': {
+      const g = screenGeom(px, width, height, floorY)
+      // Stand + foot.
+      ctx.fillStyle = '#141419'
+      ctx.fillRect(px - 4, g.inner.y + g.inner.h, 8, g.standH)
+      ctx.fillRect(px - g.inner.w * 0.16, floorY - 4, g.inner.w * 0.32, 4)
+      // Bezel.
+      ctx.fillStyle = '#0a0a0e'
+      ctx.strokeStyle = isSelected ? 'rgba(139,92,246,0.9)' : 'rgba(255,255,255,0.2)'
+      ctx.lineWidth = 1.5
+      ctx.beginPath()
+      ctx.roundRect(g.bezel.x, g.bezel.y, g.bezel.w, g.bezel.h, 4)
+      ctx.fill()
+      ctx.stroke()
+      // Dark screen base; the lighting glow is layered on in renderStage.
+      ctx.fillStyle = '#050507'
+      ctx.fillRect(g.inner.x, g.inner.y, g.inner.w, g.inner.h)
       break
     }
   }

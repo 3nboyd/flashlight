@@ -187,7 +187,7 @@ export interface AudioInputSettings {
   autoListen: boolean
 }
 
-export type StagePropType = 'vtruss' | 'speaker' | 'booth' | 'riser'
+export type StagePropType = 'vtruss' | 'speaker' | 'booth' | 'riser' | 'screen'
 
 export interface StageProp {
   id: string
