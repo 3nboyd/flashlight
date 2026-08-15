@@ -115,6 +115,11 @@ const api = {
     open: (): Promise<boolean> => ipcRenderer.invoke('output:open'),
     close: (): Promise<boolean> => ipcRenderer.invoke('output:close'),
     isOpen: (): Promise<boolean> => ipcRenderer.invoke('output:isOpen')
+  },
+  recording: {
+    save: (dir: string, filename: string, data: ArrayBuffer): Promise<string> =>
+      ipcRenderer.invoke('recording:save', dir, filename, data),
+    reveal: (path: string): Promise<boolean> => ipcRenderer.invoke('recording:reveal', path)
   }
 }
 

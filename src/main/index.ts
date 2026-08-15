@@ -8,6 +8,7 @@ import { registerFileOpsHandlers } from './ipc/fileops'
 import { registerRenameHandlers } from './ipc/rename'
 import { registerLightingHandlers, disposeLighting } from './ipc/lighting'
 import { registerOutputHandlers, disposeOutput } from './ipc/output'
+import { registerRecordingHandlers } from './ipc/recording'
 
 const isMac = process.platform === 'darwin'
 
@@ -71,6 +72,7 @@ app.whenReady().then(() => {
   registerRenameHandlers()
   registerLightingHandlers()
   registerOutputHandlers()
+  registerRecordingHandlers()
 
   createWindow()
 

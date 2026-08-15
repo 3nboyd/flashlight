@@ -39,7 +39,8 @@ export function CameraCanvas({
   showFaceMesh = false,
   className = 'cam-canvas',
   onFeatures,
-  onStatus
+  onStatus,
+  onCanvasReady
 }: {
   deviceId: string
   visualId: string
@@ -52,6 +53,8 @@ export function CameraCanvas({
   className?: string
   onFeatures?: (f: PoseFeatureState) => void
   onStatus?: (s: string) => void
+  /** Reports the underlying canvas element (for recording); null on unmount. */
+  onCanvasReady?: (el: HTMLCanvasElement | null) => void
 }): JSX.Element {
   const videoRef = useRef<HTMLVideoElement>(null)
   const canvasRef = useRef<HTMLCanvasElement>(null)
@@ -63,6 +66,12 @@ export function CameraCanvas({
   skelRef.current = showSkeleton
   faceOverlayRef.current = showFaceMesh
   paramsRef.current = params ?? {}
+
+  // Hand the canvas element up (for recording), and clear it on unmount.
+  useEffect(() => {
+    onCanvasReady?.(canvasRef.current)
+    return () => onCanvasReady?.(null)
+  }, [onCanvasReady])
 
   // Capture the camera stream into the hidden video element.
   useEffect(() => {

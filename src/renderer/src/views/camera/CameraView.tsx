@@ -2,6 +2,7 @@ import { useCallback, useEffect, useMemo, useRef, useState, type JSX } from 'rea
 import { CameraCanvas, ZERO_FEAT, ZERO_AUDIO } from '../../camera/CameraCanvas'
 import { VISUALS, getVisual, defaultParams, type AudioReact, type VisualModule } from '../../camera/VisualEngine'
 import type { PoseFeatureState } from '../../camera/PoseFeatures'
+import { RecordingPanel } from './RecordingPanel'
 import './CameraView.css'
 
 const STORE_KEY = 'djc.camera.enabled'
@@ -22,7 +23,8 @@ function CameraTile({
   beatRef,
   audioRef,
   onFeatures,
-  onStatus
+  onStatus,
+  onCanvasReady
 }: {
   deviceId: string
   primary: boolean
@@ -34,6 +36,7 @@ function CameraTile({
   audioRef: React.MutableRefObject<AudioReact>
   onFeatures?: (f: PoseFeatureState) => void
   onStatus?: (s: string) => void
+  onCanvasReady?: (el: HTMLCanvasElement | null) => void
 }): JSX.Element {
   return (
     <div className="cam-tile">
@@ -47,6 +50,7 @@ function CameraTile({
         audioRef={audioRef}
         onFeatures={primary ? onFeatures : undefined}
         onStatus={onStatus}
+        onCanvasReady={primary ? onCanvasReady : undefined}
       />
       {primary && <span className="cam-badge">Effect</span>}
     </div>
@@ -90,6 +94,10 @@ export function CameraView(): JSX.Element {
   const [outputOpen, setOutputOpen] = useState(false)
   const beatRef = useRef(0)
   const audioRef = useRef<AudioReact>({ ...ZERO_AUDIO })
+  const primaryCanvasRef = useRef<HTMLCanvasElement | null>(null)
+  const setPrimaryCanvas = useCallback((el: HTMLCanvasElement | null) => {
+    primaryCanvasRef.current = el
+  }, [])
 
   const refresh = useCallback(async () => {
     try {
@@ -247,13 +255,16 @@ export function CameraView(): JSX.Element {
           )}
           {status && <p className="settings-hint">{status}</p>}
 
-          <h3 style={{ marginTop: 8 }}>Output</h3>
+          <h3 style={{ marginTop: 8 }}>Output (background)</h3>
           <button className={`cam-output-btn${outputOpen ? ' active' : ''}`} onClick={toggleOutput}>
             {outputOpen ? 'Close projector output' : 'Open projector output'}
           </button>
           <p className="settings-hint">
             Sends the current effect full-screen to a second display (projector / stage TV).
           </p>
+
+          <h3 style={{ marginTop: 8 }}>Recording</h3>
+          <RecordingPanel getCanvas={() => primaryCanvasRef.current} />
 
           <h3 style={{ marginTop: 8 }}>Body features</h3>
           <Meter label="Present" value={feat.present} />
@@ -288,6 +299,7 @@ export function CameraView(): JSX.Element {
                     audioRef={audioRef}
                     onFeatures={onFeatures}
                     onStatus={setStatus}
+                    onCanvasReady={setPrimaryCanvas}
                   />
                 ))}
               </div>
