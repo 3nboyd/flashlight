@@ -2,6 +2,10 @@ import { useCallback, useEffect, useMemo, useRef, useState, type JSX } from 'rea
 import { CameraCanvas, ZERO_FEAT, ZERO_AUDIO } from '../../camera/CameraCanvas'
 import { VISUALS, getVisual, defaultParams, type AudioReact, type VisualModule } from '../../camera/VisualEngine'
 import type { PoseFeatureState } from '../../camera/PoseFeatures'
+import type { FaceFrame } from '../../camera/FaceEngine'
+import { framingSignal } from '../../camera/framing'
+import { CameraDirector, type CameraSignal } from '@core/camera/CameraDirector'
+import { CAMERA_ROLES, DEFAULT_CAMERA_ROLE, type CameraRole } from '@core/camera/roles'
 import { RecordingPanel } from './RecordingPanel'
 import './CameraView.css'
 
@@ -9,6 +13,8 @@ const STORE_KEY = 'djc.camera.enabled'
 const VISUAL_KEY = 'djc.camera.visual'
 const PRIMARY_KEY = 'djc.camera.primary'
 const FX_KEY = 'djc.camera.fx'
+const CONFIGS_KEY = 'djc.camera.configs'
+const AUTO_KEY = 'djc.camera.autodirector'
 const MODE_KEY = 'djc.output.mode'
 const LOOK_KEY = 'djc.output.screenLook'
 const SOURCE_KEY = 'djc.output.screenSource'
@@ -17,51 +23,70 @@ const OVERLAY_OP_KEY = 'djc.output.overlayOpacity'
 
 type FxParams = Record<string, Record<string, number>>
 type ScreenInfo = { patchId: string; label: string }
+type CameraConfig = { role: CameraRole; effect: string }
+const ROLE_LABEL: Record<CameraRole, string> = Object.fromEntries(
+  CAMERA_ROLES.map((r) => [r.role, r.label])
+) as Record<CameraRole, string>
 
 /** One live camera tile wrapping the shared canvas. */
 function CameraTile({
   deviceId,
-  primary,
-  visualId,
+  role,
+  effect,
   params,
+  program,
+  focused,
   showSkeleton,
   showFaceMesh,
   beatRef,
   audioRef,
   lightRef,
+  onFraming,
   onFeatures,
   onStatus,
-  onCanvasReady
+  onCanvasReady,
+  onClick
 }: {
   deviceId: string
-  primary: boolean
-  visualId: string
+  role: CameraRole
+  effect: string
   params: Record<string, number>
+  program: boolean
+  focused: boolean
   showSkeleton: boolean
   showFaceMesh: boolean
   beatRef: React.MutableRefObject<number>
   audioRef: React.MutableRefObject<AudioReact>
   lightRef: React.MutableRefObject<{ r: number; g: number; b: number }>
+  onFraming: (feat: PoseFeatureState, face: FaceFrame | null) => void
   onFeatures?: (f: PoseFeatureState) => void
   onStatus?: (s: string) => void
-  onCanvasReady?: (el: HTMLCanvasElement | null) => void
+  onCanvasReady: (el: HTMLCanvasElement | null) => void
+  onClick: () => void
 }): JSX.Element {
   return (
-    <div className="cam-tile">
+    <div
+      className={`cam-tile${program ? ' program' : ''}${focused ? ' focused' : ''}`}
+      onClick={onClick}
+    >
       <CameraCanvas
         deviceId={deviceId}
-        visualId={visualId}
+        visualId={effect}
         params={params}
-        showSkeleton={primary && showSkeleton}
-        showFaceMesh={primary && showFaceMesh}
+        showSkeleton={focused && showSkeleton}
+        showFaceMesh={focused && showFaceMesh}
+        detectFraming
+        framingNeedsFace={role === 'headon' || role === 'laptop'}
         beatRef={beatRef}
         audioRef={audioRef}
         lightRef={lightRef}
-        onFeatures={primary ? onFeatures : undefined}
+        onFraming={onFraming}
+        onFeatures={focused ? onFeatures : undefined}
         onStatus={onStatus}
-        onCanvasReady={primary ? onCanvasReady : undefined}
+        onCanvasReady={onCanvasReady}
       />
-      {primary && <span className="cam-badge">Effect</span>}
+      <span className="cam-badge role">{ROLE_LABEL[role]}</span>
+      {program && <span className="cam-badge program">● PROGRAM</span>}
     </div>
   )
 }
@@ -86,8 +111,16 @@ export function CameraView(): JSX.Element {
       return []
     }
   })
-  const [primary, setPrimary] = useState<string | null>(() => localStorage.getItem(PRIMARY_KEY))
-  const [visual, setVisual] = useState<string>(() => localStorage.getItem(VISUAL_KEY) ?? 'camera')
+  const [configs, setConfigs] = useState<Record<string, CameraConfig>>(() => {
+    try {
+      return JSON.parse(localStorage.getItem(CONFIGS_KEY) ?? '{}') as Record<string, CameraConfig>
+    } catch {
+      return {}
+    }
+  })
+  const [focused, setFocused] = useState<string | null>(null)
+  const [auto, setAuto] = useState<boolean>(() => localStorage.getItem(AUTO_KEY) === '1')
+  const [programId, setProgramId] = useState<string | null>(null)
   const [fxParams, setFxParams] = useState<FxParams>(() => {
     try {
       return JSON.parse(localStorage.getItem(FX_KEY) ?? '{}') as FxParams
@@ -114,10 +147,23 @@ export function CameraView(): JSX.Element {
   const beatRef = useRef(0)
   const audioRef = useRef<AudioReact>({ ...ZERO_AUDIO })
   const lightRef = useRef<{ r: number; g: number; b: number }>({ r: 0, g: 0, b: 0 })
-  const primaryCanvasRef = useRef<HTMLCanvasElement | null>(null)
-  const setPrimaryCanvas = useCallback((el: HTMLCanvasElement | null) => {
-    primaryCanvasRef.current = el
-  }, [])
+  // Auto-director + program compositor plumbing.
+  const directorRef = useRef(new CameraDirector())
+  const framingsRef = useRef<Record<string, CameraSignal>>({})
+  const tileCanvases = useRef<Record<string, HTMLCanvasElement | null>>({})
+  const programCanvasRef = useRef<HTMLCanvasElement | null>(null)
+  const programIdRef = useRef<string | null>(null)
+  const enabledRef = useRef<string[]>([])
+  const configsRef = useRef<Record<string, CameraConfig>>({})
+  const autoRef = useRef(false)
+  const manualIdRef = useRef<string | null>(null)
+  programIdRef.current = programId
+  autoRef.current = auto
+
+  const getConfig = useCallback(
+    (id: string): CameraConfig => configs[id] ?? { role: DEFAULT_CAMERA_ROLE, effect: 'camera' },
+    [configs]
+  )
 
   const refresh = useCallback(async () => {
     try {
@@ -199,15 +245,91 @@ export function CameraView(): JSX.Element {
 
   useEffect(() => {
     localStorage.setItem(STORE_KEY, JSON.stringify(enabled))
-    if (primary && !enabled.includes(primary)) setPrimary(enabled[0] ?? null)
-    if (!primary && enabled.length > 0) setPrimary(enabled[0])
-  }, [enabled, primary])
+    enabledRef.current = enabled
+    // Seed a default config for any newly-enabled camera.
+    setConfigs((prev) => {
+      let changed = false
+      const next = { ...prev }
+      enabled.forEach((id, i) => {
+        if (!next[id]) {
+          next[id] = { role: i === 0 ? 'headon' : 'other', effect: 'camera' }
+          changed = true
+        }
+      })
+      return changed ? next : prev
+    })
+    setFocused((f) => (f && enabled.includes(f) ? f : (enabled[0] ?? null)))
+    if (!manualIdRef.current || !enabled.includes(manualIdRef.current)) {
+      manualIdRef.current = enabled[0] ?? null
+    }
+  }, [enabled])
 
-  useEffect(() => localStorage.setItem(VISUAL_KEY, visual), [visual])
-  useEffect(() => localStorage.setItem(FX_KEY, JSON.stringify(fxParams)), [fxParams])
   useEffect(() => {
-    if (primary) localStorage.setItem(PRIMARY_KEY, primary)
-  }, [primary])
+    configsRef.current = configs
+    localStorage.setItem(CONFIGS_KEY, JSON.stringify(configs))
+  }, [configs])
+  useEffect(() => localStorage.setItem(FX_KEY, JSON.stringify(fxParams)), [fxParams])
+  useEffect(() => localStorage.setItem(AUTO_KEY, auto ? '1' : '0'), [auto])
+
+  // Mirror the program camera to the projector's camera-mode + recording source.
+  useEffect(() => {
+    if (programId) {
+      localStorage.setItem(PRIMARY_KEY, programId)
+      localStorage.setItem(VISUAL_KEY, configs[programId]?.effect ?? 'camera')
+    }
+  }, [programId, configs])
+
+  // Auto-director: gather each camera's framing signal + music context and pick
+  // the program camera. When auto is off, honor the manual pick.
+  useEffect(() => {
+    const id = setInterval(() => {
+      const ids = enabledRef.current
+      if (ids.length === 0) {
+        setProgramId((p) => (p === null ? p : null))
+        return
+      }
+      const director = directorRef.current
+      director.setManual(autoRef.current ? null : manualIdRef.current)
+      const signals: CameraSignal[] = ids.map(
+        (cid) =>
+          framingsRef.current[cid] ?? {
+            id: cid,
+            role: configsRef.current[cid]?.role ?? 'other',
+            present: 0,
+            motion: 0,
+            facing: 0,
+            lookingAtBoard: 0
+          }
+      )
+      const dec = director.update(signals, {
+        nowMs: performance.now(),
+        audioLevel: audioRef.current.level,
+        surge: audioRef.current.surge
+      })
+      setProgramId((p) => (p === dec.activeId ? p : dec.activeId))
+    }, 200)
+    return () => clearInterval(id)
+  }, [])
+
+  // Program compositor: copy the active camera's canvas into one canvas so
+  // recording follows the auto-switch without restarting the recorder.
+  useEffect(() => {
+    let raf = 0
+    const loop = (): void => {
+      raf = requestAnimationFrame(loop)
+      const dst = programCanvasRef.current
+      const src = programIdRef.current ? tileCanvases.current[programIdRef.current] : null
+      if (!dst || !src || src.width === 0) return
+      if (dst.width !== src.width || dst.height !== src.height) {
+        dst.width = src.width
+        dst.height = src.height
+      }
+      const ctx = dst.getContext('2d')
+      if (ctx) ctx.drawImage(src, 0, 0)
+    }
+    loop()
+    return () => cancelAnimationFrame(raf)
+  }, [])
 
   const requestPermission = async (): Promise<void> => {
     try {
@@ -238,27 +360,60 @@ export function CameraView(): JSX.Element {
     setEnabled((cur) => (cur.includes(id) ? cur.filter((x) => x !== id) : [...cur, id]))
 
   const onFeatures = useCallback((f: PoseFeatureState) => setFeat({ ...f }), [])
-  const activeVisual = getVisual(visual)
+  const registerCanvas = useCallback((id: string, el: HTMLCanvasElement | null) => {
+    tileCanvases.current[id] = el
+  }, [])
+  const onFraming = useCallback(
+    (id: string, f: PoseFeatureState, face: FaceFrame | null) => {
+      const role = configsRef.current[id]?.role ?? 'other'
+      framingsRef.current[id] = framingSignal(id, role, f, face)
+    },
+    []
+  )
+  const setRole = useCallback((id: string, role: CameraRole) => {
+    setConfigs((prev) => ({ ...prev, [id]: { role, effect: prev[id]?.effect ?? 'camera' } }))
+  }, [])
+  const setEffect = useCallback((id: string, effect: string) => {
+    setConfigs((prev) => ({
+      ...prev,
+      [id]: { role: prev[id]?.role ?? DEFAULT_CAMERA_ROLE, effect }
+    }))
+  }, [])
+  const onTileClick = useCallback((id: string) => {
+    setFocused(id)
+    if (!autoRef.current) {
+      manualIdRef.current = id
+      setProgramId(id)
+    }
+  }, [])
+
+  const focusedEffect = focused ? getConfig(focused).effect : 'camera'
+  const activeVisual = getVisual(focusedEffect)
   const tracksBody = activeVisual.needsPose || activeVisual.needsFace || showSkeleton || showFaceMesh
   const activeParams = useMemo(
-    () => ({ ...defaultParams(activeVisual), ...(fxParams[visual] ?? {}) }),
-    [activeVisual, fxParams, visual]
+    () => ({ ...defaultParams(activeVisual), ...(fxParams[focusedEffect] ?? {}) }),
+    [activeVisual, fxParams, focusedEffect]
   )
   const setParam = useCallback(
     (key: string, value: number) =>
       setFxParams((prev) => ({
         ...prev,
-        [visual]: { ...defaultParams(activeVisual), ...(prev[visual] ?? {}), [key]: value }
+        [focusedEffect]: {
+          ...defaultParams(activeVisual),
+          ...(prev[focusedEffect] ?? {}),
+          [key]: value
+        }
       })),
-    [activeVisual, visual]
+    [activeVisual, focusedEffect]
   )
   const cameraFx = VISUALS.filter((v) => v.usesCamera)
   const genFx = VISUALS.filter((v) => !v.usesCamera)
   const fxButton = (v: VisualModule): JSX.Element => (
     <button
       key={v.id}
-      className={`cam-fx-btn${visual === v.id ? ' active' : ''}`}
-      onClick={() => setVisual(v.id)}
+      className={`cam-fx-btn${focusedEffect === v.id ? ' active' : ''}`}
+      onClick={() => focused && setEffect(focused, v.id)}
+      disabled={!focused}
     >
       {v.name}
       {(v.needsPose || v.needsFace) && <span className="cam-fx-tag">body</span>}
@@ -270,8 +425,8 @@ export function CameraView(): JSX.Element {
       <div className="view-header">
         <h1>Camera</h1>
         <p className="view-sub">
-          Live cameras, body detection, and visual effects. Effects run on the primary camera and
-          react to your movement and the music.
+          Live cameras with per-camera roles and effects. The auto-director cuts the recording
+          between cameras; each camera can carry its own effect, or none.
         </p>
       </div>
 
@@ -286,24 +441,61 @@ export function CameraView(): JSX.Element {
             <p className="settings-hint">No cameras found. Connect one and it will appear here.</p>
           ) : (
             <div className="cam-device-list">
-              {devices.map((d, i) => (
-                <label key={d.deviceId} className="cam-device">
-                  <input type="checkbox" checked={enabled.includes(d.deviceId)} onChange={() => toggle(d.deviceId)} />
-                  <span className="cam-device-name">{d.label || `Camera ${i + 1}`}</span>
-                  {enabled.includes(d.deviceId) && (
-                    <button
-                      className={`cam-primary-btn${primary === d.deviceId ? ' active' : ''}`}
-                      title="Run the effect on this camera"
-                      onClick={() => setPrimary(d.deviceId)}
-                    >
-                      {primary === d.deviceId ? 'Primary' : 'Set primary'}
-                    </button>
-                  )}
-                </label>
-              ))}
+              {devices.map((d, i) => {
+                const on = enabled.includes(d.deviceId)
+                const cfg = getConfig(d.deviceId)
+                return (
+                  <div key={d.deviceId} className={`cam-device${on ? ' on' : ''}`}>
+                    <label className="cam-device-head">
+                      <input type="checkbox" checked={on} onChange={() => toggle(d.deviceId)} />
+                      <span className="cam-device-name">{d.label || `Camera ${i + 1}`}</span>
+                    </label>
+                    {on && (
+                      <div className="cam-device-cfg">
+                        <select
+                          className="cam-role-select"
+                          value={cfg.role}
+                          onChange={(e) => setRole(d.deviceId, e.target.value as CameraRole)}
+                          title="What this camera is pointed at (drives auto-switching)"
+                        >
+                          {CAMERA_ROLES.map((r) => (
+                            <option key={r.role} value={r.role}>
+                              {r.label}
+                            </option>
+                          ))}
+                        </select>
+                        <select
+                          className="cam-effect-select"
+                          value={cfg.effect}
+                          onChange={(e) => setEffect(d.deviceId, e.target.value)}
+                          title="Effect drawn on this camera (None = plain feed)"
+                        >
+                          <option value="camera">No effect</option>
+                          {VISUALS.filter((v) => v.id !== 'camera').map((v) => (
+                            <option key={v.id} value={v.id}>
+                              {v.name}
+                            </option>
+                          ))}
+                        </select>
+                      </div>
+                    )}
+                  </div>
+                )
+              })}
             </div>
           )}
           {status && <p className="settings-hint">{status}</p>}
+
+          <h3 style={{ marginTop: 8 }}>Auto-director</h3>
+          <label className="cam-out-row">
+            <span>Auto-switch recording</span>
+            <input type="checkbox" checked={auto} onChange={(e) => setAuto(e.target.checked)} />
+          </label>
+          <p className="settings-hint">
+            {auto
+              ? 'The director cuts the recording between cameras by role, framing, and the music. The laptop cam is only used when you turn to the decks.'
+              : 'Manual: click a camera tile to cut the recording to it.'}
+          </p>
 
           <h3 style={{ marginTop: 8 }}>Output (background)</h3>
           <button className={`cam-output-btn${outputOpen ? ' active' : ''}`} onClick={toggleOutput}>
@@ -388,7 +580,10 @@ export function CameraView(): JSX.Element {
           )}
 
           <h3 style={{ marginTop: 8 }}>Recording</h3>
-          <RecordingPanel getCanvas={() => primaryCanvasRef.current} />
+          <p className="settings-hint">
+            Records the live program (the auto-switched / selected camera), not the screen bus.
+          </p>
+          <RecordingPanel getCanvas={() => programCanvasRef.current} />
 
           <h3 style={{ marginTop: 8 }}>Body features</h3>
           <Meter label="Present" value={feat.present} />
@@ -410,25 +605,37 @@ export function CameraView(): JSX.Element {
               <div className="camera-empty">Enable a camera to preview it here.</div>
             ) : (
               <div className={`cam-grid count-${Math.min(enabled.length, 4)}`}>
-                {enabled.map((id) => (
-                  <CameraTile
-                    key={id}
-                    deviceId={id}
-                    primary={primary === id}
-                    visualId={primary === id ? visual : 'camera'}
-                    params={primary === id ? activeParams : {}}
-                    showSkeleton={showSkeleton}
-                    showFaceMesh={showFaceMesh}
-                    beatRef={beatRef}
-                    audioRef={audioRef}
-                    lightRef={lightRef}
-                    onFeatures={onFeatures}
-                    onStatus={setStatus}
-                    onCanvasReady={setPrimaryCanvas}
-                  />
-                ))}
+                {enabled.map((id) => {
+                  const cfg = getConfig(id)
+                  return (
+                    <CameraTile
+                      key={id}
+                      deviceId={id}
+                      role={cfg.role}
+                      effect={cfg.effect}
+                      params={{
+                        ...defaultParams(getVisual(cfg.effect)),
+                        ...(fxParams[cfg.effect] ?? {})
+                      }}
+                      program={programId === id}
+                      focused={focused === id}
+                      showSkeleton={showSkeleton}
+                      showFaceMesh={showFaceMesh}
+                      beatRef={beatRef}
+                      audioRef={audioRef}
+                      lightRef={lightRef}
+                      onFraming={(f, face) => onFraming(id, f, face)}
+                      onFeatures={onFeatures}
+                      onStatus={setStatus}
+                      onCanvasReady={(el) => registerCanvas(id, el)}
+                      onClick={() => onTileClick(id)}
+                    />
+                  )
+                })}
               </div>
             )}
+            {/* Hidden program compositor - the recording source. */}
+            <canvas ref={programCanvasRef} className="cam-program-hidden" />
             {enabled.length > 0 && (
               <div className="cam-debug">
                 <label className="cam-debug-toggle">
@@ -444,6 +651,11 @@ export function CameraView(): JSX.Element {
           </div>
 
           <div className="cam-hud">
+            <div className="cam-hud-target">
+              {focused
+                ? `Effect for: ${devices.find((d) => d.deviceId === focused)?.label || 'selected camera'} (${ROLE_LABEL[getConfig(focused).role]})`
+                : 'Select a camera tile to set its effect'}
+            </div>
             <div className="cam-fx-group">
               <span className="cam-hud-label">Camera</span>
               {cameraFx.map(fxButton)}

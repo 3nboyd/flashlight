@@ -36,9 +36,38 @@
 
 .cam-device {
   display: flex;
+  flex-direction: column;
+  gap: 6px;
+  font-size: 13px;
+  color: var(--text-primary);
+}
+
+.cam-device.on {
+  padding: 6px 7px;
+  border: 1px solid var(--border-strong);
+  border-radius: 8px;
+  background: rgba(255, 255, 255, 0.02);
+}
+
+.cam-device-head {
+  display: flex;
   align-items: center;
   gap: 8px;
-  font-size: 13px;
+}
+
+.cam-device-cfg {
+  display: flex;
+  gap: 6px;
+}
+
+.cam-device-cfg > select {
+  flex: 1 1 0;
+  min-width: 0;
+  font-size: 11px;
+  padding: 3px 5px;
+  border-radius: 6px;
+  border: 1px solid var(--border-strong);
+  background: var(--surface-1, #16161c);
   color: var(--text-primary);
 }
 
@@ -405,6 +434,44 @@
   border-radius: 6px;
   overflow: hidden;
   min-height: 0;
+  cursor: pointer;
+  border: 2px solid transparent;
+}
+
+.cam-tile.focused {
+  border-color: rgba(125, 211, 252, 0.6);
+}
+
+.cam-tile.program {
+  border-color: #ef4444;
+}
+
+.cam-badge.role {
+  left: 6px;
+  color: #cbd5e1;
+}
+
+.cam-badge.program {
+  left: auto;
+  right: 6px;
+  color: #fff;
+  background: rgba(239, 68, 68, 0.85);
+  font-weight: 700;
+}
+
+.cam-program-hidden {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  opacity: 0;
+  pointer-events: none;
+  left: -9999px;
+}
+
+.cam-hud-target {
+  font-size: 11px;
+  color: var(--text-secondary, #9a9aa8);
+  padding: 2px 4px 6px;
 }
 
 .cam-video-hidden {

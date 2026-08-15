@@ -1,6 +1,6 @@
 import { useEffect, useRef, type JSX } from 'react'
 import { PoseEngine } from './PoseEngine'
-import { FaceEngine } from './FaceEngine'
+import { FaceEngine, type FaceFrame } from './FaceEngine'
 import { PoseFeatures, type PoseFeatureState } from './PoseFeatures'
 import {
   getVisual,
@@ -39,8 +39,11 @@ export function CameraCanvas({
   params,
   showSkeleton = false,
   showFaceMesh = false,
+  detectFraming = false,
+  framingNeedsFace = false,
   className = 'cam-canvas',
   onFeatures,
+  onFraming,
   onStatus,
   onCanvasReady
 }: {
@@ -54,8 +57,14 @@ export function CameraCanvas({
   params?: Record<string, number>
   showSkeleton?: boolean
   showFaceMesh?: boolean
+  /** Run body (and optionally face) detection to feed the auto-director, even
+   *  when the effect itself doesn't need it. */
+  detectFraming?: boolean
+  framingNeedsFace?: boolean
   className?: string
   onFeatures?: (f: PoseFeatureState) => void
+  /** Throttled framing report for the director (pose features + face frame). */
+  onFraming?: (feat: PoseFeatureState, face: FaceFrame | null) => void
   onStatus?: (s: string) => void
   /** Reports the underlying canvas element (for recording); null on unmount. */
   onCanvasReady?: (el: HTMLCanvasElement | null) => void
@@ -66,10 +75,16 @@ export function CameraCanvas({
   const skelRef = useRef(showSkeleton)
   const faceOverlayRef = useRef(showFaceMesh)
   const paramsRef = useRef<Record<string, number>>(params ?? {})
+  const framingRef = useRef(detectFraming)
+  const framingFaceRef = useRef(framingNeedsFace)
+  const onFramingRef = useRef(onFraming)
   visualIdRef.current = visualId
   skelRef.current = showSkeleton
   faceOverlayRef.current = showFaceMesh
   paramsRef.current = params ?? {}
+  framingRef.current = detectFraming
+  framingFaceRef.current = framingNeedsFace
+  onFramingRef.current = onFraming
 
   // Hand the canvas element up (for recording), and clear it on unmount.
   useEffect(() => {
@@ -116,6 +131,7 @@ export function CameraCanvas({
     let poseLoading = false
     let faceLoading = false
     let lastFeat = ZERO_FEAT
+    let lastFramingMs = 0
 
     const loop = (): void => {
       raf = requestAnimationFrame(loop)
@@ -133,8 +149,18 @@ export function CameraCanvas({
 
       const visual = getVisual(visualIdRef.current)
       const ready = video != null && video.readyState >= 2
-      const needPose = visual.needsPose || skelRef.current
-      const needFace = visual.needsFace || faceOverlayRef.current
+      const wantFraming = framingRef.current
+      const effectPose = visual.needsPose || skelRef.current
+      const effectFace = visual.needsFace || faceOverlayRef.current
+      const needPose = effectPose || wantFraming
+      const needFace = effectFace || (wantFraming && framingFaceRef.current)
+      // When detection is only for the director (the effect doesn't need it),
+      // run it at the ~7fps framing cadence instead of every frame, so N
+      // background cameras stay cheap.
+      const now = performance.now()
+      const framingTick = now - lastFramingMs > 140
+      const runPose = effectPose || framingTick
+      const runFace = effectFace || framingTick
 
       let poseFrame = null
       if (needPose) {
@@ -147,8 +173,8 @@ export function CameraCanvas({
             .then(() => onStatus?.(''))
             .catch((err) => onStatus?.(`Body detection failed: ${err?.message ?? err}`))
         }
-        if (pose?.ready && ready) {
-          poseFrame = pose.detect(video, performance.now())
+        if (pose?.ready && ready && runPose) {
+          poseFrame = pose.detect(video, now)
           if (poseFrame) {
             lastFeat = features.addFrame(poseFrame)
             onFeatures?.(lastFeat)
@@ -163,7 +189,13 @@ export function CameraCanvas({
           face = new FaceEngine()
           face.init().catch((err) => onStatus?.(`Face detection failed: ${err?.message ?? err}`))
         }
-        if (face?.ready && ready) faceFrame = face.detect(video, performance.now())
+        if (face?.ready && ready && runFace) faceFrame = face.detect(video, now)
+      }
+
+      // Feed the auto-director at ~7fps (enough to switch on, cheap to run).
+      if (wantFraming && framingTick) {
+        lastFramingMs = now
+        onFramingRef.current?.(lastFeat, faceFrame)
       }
 
       const input: VisualInput = {
@@ -190,6 +222,8 @@ export function CameraCanvas({
       face?.close()
     }
   }, [beatRef, audioRef, lightRef, onFeatures, onStatus])
+  /* framing/detect props are read through refs above, so they don't restart the
+     camera loop when they change. */
 
   return (
     <>
