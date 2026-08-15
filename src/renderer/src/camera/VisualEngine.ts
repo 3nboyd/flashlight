@@ -28,18 +28,47 @@ export interface VisualInput {
   beatPhase: number
   /** Live music features for audio reactivity. */
   audio: AudioReact
+  /** Per-effect user settings (e.g. intensity), keyed by param id. */
+  params: Record<string, number>
   w: number
   h: number
+}
+
+/** A user-tunable setting an effect exposes (rendered as a slider). */
+export interface VisualParam {
+  key: string
+  label: string
+  min: number
+  max: number
+  step: number
+  default: number
 }
 
 export interface VisualModule {
   id: string
   name: string
+  /** Reads the live camera feed (groups it under "Camera" in the UI). */
+  usesCamera: boolean
   /** Runs body pose detection while active. */
   needsPose: boolean
   /** Runs detailed face detection while active. */
   needsFace: boolean
+  /** User-adjustable settings shown in the effect's own panel. */
+  params?: VisualParam[]
   render: (ctx: CanvasRenderingContext2D, input: VisualInput) => void
+}
+
+/** Read an effect param with a fallback (when settings aren't loaded yet). */
+function pget(input: VisualInput, key: string, dflt: number): number {
+  const v = input.params[key]
+  return v == null || Number.isNaN(v) ? dflt : v
+}
+
+/** Default param values for a module (used to seed settings + render). */
+export function defaultParams(m: VisualModule): Record<string, number> {
+  const out: Record<string, number> = {}
+  for (const p of m.params ?? []) out[p.key] = p.default
+  return out
 }
 
 // ---- shared helpers -------------------------------------------------------
@@ -122,6 +151,7 @@ const mid = (a: Pt, b: Pt): Pt => ({ x: (a.x + b.x) / 2, y: (a.y + b.y) / 2, v: 
 const camera: VisualModule = {
   id: 'camera',
   name: 'Camera',
+  usesCamera: true,
   needsPose: false,
   needsFace: false,
   render: (ctx, input) => {
@@ -132,6 +162,7 @@ const camera: VisualModule = {
 const mono: VisualModule = {
   id: 'mono',
   name: 'Black & White',
+  usesCamera: true,
   needsPose: false,
   needsFace: false,
   render: (ctx, input) => {
@@ -180,6 +211,7 @@ function drawHand(
 const stickman: VisualModule = {
   id: 'stickman',
   name: 'Neon Stickman',
+  usesCamera: true,
   needsPose: true,
   needsFace: false,
   render: (ctx, input) => {
@@ -267,105 +299,223 @@ const stickman: VisualModule = {
   }
 }
 
-// ---- Spinning 3D Face (driven by real facial features) --------------------
+// ---- Spinning Head (procedural low-poly head, retro flat-shaded) ----------
+// A full bald head built as a tapered ellipsoid mesh. It auto-spins in 3D and
+// pulses to the beat; the eyes + mouth on the front animate from the DJ's real
+// face (blink / mouth-open) via MediaPipe. Grayish-white, quantized flat
+// shading for an old-school video-game look.
 
-const spinFace: VisualModule = {
-  id: 'spinFace',
-  name: 'Spinning Face',
+interface V3 {
+  x: number
+  y: number
+  z: number
+}
+let headVerts: V3[] | null = null
+let headTris: [number, number, number][] | null = null
+const HEAD_RX = 0.82
+const HEAD_RY = 1.05
+const HEAD_RZ = 0.92
+
+function buildHead(): void {
+  const rings = 18
+  const sectors = 22
+  const verts: V3[] = []
+  for (let i = 0; i <= rings; i++) {
+    const phi = (i / rings) * Math.PI // 0 (top) .. PI (bottom)
+    const sinPhi = Math.sin(phi)
+    const cosPhi = Math.cos(phi)
+    for (let j = 0; j <= sectors; j++) {
+      const theta = (j / sectors) * Math.PI * 2
+      const x = sinPhi * Math.cos(theta)
+      const y = cosPhi // +1 top .. -1 chin
+      const z = sinPhi * Math.sin(theta)
+      const taper = y < 0 ? 1 + y * 0.28 : 1 // narrow the jaw
+      verts.push({ x: x * HEAD_RX * taper, y: y * HEAD_RY, z: z * HEAD_RZ * taper })
+    }
+  }
+  const tris: [number, number, number][] = []
+  const stride = sectors + 1
+  for (let i = 0; i < rings; i++) {
+    for (let j = 0; j < sectors; j++) {
+      const a = i * stride + j
+      const b = a + 1
+      const c = a + stride
+      const d = c + 1
+      tris.push([a, b, c])
+      tris.push([b, d, c])
+    }
+  }
+  headVerts = verts
+  headTris = tris
+}
+
+function rotYP(
+  x: number,
+  y: number,
+  z: number,
+  cY: number,
+  sY: number,
+  cP: number,
+  sP: number
+): [number, number, number] {
+  const x1 = x * cY + z * sY
+  const z1 = -x * sY + z * cY
+  const y2 = y * cP - z1 * sP
+  const z2 = y * sP + z1 * cP
+  return [x1, y2, z2]
+}
+
+// Smoothed facial openness driven by the live face (idles when no face).
+let headEyeOpen = 0.7
+let headMouthOpen = 0.1
+function updateFaceOpen(face: FaceFrame | null, timeMs: number): void {
+  let eyeTarget = 0.72
+  let mouthTarget = 0.06
+  if (face?.present && face.landmarks.length >= 468) {
+    const lm = face.landmarks
+    const d = (a: number, b: number): number => Math.hypot(lm[a].x - lm[b].x, lm[a].y - lm[b].y)
+    const faceH = Math.max(1e-4, d(10, 152))
+    const eyeR = (d(159, 145) + d(386, 374)) / 2 / faceH
+    const mouthR = d(13, 14) / faceH
+    eyeTarget = Math.max(0, Math.min(1, (eyeR - 0.012) / 0.045))
+    mouthTarget = Math.max(0, Math.min(1, (mouthR - 0.006) / 0.09))
+  } else {
+    // Idle blink: mostly open with the occasional quick close.
+    const blink = Math.sin(timeMs / 1600) > 0.985 ? 0.05 : 0.8
+    eyeTarget = blink
+    mouthTarget = 0.05 + 0.04 * (0.5 + 0.5 * Math.sin(timeMs / 900))
+  }
+  headEyeOpen += 0.35 * (eyeTarget - headEyeOpen)
+  headMouthOpen += 0.4 * (mouthTarget - headMouthOpen)
+}
+
+const spinHead: VisualModule = {
+  id: 'spinHead',
+  name: 'Spinning Head',
+  usesCamera: true,
   needsPose: false,
   needsFace: true,
+  params: [{ key: 'size', label: 'Size', min: 0.6, max: 1.8, step: 0.05, default: 1.15 }],
   render: (ctx, input) => {
-    ctx.fillStyle = '#04050b'
-    ctx.fillRect(0, 0, input.w, input.h)
-    if (!input.face?.present) return
-    const lm = input.face.landmarks
-    if (lm.length === 0) return
+    const { w, h } = input
+    ctx.fillStyle = '#060608'
+    ctx.fillRect(0, 0, w, h)
+    if (!headVerts || !headTris) buildHead()
+    const verts = headVerts!
+    const tris = headTris!
 
-    // Centroid so the head spins about its own center.
-    let cx = 0
-    let cy = 0
-    let cz = 0
-    for (const p of lm) {
-      cx += p.x
-      cy += p.y
-      cz += p.z
-    }
-    cx /= lm.length
-    cy /= lm.length
-    cz /= lm.length
+    updateFaceOpen(input.face, input.timeMs)
 
-    // Slowly wandering 3D orientation; the pulse speeds the spin + zooms.
     const t = input.timeMs / 1000
-    const spinRate = 0.35 + 1.4 * input.audio.level
-    const yaw = t * spinRate + 1.6 * Math.sin(t * 0.13)
-    const pitch = 0.5 * Math.sin(t * 0.21) + 0.25 * input.audio.surge
-    const cosY = Math.cos(yaw)
-    const sinY = Math.sin(yaw)
-    const cosP = Math.cos(pitch)
-    const sinP = Math.sin(pitch)
+    const kick = input.audio.kick
+    const level = input.audio.level
+    const pulse = Math.max(beatPulse(input.beatPhase), kick)
 
-    const S = Math.min(input.w, input.h) * (0.85 + 0.18 * input.audio.kick)
-    const ox = input.w / 2
-    const oy = input.h / 2
-    const focal = 2.6
+    // Auto-spin in wandering directions; louder = faster.
+    const yaw = t * (0.5 + 0.9 * level) + 1.4 * Math.sin(t * 0.11)
+    const pitch = 0.26 * Math.sin(t * 0.19)
+    const cY = Math.cos(yaw)
+    const sY = Math.sin(yaw)
+    const cP = Math.cos(pitch)
+    const sP = Math.sin(pitch)
 
-    // Project every landmark through yaw->pitch rotation + weak perspective.
-    const px = new Float32Array(lm.length)
-    const py = new Float32Array(lm.length)
-    const pd = new Float32Array(lm.length) // depth for shading
-    for (let i = 0; i < lm.length; i++) {
-      let X = lm[i].x - cx
-      let Y = lm[i].y - cy
-      let Z = lm[i].z - cz
-      // Yaw about vertical axis.
-      const x1 = X * cosY + Z * sinY
-      const z1 = -X * sinY + Z * cosY
-      // Pitch about horizontal axis.
-      const y2 = Y * cosP - z1 * sinP
-      const z2 = Y * sinP + z1 * cosP
-      X = x1
-      Y = y2
-      Z = z2
-      const persp = focal / (focal - Z)
-      px[i] = ox + X * S * persp
-      py[i] = oy + Y * S * persp
-      pd[i] = Z
+    const size = pget(input, 'size', 1.15)
+    const S = Math.min(w, h) * 0.46 * size * (1 + 0.14 * pulse) // bigger + beat pulse
+    const ox = w / 2
+    const oy = h / 2
+    const focal = 3.4
+
+    const rv = verts.map((v) => rotYP(v.x, v.y, v.z, cY, sY, cP, sP))
+    const proj = rv.map(([x, y, z]) => {
+      const p = focal / (focal - z)
+      return [ox + x * S * p, oy - y * S * p] as [number, number]
+    })
+
+    // Light from upper-front; retro quantized flat shading, back faces culled.
+    const lx = 0.35
+    const ly = 0.5
+    const lz = 0.79
+    const draw: { tri: [number, number, number]; shade: number; z: number }[] = []
+    for (const tri of tris) {
+      const A = rv[tri[0]]
+      const B = rv[tri[1]]
+      const C = rv[tri[2]]
+      const ux = B[0] - A[0]
+      const uy = B[1] - A[1]
+      const uz = B[2] - A[2]
+      const vx = C[0] - A[0]
+      const vy = C[1] - A[1]
+      const vz = C[2] - A[2]
+      let nx = uy * vz - uz * vy
+      let ny = uz * vx - ux * vz
+      let nz = ux * vy - uy * vx
+      const nl = Math.hypot(nx, ny, nz) || 1
+      nx /= nl
+      ny /= nl
+      nz /= nl
+      if (nz <= 0) continue // facing away from camera
+      const lit = Math.max(0, nx * lx + ny * ly + nz * lz)
+      draw.push({ tri, shade: lit, z: (A[2] + B[2] + C[2]) / 3 })
     }
+    draw.sort((a, b) => a.z - b.z) // painter's order: far first
 
-    const glow = 0.5 + 0.5 * Math.max(beatPulse(input.beatPhase), input.audio.kick)
-    const hue = (input.timeMs / 40) % 360
-
-    // Wireframe tesselation, depth-cued (front brighter than back).
-    ctx.lineWidth = Math.max(0.5, input.w / 900)
-    for (const c of FACE_TESSELATION) {
-      if (c.start >= lm.length || c.end >= lm.length) continue
-      const depth = (pd[c.start] + pd[c.end]) / 2
-      const a = 0.10 + 0.30 * Math.max(0, 0.5 - depth)
-      ctx.strokeStyle = `hsla(${(hue + 140) % 360}, 90%, 60%, ${a.toFixed(3)})`
+    const bands = 5
+    ctx.lineJoin = 'round'
+    for (const it of draw) {
+      let s = 0.3 + 0.7 * it.shade
+      s = Math.round(s * bands) / bands // quantize -> retro banding
+      s *= 0.9 + 0.3 * pulse
+      const g = Math.min(255, 44 + 205 * s)
+      ctx.fillStyle = `rgb(${(g * 0.96) | 0}, ${(g * 0.98) | 0}, ${Math.min(255, g * 1.04) | 0})`
+      const a = proj[it.tri[0]]
+      const b = proj[it.tri[1]]
+      const c = proj[it.tri[2]]
       ctx.beginPath()
-      ctx.moveTo(px[c.start], py[c.start])
-      ctx.lineTo(px[c.end], py[c.end])
+      ctx.moveTo(a[0], a[1])
+      ctx.lineTo(b[0], b[1])
+      ctx.lineTo(c[0], c[1])
+      ctx.closePath()
+      ctx.fill()
+      ctx.strokeStyle = 'rgba(18,20,28,0.22)' // faint facet seams
+      ctx.lineWidth = 0.5
       ctx.stroke()
     }
 
-    // Feature contours (eyes / brows / lips / irises) pop brighter.
-    ctx.shadowColor = `hsl(${hue}, 90%, 60%)`
-    ctx.shadowBlur = 8 * glow
-    for (let ci = 0; ci < FACE_CONTOURS.length; ci++) {
-      const bright = ci >= 6 // irises
-      ctx.strokeStyle = bright
-        ? `hsla(${hue}, 100%, 75%, 0.95)`
-        : `hsla(${(hue + 20) % 360}, 95%, ${52 + 20 * glow}%, 0.9)`
-      ctx.lineWidth = Math.max(1, input.w / 700) * (bright ? 1.6 : 1.1)
-      ctx.beginPath()
-      for (const c of FACE_CONTOURS[ci]) {
-        if (c.start >= lm.length || c.end >= lm.length) continue
-        ctx.moveTo(px[c.start], py[c.start])
-        ctx.lineTo(px[c.end], py[c.end])
+    // Features: eyes + mouth on the front, animated by the real face.
+    const anchors: { dir: [number, number, number]; kind: 'eye' | 'mouth' }[] = [
+      { dir: [-0.32, 0.16, 0.9], kind: 'eye' },
+      { dir: [0.32, 0.16, 0.9], kind: 'eye' },
+      { dir: [0, -0.32, 0.96], kind: 'mouth' }
+    ]
+    for (const anc of anchors) {
+      const [dx, dy, dz] = anc.dir
+      const rd = rotYP(dx, dy, dz, cY, sY, cP, sP) // facing test
+      if (rd[2] <= 0.15) continue // on the far side of the head
+      const surf: [number, number, number] = [dx * HEAD_RX, dy * HEAD_RY, dz * HEAD_RZ]
+      const [rx, ry, rz] = rotYP(surf[0], surf[1], surf[2], cY, sY, cP, sP)
+      const p = focal / (focal - rz)
+      const sx = ox + rx * S * p
+      const sy = oy - ry * S * p
+      ctx.fillStyle = '#111318'
+      if (anc.kind === 'eye') {
+        const ew = S * 0.1 * p
+        const eh = ew * (0.16 + 0.9 * headEyeOpen)
+        ctx.beginPath()
+        ctx.ellipse(sx, sy, ew, eh, 0, 0, Math.PI * 2)
+        ctx.fill()
+        // little glossy pupil so the eye reads
+        ctx.fillStyle = 'rgba(210,220,235,0.85)'
+        ctx.beginPath()
+        ctx.arc(sx, sy, Math.max(1, ew * 0.28), 0, Math.PI * 2)
+        ctx.fill()
+      } else {
+        const mw = S * 0.17 * p
+        const mh = S * (0.016 + 0.12 * headMouthOpen) * p
+        ctx.beginPath()
+        ctx.ellipse(sx, sy, mw, mh, 0, 0, Math.PI * 2)
+        ctx.fill()
       }
-      ctx.stroke()
     }
-    ctx.shadowBlur = 0
   }
 }
 
@@ -374,6 +524,7 @@ const spinFace: VisualModule = {
 const sketch: VisualModule = {
   id: 'sketch',
   name: 'Sketch',
+  usesCamera: true,
   needsPose: false,
   needsFace: false,
   render: (ctx, input) => {
@@ -434,6 +585,7 @@ const sketch: VisualModule = {
 const echo: VisualModule = {
   id: 'echo',
   name: 'Echo Trails',
+  usesCamera: true,
   needsPose: false,
   needsFace: false,
   render: (ctx, input) => {
@@ -476,59 +628,6 @@ const echo: VisualModule = {
   }
 }
 
-// ---- Kaleidoscope (mirrored camera wedges) --------------------------------
-
-const kaleidoscope: VisualModule = {
-  id: 'kaleido',
-  name: 'Kaleidoscope',
-  needsPose: false,
-  needsFace: false,
-  render: (ctx, input) => {
-    const { w, h } = input
-    ctx.fillStyle = '#000'
-    ctx.fillRect(0, 0, w, h)
-    if (!input.video || input.video.readyState < 2) return
-    const segments = 6 + 2 * Math.round(input.audio.surge * 3) // 6..12 wedges
-    const angle = (Math.PI * 2) / segments
-    const cx = w / 2
-    const cy = h / 2
-    const radius = Math.hypot(w, h) / 2 + 4
-    const spin = input.timeMs / 4000 + input.audio.kick * 0.4
-    const zoom = 0.9 + 0.25 * input.audio.level
-    const r = inputRect(input)
-
-    for (let i = 0; i < segments; i++) {
-      ctx.save()
-      ctx.translate(cx, cy)
-      ctx.rotate(spin + i * angle)
-      if (i % 2 === 1) ctx.scale(-1, 1) // mirror alternate wedges
-      // Clip a triangular wedge from the center.
-      ctx.beginPath()
-      ctx.moveTo(0, 0)
-      ctx.lineTo(radius * Math.cos(-angle / 2), radius * Math.sin(-angle / 2))
-      ctx.lineTo(radius * Math.cos(angle / 2), radius * Math.sin(angle / 2))
-      ctx.closePath()
-      ctx.clip()
-      // Draw the camera sampled off-center so the wedge shows lively detail.
-      ctx.scale(zoom, zoom)
-      ctx.translate(-cx - r.dw * 0.12, -cy)
-      ctx.drawImage(input.video, r.dx, r.dy, r.dw, r.dh)
-      ctx.restore()
-    }
-    // Beat bloom in the middle.
-    const bloom = beatPulse(input.beatPhase) * 0.5
-    if (bloom > 0.01) {
-      ctx.globalCompositeOperation = 'lighter'
-      const grd = ctx.createRadialGradient(cx, cy, 0, cx, cy, radius * 0.5)
-      grd.addColorStop(0, `rgba(255,255,255,${bloom.toFixed(3)})`)
-      grd.addColorStop(1, 'rgba(255,255,255,0)')
-      ctx.fillStyle = grd
-      ctx.fillRect(0, 0, w, h)
-      ctx.globalCompositeOperation = 'source-over'
-    }
-  }
-}
-
 // ---- Starfield / Warp -----------------------------------------------------
 
 interface Star {
@@ -546,10 +645,13 @@ function resetStar(s: Star): void {
 const starfield: VisualModule = {
   id: 'starfield',
   name: 'Starfield',
+  usesCamera: false,
   needsPose: false,
   needsFace: false,
+  params: [{ key: 'intensity', label: 'Intensity', min: 0.3, max: 2, step: 0.05, default: 1 }],
   render: (ctx, input) => {
     const { w, h } = input
+    const intensity = pget(input, 'intensity', 1)
     if (stars.length !== 260) {
       stars = Array.from({ length: 260 }, () => {
         const s = { x: 0, y: 0, z: 0 }
@@ -559,14 +661,16 @@ const starfield: VisualModule = {
       })
     }
     // Trails: fade toward black (longer streaks when louder).
-    ctx.fillStyle = `rgba(2,3,12,${(0.35 - 0.22 * input.audio.level).toFixed(3)})`
+    ctx.fillStyle = `rgba(2,3,12,${(0.35 - 0.24 * input.audio.level).toFixed(3)})`
     ctx.fillRect(0, 0, w, h)
 
     const cx = w / 2
     const cy = h / 2
     const fov = w * 0.7
     const warp = input.audio.surge > 0.4 // hyperspace on a build
-    const speed = 0.008 + 0.03 * input.audio.level + 0.05 * input.audio.kick + (warp ? 0.06 : 0)
+    // Extremely beat/kick reactive: the field lurches forward on every hit.
+    const speed =
+      (0.006 + 0.05 * input.audio.level + 0.16 * input.audio.kick + (warp ? 0.08 : 0)) * intensity
     const hue = (input.timeMs / 30) % 360
     ctx.lineCap = 'round'
     for (const s of stars) {
@@ -600,10 +704,13 @@ let gridScroll = 0
 const neonGrid: VisualModule = {
   id: 'grid',
   name: 'Neon Grid',
+  usesCamera: false,
   needsPose: false,
   needsFace: false,
+  params: [{ key: 'intensity', label: 'Intensity', min: 0.3, max: 2, step: 0.05, default: 1 }],
   render: (ctx, input) => {
     const { w, h } = input
+    const intensity = pget(input, 'intensity', 1)
     const horizon = h * 0.52
     // Sky gradient.
     const sky = ctx.createLinearGradient(0, 0, 0, horizon)
@@ -635,19 +742,20 @@ const neonGrid: VisualModule = {
     }
     ctx.restore()
 
-    // Horizon glow.
-    ctx.strokeStyle = 'rgba(255,120,220,0.8)'
-    ctx.lineWidth = 2 + 3 * input.audio.kick
+    // Horizon glow (flares on the beat).
+    const beat = Math.max(beatPulse(input.beatPhase), input.audio.kick)
+    ctx.strokeStyle = `rgba(255,120,220,${(0.7 + 0.3 * beat).toFixed(3)})`
+    ctx.lineWidth = 2 + 7 * beat
     ctx.beginPath()
     ctx.moveTo(0, horizon)
     ctx.lineTo(w, horizon)
     ctx.stroke()
 
-    // Perspective floor grid.
-    const speed = 0.004 + 0.02 * input.audio.level + 0.03 * input.audio.kick
+    // Perspective floor grid: rushes toward the viewer on every kick.
+    const speed = (0.003 + 0.02 * input.audio.level + 0.06 * input.audio.kick) * intensity
     gridScroll = (gridScroll + speed) % 1
-    ctx.strokeStyle = `rgba(0,240,255,${(0.5 + 0.4 * input.audio.kick).toFixed(3)})`
-    ctx.lineWidth = 1.5
+    ctx.strokeStyle = `rgba(0,240,255,${(0.45 + 0.5 * beat).toFixed(3)})`
+    ctx.lineWidth = 1.5 + 1.5 * beat
     // Receding horizontal lines (denser toward horizon).
     const rows = 14
     ctx.beginPath()
@@ -675,9 +783,12 @@ const neonGrid: VisualModule = {
 const plasma: VisualModule = {
   id: 'plasma',
   name: 'Plasma',
+  usesCamera: false,
   needsPose: false,
   needsFace: false,
+  params: [{ key: 'intensity', label: 'Intensity', min: 0.3, max: 2, step: 0.05, default: 1 }],
   render: (ctx, input) => {
+    const intensity = pget(input, 'intensity', 1)
     const pw = 160
     const ph = Math.max(1, Math.round((pw * input.h) / input.w))
     const c = getScratch('plasma', pw, ph)
@@ -686,9 +797,9 @@ const plasma: VisualModule = {
     const img = pctx.createImageData(pw, ph)
     const d = img.data
     const t = input.timeMs / 1000
-    const speed = 1 + 2 * input.audio.level
-    const bright = 0.75 + 0.5 * input.audio.kick
-    const hueBase = (input.timeMs / 24) % 360
+    const speed = (1 + 3 * input.audio.level) * intensity
+    const bright = 0.7 + 0.7 * Math.max(beatPulse(input.beatPhase), input.audio.kick)
+    const hueBase = (input.timeMs / 24 + input.audio.kick * 90) % 360
     for (let y = 0; y < ph; y++) {
       for (let x = 0; x < pw; x++) {
         const v =
@@ -746,21 +857,24 @@ let prevKick = 0
 const particleField: VisualModule = {
   id: 'particles',
   name: 'Particles',
+  usesCamera: false,
   needsPose: false,
   needsFace: false,
+  params: [{ key: 'intensity', label: 'Intensity', min: 0.3, max: 2, step: 0.05, default: 1 }],
   render: (ctx, input) => {
     const { w, h } = input
+    const intensity = pget(input, 'intensity', 1)
     ctx.fillStyle = `rgba(3,4,12,${(0.28 - 0.14 * input.audio.level).toFixed(3)})`
     ctx.fillRect(0, 0, w, h)
 
     const kick = input.audio.kick
     const hue = (input.timeMs / 20) % 360
-    // Kick edge -> radial burst from center.
-    if (kick > 0.45 && prevKick <= 0.45) {
-      const n = 40 + Math.round(60 * input.audio.level)
+    // Kick edge -> big radial burst from center.
+    if (kick > 0.4 && prevKick <= 0.4) {
+      const n = Math.round((50 + 90 * input.audio.level) * intensity)
       for (let i = 0; i < n; i++) {
         const a = Math.random() * Math.PI * 2
-        const sp = (2 + Math.random() * 5) * (1 + kick)
+        const sp = (2.5 + Math.random() * 6) * (1 + 1.4 * kick)
         particles.push({
           x: w / 2,
           y: h / 2,
@@ -802,6 +916,93 @@ const particleField: VisualModule = {
       ctx.beginPath()
       ctx.arc(p.x, p.y, rad, 0, Math.PI * 2)
       ctx.fill()
+    }
+    ctx.globalCompositeOperation = 'source-over'
+  }
+}
+
+// ---- Trance Rings (minimal concentric mandala pulse) ----------------------
+
+const tranceRings: VisualModule = {
+  id: 'rings',
+  name: 'Trance Rings',
+  usesCamera: false,
+  needsPose: false,
+  needsFace: false,
+  params: [
+    { key: 'intensity', label: 'Intensity', min: 0, max: 1.5, step: 0.05, default: 0.6 },
+    { key: 'speed', label: 'Speed', min: 0.2, max: 2, step: 0.05, default: 0.8 }
+  ],
+  render: (ctx, input) => {
+    const { w, h } = input
+    const intensity = pget(input, 'intensity', 0.6)
+    const speed = pget(input, 'speed', 0.8)
+    // Gentle trail so rings glide rather than flicker.
+    ctx.fillStyle = 'rgba(4,5,10,0.22)'
+    ctx.fillRect(0, 0, w, h)
+    ctx.globalCompositeOperation = 'lighter'
+    const cx = w / 2
+    const cy = h / 2
+    const maxR = Math.hypot(w, h) / 2
+    const beat = beatPulse(input.beatPhase)
+    const hue = (input.timeMs / 60) % 360
+    const rings = 7
+    const phase = (input.timeMs / 3400) * speed
+    for (let i = 0; i < rings; i++) {
+      const f = (phase + i / rings) % 1
+      const rad = f * maxR * (1 + 0.06 * beat)
+      const fade = (1 - f) * (0.25 + 0.55 * intensity + 0.4 * beat * intensity)
+      ctx.strokeStyle = `hsla(${(hue + i * 12) % 360}, 70%, 65%, ${Math.min(0.9, fade).toFixed(3)})`
+      ctx.lineWidth = (1 + 3 * intensity) * (1 - f) + 0.5
+      ctx.beginPath()
+      ctx.arc(cx, cy, Math.max(0, rad), 0, Math.PI * 2)
+      ctx.stroke()
+    }
+    ctx.globalCompositeOperation = 'source-over'
+  }
+}
+
+// ---- Outline (minimal rotating line-art) ----------------------------------
+
+const outline: VisualModule = {
+  id: 'outline',
+  name: 'Outline',
+  usesCamera: false,
+  needsPose: false,
+  needsFace: false,
+  params: [
+    { key: 'intensity', label: 'Intensity', min: 0, max: 1.5, step: 0.05, default: 0.55 },
+    { key: 'count', label: 'Shapes', min: 2, max: 8, step: 1, default: 4 }
+  ],
+  render: (ctx, input) => {
+    const { w, h } = input
+    const intensity = pget(input, 'intensity', 0.55)
+    const count = Math.round(pget(input, 'count', 4))
+    ctx.fillStyle = 'rgba(6,7,12,0.3)'
+    ctx.fillRect(0, 0, w, h)
+    const cx = w / 2
+    const cy = h / 2
+    const beat = Math.max(beatPulse(input.beatPhase), input.audio.kick)
+    const base = Math.min(w, h) * 0.12
+    const hue = (input.timeMs / 90) % 360
+    ctx.globalCompositeOperation = 'lighter'
+    ctx.lineJoin = 'round'
+    for (let i = 0; i < count; i++) {
+      const sides = 3 + ((i + 3) % 5) // 3..7-gon
+      const rad = base * (1 + i * 0.55) * (1 + 0.1 * beat)
+      const rot = input.timeMs / 5200 * (i % 2 ? -1 : 1) + i
+      const alpha = (0.18 + 0.5 * intensity) * (1 - i / (count + 2)) + 0.35 * beat * intensity
+      ctx.strokeStyle = `hsla(${(hue + i * 24) % 360}, 65%, 62%, ${Math.min(0.9, alpha).toFixed(3)})`
+      ctx.lineWidth = 1 + 2 * intensity
+      ctx.beginPath()
+      for (let k = 0; k <= sides; k++) {
+        const a = rot + (k / sides) * Math.PI * 2
+        const x = cx + Math.cos(a) * rad
+        const y = cy + Math.sin(a) * rad
+        if (k === 0) ctx.moveTo(x, y)
+        else ctx.lineTo(x, y)
+      }
+      ctx.stroke()
     }
     ctx.globalCompositeOperation = 'source-over'
   }
@@ -880,17 +1081,20 @@ export function drawFaceMeshOverlay(ctx: CanvasRenderingContext2D, input: Visual
 // ---------------------------------------------------------------------------
 
 export const VISUALS: VisualModule[] = [
+  // Camera-based looks.
   camera,
   mono,
   stickman,
-  spinFace,
+  spinHead,
   sketch,
   echo,
-  kaleidoscope,
+  // Generative (no camera) looks.
   starfield,
   neonGrid,
   plasma,
-  particleField
+  particleField,
+  tranceRings,
+  outline
 ]
 
 export function getVisual(id: string): VisualModule {

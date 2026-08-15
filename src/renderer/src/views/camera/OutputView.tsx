@@ -1,11 +1,12 @@
 import { useEffect, useRef, useState, type JSX } from 'react'
 import { CameraCanvas, ZERO_AUDIO } from '../../camera/CameraCanvas'
-import type { AudioReact } from '../../camera/VisualEngine'
+import { getVisual, defaultParams, type AudioReact } from '../../camera/VisualEngine'
 import './OutputView.css'
 
 const STORE_KEY = 'djc.camera.enabled'
 const VISUAL_KEY = 'djc.camera.visual'
 const PRIMARY_KEY = 'djc.camera.primary'
+const FX_KEY = 'djc.camera.fx'
 
 function readPrimary(): string | null {
   const explicit = localStorage.getItem(PRIMARY_KEY)
@@ -18,6 +19,20 @@ function readPrimary(): string | null {
   }
 }
 
+function readParams(visual: string): Record<string, number> {
+  let stored: Record<string, number> = {}
+  try {
+    const all = JSON.parse(localStorage.getItem(FX_KEY) ?? '{}') as Record<
+      string,
+      Record<string, number>
+    >
+    stored = all[visual] ?? {}
+  } catch {
+    /* defaults only */
+  }
+  return { ...defaultParams(getVisual(visual)), ...stored }
+}
+
 /**
  * Full-screen projector / stage-TV surface. Renders the same visual the main
  * window shows, on the same primary camera, staying in sync through localStorage
@@ -26,18 +41,26 @@ function readPrimary(): string | null {
 export function OutputView(): JSX.Element {
   const [visual, setVisual] = useState<string>(() => localStorage.getItem(VISUAL_KEY) ?? 'camera')
   const [primary, setPrimary] = useState<string | null>(() => readPrimary())
+  const [params, setParams] = useState<Record<string, number>>(() =>
+    readParams(localStorage.getItem(VISUAL_KEY) ?? 'camera')
+  )
   const beatRef = useRef(0)
   const audioRef = useRef<AudioReact>({ ...ZERO_AUDIO })
 
-  // Follow the operator's effect + camera choices live.
+  // Follow the operator's effect + camera + settings choices live.
   useEffect(() => {
     const onStorage = (e: StorageEvent): void => {
-      if (e.key === VISUAL_KEY) setVisual(e.newValue ?? 'camera')
+      if (e.key === VISUAL_KEY) {
+        const v = e.newValue ?? 'camera'
+        setVisual(v)
+        setParams(readParams(v))
+      }
+      if (e.key === FX_KEY) setParams((prev) => ({ ...prev, ...readParams(visual) }))
       if (e.key === PRIMARY_KEY || e.key === STORE_KEY) setPrimary(readPrimary())
     }
     window.addEventListener('storage', onStorage)
     return () => window.removeEventListener('storage', onStorage)
-  }, [])
+  }, [visual])
 
   // Poll the lighting clock + audio features (same as the main window).
   useEffect(() => {
@@ -65,6 +88,7 @@ export function OutputView(): JSX.Element {
           key={primary}
           deviceId={primary}
           visualId={visual}
+          params={params}
           beatRef={beatRef}
           audioRef={audioRef}
           className="output-canvas"

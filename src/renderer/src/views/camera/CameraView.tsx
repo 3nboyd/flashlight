@@ -1,18 +1,22 @@
-import { useCallback, useEffect, useRef, useState, type JSX } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState, type JSX } from 'react'
 import { CameraCanvas, ZERO_FEAT, ZERO_AUDIO } from '../../camera/CameraCanvas'
-import { VISUALS, getVisual, type AudioReact } from '../../camera/VisualEngine'
+import { VISUALS, getVisual, defaultParams, type AudioReact, type VisualModule } from '../../camera/VisualEngine'
 import type { PoseFeatureState } from '../../camera/PoseFeatures'
 import './CameraView.css'
 
 const STORE_KEY = 'djc.camera.enabled'
 const VISUAL_KEY = 'djc.camera.visual'
 const PRIMARY_KEY = 'djc.camera.primary'
+const FX_KEY = 'djc.camera.fx'
+
+type FxParams = Record<string, Record<string, number>>
 
 /** One live camera tile wrapping the shared canvas. */
 function CameraTile({
   deviceId,
   primary,
   visualId,
+  params,
   showSkeleton,
   showFaceMesh,
   beatRef,
@@ -23,6 +27,7 @@ function CameraTile({
   deviceId: string
   primary: boolean
   visualId: string
+  params: Record<string, number>
   showSkeleton: boolean
   showFaceMesh: boolean
   beatRef: React.MutableRefObject<number>
@@ -35,6 +40,7 @@ function CameraTile({
       <CameraCanvas
         deviceId={deviceId}
         visualId={visualId}
+        params={params}
         showSkeleton={primary && showSkeleton}
         showFaceMesh={primary && showFaceMesh}
         beatRef={beatRef}
@@ -69,6 +75,13 @@ export function CameraView(): JSX.Element {
   })
   const [primary, setPrimary] = useState<string | null>(() => localStorage.getItem(PRIMARY_KEY))
   const [visual, setVisual] = useState<string>(() => localStorage.getItem(VISUAL_KEY) ?? 'camera')
+  const [fxParams, setFxParams] = useState<FxParams>(() => {
+    try {
+      return JSON.parse(localStorage.getItem(FX_KEY) ?? '{}') as FxParams
+    } catch {
+      return {}
+    }
+  })
   const [feat, setFeat] = useState<PoseFeatureState>(ZERO_FEAT)
   const [status, setStatus] = useState('')
   const [needsPermission, setNeedsPermission] = useState(true)
@@ -133,6 +146,7 @@ export function CameraView(): JSX.Element {
   }, [enabled, primary])
 
   useEffect(() => localStorage.setItem(VISUAL_KEY, visual), [visual])
+  useEffect(() => localStorage.setItem(FX_KEY, JSON.stringify(fxParams)), [fxParams])
   useEffect(() => {
     if (primary) localStorage.setItem(PRIMARY_KEY, primary)
   }, [primary])
@@ -168,6 +182,30 @@ export function CameraView(): JSX.Element {
   const onFeatures = useCallback((f: PoseFeatureState) => setFeat({ ...f }), [])
   const activeVisual = getVisual(visual)
   const tracksBody = activeVisual.needsPose || activeVisual.needsFace || showSkeleton || showFaceMesh
+  const activeParams = useMemo(
+    () => ({ ...defaultParams(activeVisual), ...(fxParams[visual] ?? {}) }),
+    [activeVisual, fxParams, visual]
+  )
+  const setParam = useCallback(
+    (key: string, value: number) =>
+      setFxParams((prev) => ({
+        ...prev,
+        [visual]: { ...defaultParams(activeVisual), ...(prev[visual] ?? {}), [key]: value }
+      })),
+    [activeVisual, visual]
+  )
+  const cameraFx = VISUALS.filter((v) => v.usesCamera)
+  const genFx = VISUALS.filter((v) => !v.usesCamera)
+  const fxButton = (v: VisualModule): JSX.Element => (
+    <button
+      key={v.id}
+      className={`cam-fx-btn${visual === v.id ? ' active' : ''}`}
+      onClick={() => setVisual(v.id)}
+    >
+      {v.name}
+      {(v.needsPose || v.needsFace) && <span className="cam-fx-tag">body</span>}
+    </button>
+  )
 
   return (
     <div className="view camera-view">
@@ -226,7 +264,7 @@ export function CameraView(): JSX.Element {
           <Meter label="Jump" value={feat.jump} />
           {!tracksBody && (
             <p className="settings-hint">
-              Pick a body effect (Neon Stickman / Spinning Face) or a debug overlay to see these move.
+              Pick a body effect (Neon Stickman / Spinning Head) or a debug overlay to see these move.
             </p>
           )}
         </aside>
@@ -243,6 +281,7 @@ export function CameraView(): JSX.Element {
                     deviceId={id}
                     primary={primary === id}
                     visualId={primary === id ? visual : 'camera'}
+                    params={primary === id ? activeParams : {}}
                     showSkeleton={showSkeleton}
                     showFaceMesh={showFaceMesh}
                     beatRef={beatRef}
@@ -268,18 +307,38 @@ export function CameraView(): JSX.Element {
           </div>
 
           <div className="cam-hud">
-            <span className="cam-hud-label">Effect</span>
-            {VISUALS.map((v) => (
-              <button
-                key={v.id}
-                className={`cam-fx-btn${visual === v.id ? ' active' : ''}`}
-                onClick={() => setVisual(v.id)}
-              >
-                {v.name}
-                {(v.needsPose || v.needsFace) && <span className="cam-fx-tag">body</span>}
-              </button>
-            ))}
+            <div className="cam-fx-group">
+              <span className="cam-hud-label">Camera</span>
+              {cameraFx.map(fxButton)}
+            </div>
+            <div className="cam-fx-group">
+              <span className="cam-hud-label">Generative</span>
+              {genFx.map(fxButton)}
+            </div>
           </div>
+
+          {activeVisual.params && activeVisual.params.length > 0 && (
+            <div className="cam-fx-settings">
+              <span className="cam-hud-label">{activeVisual.name} settings</span>
+              {activeVisual.params.map((p) => {
+                const val = activeParams[p.key] ?? p.default
+                return (
+                  <label key={p.key} className="cam-fx-param">
+                    <span className="cam-fx-param-label">{p.label}</span>
+                    <input
+                      type="range"
+                      min={p.min}
+                      max={p.max}
+                      step={p.step}
+                      value={val}
+                      onChange={(e) => setParam(p.key, Number(e.target.value))}
+                    />
+                    <span className="cam-fx-param-val">{val.toFixed(2)}</span>
+                  </label>
+                )
+              })}
+            </div>
+          )}
         </div>
       </div>
     </div>

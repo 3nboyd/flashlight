@@ -171,9 +171,48 @@
 
 .cam-hud {
   display: flex;
+  align-items: flex-start;
+  gap: 16px;
+  flex-wrap: wrap;
+}
+
+.cam-fx-group {
+  display: flex;
   align-items: center;
   gap: 6px;
   flex-wrap: wrap;
+}
+
+.cam-fx-settings {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  flex-wrap: wrap;
+  padding: 6px 2px 0;
+}
+
+.cam-fx-param {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  font-size: 11px;
+  color: var(--text-secondary);
+}
+
+.cam-fx-param-label {
+  color: var(--text-tertiary);
+}
+
+.cam-fx-param input[type='range'] {
+  width: 120px;
+  accent-color: var(--accent, #38bdf8);
+}
+
+.cam-fx-param-val {
+  width: 34px;
+  text-align: right;
+  color: var(--text-primary);
+  font-variant-numeric: tabular-nums;
 }
 
 .cam-hud-label {

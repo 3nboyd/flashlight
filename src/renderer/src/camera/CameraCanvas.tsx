@@ -34,6 +34,7 @@ export function CameraCanvas({
   visualId,
   beatRef,
   audioRef,
+  params,
   showSkeleton = false,
   showFaceMesh = false,
   className = 'cam-canvas',
@@ -44,6 +45,8 @@ export function CameraCanvas({
   visualId: string
   beatRef: React.MutableRefObject<number>
   audioRef: React.MutableRefObject<AudioReact>
+  /** Per-effect settings for the active visual (e.g. { intensity: 1 }). */
+  params?: Record<string, number>
   showSkeleton?: boolean
   showFaceMesh?: boolean
   className?: string
@@ -55,9 +58,11 @@ export function CameraCanvas({
   const visualIdRef = useRef(visualId)
   const skelRef = useRef(showSkeleton)
   const faceOverlayRef = useRef(showFaceMesh)
+  const paramsRef = useRef<Record<string, number>>(params ?? {})
   visualIdRef.current = visualId
   skelRef.current = showSkeleton
   faceOverlayRef.current = showFaceMesh
+  paramsRef.current = params ?? {}
 
   // Capture the camera stream into the hidden video element.
   useEffect(() => {
@@ -156,6 +161,7 @@ export function CameraCanvas({
         timeMs: performance.now(),
         beatPhase: beatRef.current,
         audio: audioRef.current,
+        params: paramsRef.current,
         w,
         h
       }
