@@ -224,8 +224,18 @@ export function PerformPanel(): JSX.Element {
           setOverrides({ reactivity: v * 2 })
           break
         case 'colorPick': {
+          // Fader at the very bottom (0%) or top (100%) reverts to each scene's
+          // own default color; the interior sweeps across the favorite colors.
+          if (v <= 0.02 || v >= 0.98) {
+            colorIdxRef.current = -1
+            setOverrides({ colorOverride: null })
+            break
+          }
           const favs = useLightingStore.getState().project.favoriteColors ?? []
-          if (favs.length > 0) applyFavColor(Math.round(v * (favs.length - 1)))
+          if (favs.length > 0) {
+            const t = (v - 0.02) / 0.96 // remap so the first/last favorite stay reachable
+            applyFavColor(Math.round(t * (favs.length - 1)))
+          }
           break
         }
       }

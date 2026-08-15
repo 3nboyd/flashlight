@@ -235,6 +235,9 @@ export interface LightingProject {
   output: OutputSettings
   os2l: Os2lSettings
   audio: AudioInputSettings
+  /** MIDI controller mapping (notes → actions, CCs → knobs/faders). Saved with
+   *  the project so it persists to disk + backups, like the output config. */
+  midi?: import('../midi/midiMapping').MidiMapping
 }
 
 export function defaultLightingProject(): LightingProject {
@@ -268,6 +271,7 @@ export function defaultLightingProject(): LightingProject {
       usbUniverse: 1
     },
     os2l: { enabled: true, port: 4444 },
-    audio: { deviceId: null, deviceLabel: null, autoListen: true }
+    audio: { deviceId: null, deviceLabel: null, autoListen: true },
+    midi: { notes: {}, controls: {} }
   }
 }

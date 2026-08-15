@@ -1,39 +1,18 @@
 /**
  * MIDI pad-controller support via Web MIDI (no native deps). Note-on
  * messages trigger mapped actions; a "learn" mode captures the next note
- * and binds it. Mappings persist in localStorage keyed by note number -
- * they're device-agnostic on purpose, since DJs swap controllers.
+ * and binds it. The durable mapping lives in the LightingProject (saved to
+ * disk); localStorage is kept only as a legacy cache + migration source.
+ * Mappings are device-agnostic on purpose, since DJs swap controllers.
  */
 
-export type PadAction =
-  | { kind: 'pad'; padIndex: number }
-  | { kind: 'blackout' }
-  | { kind: 'strobe' }
-  | { kind: 'tap' }
-  | { kind: 'resync' }
-  | { kind: 'autopilot' }
-  | { kind: 'manual' }
+import type { PadAction, ControlAction, ControlKind, MidiMapping } from '@core/lighting/midi/midiMapping'
 
-/** Continuous controls bound to a MIDI knob/fader (Control Change). */
-export type ControlAction =
-  | { kind: 'masterDimmer' }
-  | { kind: 'pan' }
-  | { kind: 'tilt' }
-  | { kind: 'speed' }
-  | { kind: 'reactivity' }
-  | { kind: 'colorPick' }
-
-export type ControlKind = ControlAction['kind']
-
-export interface MidiMapping {
-  /** MIDI note number → pad/button action. */
-  notes: Record<number, PadAction>
-  /** MIDI CC number → continuous control (knob/fader). */
-  controls: Record<number, ControlAction>
-}
+export type { PadAction, ControlAction, ControlKind, MidiMapping }
 
 const STORAGE_KEY = 'djc-midi-mapping'
 
+/** Legacy localStorage mapping, used only to migrate into the project once. */
 export function loadMidiMapping(): MidiMapping {
   try {
     const raw = localStorage.getItem(STORAGE_KEY)
@@ -68,6 +47,25 @@ export class MidiPads {
   private learnControlArmed = false
   private learnControlCallback: ((cc: number) => void) | null = null
   private events: MidiEvents | null = null
+  private onChange: ((mapping: MidiMapping) => void) | null = null
+
+  /** Register a persistence sink (the store writes the mapping into the
+   *  project). Fired whenever a binding changes, not on setMapping(). */
+  setOnChange(cb: ((mapping: MidiMapping) => void) | null): void {
+    this.onChange = cb
+  }
+
+  /** Replace the active mapping (e.g. loaded from the project / stage switch)
+   *  without firing onChange, so loading never loops back into a save. */
+  setMapping(mapping: MidiMapping): void {
+    this.mapping = { notes: { ...mapping.notes }, controls: { ...mapping.controls } }
+  }
+
+  /** Cache to localStorage and notify the persistence sink. */
+  private persist(): void {
+    saveMidiMapping(this.mapping)
+    this.onChange?.({ notes: { ...this.mapping.notes }, controls: { ...this.mapping.controls } })
+  }
 
   async start(events: MidiEvents): Promise<boolean> {
     this.events = events
@@ -161,27 +159,27 @@ export class MidiPads {
 
   bind(note: number, action: PadAction): void {
     this.mapping.notes[note] = action
-    saveMidiMapping(this.mapping)
+    this.persist()
   }
 
   unbindNote(note: number): void {
     delete this.mapping.notes[note]
-    saveMidiMapping(this.mapping)
+    this.persist()
   }
 
   bindControl(cc: number, action: ControlAction): void {
     this.mapping.controls[cc] = action
-    saveMidiMapping(this.mapping)
+    this.persist()
   }
 
   unbindControl(cc: number): void {
     delete this.mapping.controls[cc]
-    saveMidiMapping(this.mapping)
+    this.persist()
   }
 
   unbindAll(): void {
     this.mapping = { notes: {}, controls: {} }
-    saveMidiMapping(this.mapping)
+    this.persist()
   }
 
   getMapping(): MidiMapping {
