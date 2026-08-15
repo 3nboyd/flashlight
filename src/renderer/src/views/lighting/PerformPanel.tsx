@@ -14,7 +14,7 @@ import { SceneBrowser } from './SceneBrowser'
 import { SceneEditorModal } from './SceneEditorModal'
 import { padColumns } from './padGrid'
 import { parsePadFunction, padFunctionInfo, type PadFunctionKind } from './padFunctions'
-import type { Rgbw } from '@core/lighting/engine/types'
+import { DEFAULT_MELODY_SENSITIVITY, type Rgbw } from '@core/lighting/engine/types'
 
 const OVERRIDE_COLORS: { name: string; color: Rgbw | null; css: string }[] = [
   { name: 'Off', color: null, css: 'transparent' },
@@ -375,6 +375,24 @@ export function PerformPanel(): JSX.Element {
               }
             />
             bars
+          </div>
+          <div
+            className="autopilot-sensitivity"
+            title="How much the adaptive scenes + live pulse react to faint sound (echoes, reverb tails, ambience). Lower ignores those and stops/dims the lights quicker; higher reacts to fainter sound."
+          >
+            <span className="autopilot-sens-label">Echo filter</span>
+            <input
+              type="range"
+              min={0}
+              max={1}
+              step={0.05}
+              // Slider left = filter more (less sensitive); we store sensitivity,
+              // so invert for display.
+              value={1 - (project.melodySensitivity ?? DEFAULT_MELODY_SENSITIVITY)}
+              onChange={(e) =>
+                updateProject((p) => ({ ...p, melodySensitivity: 1 - Number(e.target.value) }))
+              }
+            />
           </div>
           <button
             className={`audio-toggle${audioRunning ? ' on' : ''}`}

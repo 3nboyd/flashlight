@@ -453,6 +453,22 @@
   color: var(--text-primary);
 }
 
+.autopilot-sensitivity {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 12px;
+  color: var(--text-tertiary);
+}
+
+.autopilot-sensitivity input[type='range'] {
+  width: 90px;
+}
+
+.autopilot-sens-label {
+  white-space: nowrap;
+}
+
 .audio-toggle {
   background: var(--bg-2);
   border: 1px solid var(--border-subtle);

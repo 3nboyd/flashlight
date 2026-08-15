@@ -126,4 +126,29 @@ describe('MusicPulse kick detection', () => {
     for (let i = 0; i < 20; i++) state = pulse.addFrame(frame({}), clock.positionAt(200 + i * 25))
     expect(state.level).toBeLessThan(0.02)
   })
+
+  it('sensitivity gates faint sound: lower ignores echoes, still passes the melody', () => {
+    const faintLevel = (sens: number): number => {
+      const pulse = new MusicPulse(FPS)
+      pulse.setSensitivity(sens)
+      const clock = clockAt(120)
+      let s = pulse.addFrame(frame({ rms: 0.06, bass: 0.06 }), clock.positionAt(0))
+      for (let i = 1; i < 40; i++) s = pulse.addFrame(frame({ rms: 0.06, bass: 0.06 }), clock.positionAt(i * 25))
+      return s.level
+    }
+    // A faint ~0.06 tail: low sensitivity attenuates it well below high sensitivity.
+    expect(faintLevel(0.1)).toBeLessThan(faintLevel(0.9))
+    expect(faintLevel(0.1)).toBeLessThan(0.05)
+
+    // A clear melody (~0.4) passes through regardless of sensitivity.
+    const melody = (sens: number): number => {
+      const pulse = new MusicPulse(FPS)
+      pulse.setSensitivity(sens)
+      const clock = clockAt(120)
+      let s = pulse.addFrame(frame({ rms: 0.4, bass: 0.3 }), clock.positionAt(0))
+      for (let i = 1; i < 20; i++) s = pulse.addFrame(frame({ rms: 0.4, bass: 0.3 }), clock.positionAt(i * 25))
+      return s.level
+    }
+    expect(melody(0.1)).toBeGreaterThan(0.3)
+  })
 })

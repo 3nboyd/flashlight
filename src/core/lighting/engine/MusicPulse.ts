@@ -1,5 +1,6 @@
 import type { AudioFeatures } from '../audio/features'
 import type { BeatPosition } from './BeatClock'
+import { DEFAULT_MELODY_SENSITIVITY } from './types'
 
 /**
  * Distinguishes a real, driving bass DRUM from mere bass energy (sustained
@@ -60,9 +61,17 @@ export class MusicPulse {
   private lastOnsetFrame = -Infinity
   private kickConfidence = 0
   private frames = 0
+  // 0 = ignore faint/echo sound the most (react only to the clear melody), 1 =
+  // most sensitive. Sets a noise/echo floor and a quicker release below it.
+  private sensitivity = DEFAULT_MELODY_SENSITIVITY
 
   constructor(framesPerSecond = 40) {
     this.fps = framesPerSecond
+  }
+
+  /** 0-1: lower makes the lights ignore faint echoes and stop quicker. */
+  setSensitivity(s: number): void {
+    this.sensitivity = Math.max(0, Math.min(1, s))
   }
 
   reset(): void {
@@ -90,8 +99,18 @@ export class MusicPulse {
     // hit's peak, the decay from that peak still bridges the gap to the next
     // hit (no flicker), while a true pause crosses the floor in ~0.4s.
     const energy = Math.max(features.rms, features.bass * 0.9)
-    if (energy > this.energyLevel) this.energyLevel = energy
-    else this.energyLevel += (1 - Math.exp(-1 / (this.fps * 0.12))) * (energy - this.energyLevel)
+    // Noise/echo floor from the sensitivity setting: below this, sound is treated
+    // as faint tail/ambience rather than the melody.
+    const floor = 0.025 + (1 - this.sensitivity) * 0.1
+    if (energy > this.energyLevel) {
+      this.energyLevel = energy
+    } else {
+      // Once we drop into faint territory (echo tails), release quicker so the
+      // lights actually stop/dim with the sound instead of chasing the tail.
+      const faint = this.energyLevel < floor * 1.2
+      const releaseSec = faint ? 0.05 : 0.12
+      this.energyLevel += (1 - Math.exp(-1 / (this.fps * releaseSec))) * (energy - this.energyLevel)
+    }
 
     // Fast envelope: instant attack, ~45ms release, so a scratch cut drops it
     // almost immediately and a cut-in snaps it back.
@@ -181,8 +200,15 @@ export class MusicPulse {
     this.onsetRate += (1 - Math.exp(-1 / (this.fps * 1.5))) * ((features.onset ? 1 : 0) - this.onsetRate)
     const rhythm = Math.min(1, this.onsetRate * 12)
 
+    // Soft gate on the reported level: attenuate sub-floor energy so the
+    // adaptive scenes and live pulse follow the melody, not faint echoes just
+    // above silence. Full signal stays above the floor.
+    const floorNow = 0.025 + (1 - this.sensitivity) * 0.1
+    const g = smoothstep(floorNow - 0.03, floorNow + 0.03, this.energyLevel)
+    const gatedLevel = this.energyLevel * (0.3 + 0.7 * g)
+
     return {
-      level: this.energyLevel,
+      level: gatedLevel,
       kick: this.kickConfidence,
       fast: this.energyFast,
       surge: this.surgeEnv,
@@ -190,4 +216,10 @@ export class MusicPulse {
       rhythm
     }
   }
+}
+
+/** Classic smoothstep: 0 below `edge0`, 1 above `edge1`, eased between. */
+function smoothstep(edge0: number, edge1: number, x: number): number {
+  const t = Math.max(0, Math.min(1, (x - edge0) / (edge1 - edge0 || 1e-6)))
+  return t * t * (3 - 2 * t)
 }

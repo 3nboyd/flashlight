@@ -7,6 +7,7 @@ import { BeatClock } from '@core/lighting/engine/BeatClock'
 import {
   defaultLightingProject,
   DEFAULT_OVERRIDES,
+  DEFAULT_MELODY_SENSITIVITY,
   type LightingProject,
   type LiveOverrides,
   type Scene
@@ -346,6 +347,9 @@ export class LightingHost {
   }
 
   private applyIntegrationConfig(): void {
+    // Adaptive/live-pulse sensitivity: how much faint sound (echoes, reverb
+    // tails, ambience) the lights react to. Lower = ignore more, stop quicker.
+    this.pulse.setSensitivity(this.project.melodySensitivity ?? DEFAULT_MELODY_SENSITIVITY)
     // Classify each scene for texture-aware smart picks: scenes built on
     // audio/beat-driven effects read as 'reactive'; color/movement flows
     // read as 'flow'.

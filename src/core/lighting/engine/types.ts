@@ -198,6 +198,10 @@ export interface StageProp {
   stack?: number
 }
 
+/** Default adaptive/live-pulse sensitivity to faint sound (echoes/ambience).
+ *  A touch below neutral so echoes don't drive the lights out of the box. */
+export const DEFAULT_MELODY_SENSITIVITY = 0.55
+
 export interface SmartSettings {
   pools: { chill: string[]; main: string[]; peak: string[] }
   /** Rotate the main pool every N 8-bar phrases while steady. */
@@ -232,6 +236,9 @@ export interface LightingProject {
   sceneViewMode: 'grid' | 'list'
   autopilot: AutopilotSettings
   smart: SmartSettings
+  /** 0-1 adaptive/live-pulse sensitivity to faint sound (echoes/ambience).
+   *  Lower ignores echoes more and stops the lights quicker. */
+  melodySensitivity?: number
   output: OutputSettings
   os2l: Os2lSettings
   audio: AudioInputSettings
@@ -263,6 +270,7 @@ export function defaultLightingProject(): LightingProject {
     sceneViewMode: 'grid',
     autopilot: { enabled: false, barsPerScene: 8, sceneIds: [] },
     smart: { pools: { chill: [], main: [], peak: [] }, phrasesPerScene: 2, sensitivity: 0.5 },
+    melodySensitivity: DEFAULT_MELODY_SENSITIVITY,
     output: {
       protocol: 'artnet',
       artnetHost: '255.255.255.255',
