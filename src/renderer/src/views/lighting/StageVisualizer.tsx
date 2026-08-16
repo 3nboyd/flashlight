@@ -32,6 +32,10 @@ interface StageVisualizerProps {
   className?: string
   /** Fixtures to ring with a pulsing highlight (the layer being edited). */
   highlightIds?: Set<string> | null
+  /** Zoom the layout to the rig's actual horizontal extent (crop empty ends),
+   *  so a rig that doesn't span the stage still fills the frame. Read-only view
+   *  only - not the editor, where you place fixtures across the whole stage. */
+  fitContent?: boolean
 }
 
 type DragTarget = { type: 'fixture'; id: string } | { type: 'prop'; id: string }
@@ -106,7 +110,8 @@ export function StageVisualizer({
   editable = false,
   onBackgroundClick,
   className,
-  highlightIds
+  highlightIds,
+  fitContent = false
 }: StageVisualizerProps): JSX.Element {
   const canvasRef = useRef<HTMLCanvasElement | null>(null)
   const snapshotRef = useRef<Record<number, number[]>>({})
@@ -190,12 +195,13 @@ export function StageVisualizer({
         editable,
         selected: selectedRef.current,
         highlight: highlightRef.current,
+        fitX: fitContent ? computeFitX(positionsRef.current) : null,
         timeMs: performance.now()
       })
     }
     raf = requestAnimationFrame(draw)
     return () => cancelAnimationFrame(raf)
-  }, [editable, resolveFixtures, currentProps])
+  }, [editable, fitContent, resolveFixtures, currentProps])
 
   // ---- geometry helpers shared with rendering ----
 
@@ -485,7 +491,29 @@ interface RenderContext {
   editable: boolean
   selected: DragTarget | null
   highlight: Set<string> | null
+  /** When set, remap the horizontal axis to this fixture extent (crop empty ends). */
+  fitX: { min: number; max: number } | null
   timeMs: number
+}
+
+/**
+ * The horizontal extent of the patched fixtures (0-1). Returns null - meaning
+ * "don't remap" - when there's nothing to gain: too few fixtures, a single
+ * column, or the rig already spans most of the stage.
+ */
+function computeFitX(positions: Map<string, StagePosition>): { min: number; max: number } | null {
+  let min = Infinity
+  let max = -Infinity
+  let n = 0
+  for (const p of positions.values()) {
+    if (p.x < min) min = p.x
+    if (p.x > max) max = p.x
+    n++
+  }
+  if (n < 2) return null
+  const extent = max - min
+  if (extent < 0.04 || extent > 0.82) return null
+  return { min, max }
 }
 
 function renderStage(
@@ -505,6 +533,15 @@ function renderStage(
 
   const floorY = FLOOR_Y * height
   const trussY = TRUSS_Y * height
+
+  // Remap a 0-1 x onto the rig's cropped extent (identity when not fitting), so
+  // a rig that doesn't span the stage still fills the frame.
+  const fitPad = 0.06
+  const mapX = (x: number): number => {
+    if (!rc.fitX) return x
+    const span = rc.fitX.max - rc.fitX.min || 1
+    return fitPad + ((x - rc.fitX.min) / span) * (1 - 2 * fitPad)
+  }
 
   // Floor with perspective grid.
   ctx.strokeStyle = 'rgba(255,255,255,0.05)'
@@ -534,7 +571,8 @@ function renderStage(
   const orderedProps = [...rc.props].sort((a, b) => PROP_DEPTH[a.type] - PROP_DEPTH[b.type])
   for (const prop of orderedProps) {
     const isSelected = rc.selected?.type === 'prop' && rc.selected.id === prop.id
-    drawProp(ctx, prop, width, height, trussY, floorY, isSelected)
+    const mp = rc.fitX ? { ...prop, x: mapX(prop.x) } : prop
+    drawProp(ctx, mp, width, height, trussY, floorY, isSelected)
   }
 
   // --- fixture states ---
@@ -549,10 +587,10 @@ function renderStage(
 
   const screenPos = (pos: StagePosition): { x: number; y: number } => {
     if (pos.level === 'side') {
-      return { x: pos.x * width, y: trussY + (floorY - trussY) * (pos.y ?? 0.5) }
+      return { x: mapX(pos.x) * width, y: trussY + (floorY - trussY) * (pos.y ?? 0.5) }
     }
     return {
-      x: pos.x * width,
+      x: mapX(pos.x) * width,
       y: pos.level === 'truss' ? trussY + Math.max(5, height * 0.02) : floorY
     }
   }
@@ -578,7 +616,7 @@ function renderStage(
     const cb = wsum > 0 ? Math.round(B / wsum) : 0
     ctx.globalCompositeOperation = 'lighter'
     for (const prop of screenProps) {
-      const { inner } = screenGeom(prop.x * width, width, height, floorY)
+      const { inner } = screenGeom(mapX(prop.x) * width, width, height, floorY)
       const a = 0.16 + 0.72 * lit
       const grad = ctx.createLinearGradient(inner.x, inner.y, inner.x, inner.y + inner.h)
       grad.addColorStop(0, `rgba(${cr},${cg},${cb},${(a * 0.55).toFixed(3)})`)
