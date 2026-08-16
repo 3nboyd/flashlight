@@ -2,8 +2,7 @@ import { useEffect, useState, type JSX } from 'react'
 import { useLightingStore } from '../../state/lightingStore'
 import { Banner } from '../../components/Banner'
 import { PerformPanel } from '../lighting/PerformPanel'
-import { PresetBrowser } from '../lighting/PresetBrowser'
-import { SceneBrowser } from '../lighting/SceneBrowser'
+import { SceneLibrary } from '../lighting/SceneLibrary'
 import { autoStartAudioIfConfigured } from '../lighting/runtime'
 import { CameraView } from '../camera/CameraView'
 import './OperatorView.css'
@@ -19,10 +18,9 @@ type Collapsed = 'none' | 'lighting' | 'camera'
  * and only section the user opens).
  */
 export function OperatorView(): JSX.Element {
-  const { load, loaded, status, startEngine, stopEngine, project, triggerScene } = useLightingStore()
+  const { load, loaded, status, startEngine, stopEngine, project } = useLightingStore()
   const [collapsed, setCollapsed] = useState<Collapsed>('none')
-  const [presetsOpen, setPresetsOpen] = useState(false)
-  const [browseOpen, setBrowseOpen] = useState(false)
+  const [libraryOpen, setLibraryOpen] = useState(false)
 
   useEffect(() => {
     if (!loaded) load()
@@ -46,15 +44,8 @@ export function OperatorView(): JSX.Element {
             <div className="operator-pane-actions">
               <button
                 className="secondary-button"
-                title="Preset library: import ready-made looks onto your rig"
-                onClick={() => setPresetsOpen(true)}
-              >
-                Presets
-              </button>
-              <button
-                className="secondary-button"
-                title="Browse your scenes by category (with previews) and switch the live look"
-                onClick={() => setBrowseOpen(true)}
+                title="Scene + preset library: play any look, pin it to a pad, add presets to this stage"
+                onClick={() => setLibraryOpen(true)}
               >
                 Scenes
               </button>
@@ -118,19 +109,7 @@ export function OperatorView(): JSX.Element {
         </button>
       )}
 
-      {presetsOpen && <PresetBrowser onClose={() => setPresetsOpen(false)} showStage={false} />}
-      {browseOpen && (
-        <SceneBrowser
-          scenes={project.scenes}
-          title="Switch scene"
-          currentId={status?.activeSceneId ?? null}
-          onPick={(id) => {
-            triggerScene(id)
-            setBrowseOpen(false)
-          }}
-          onClose={() => setBrowseOpen(false)}
-        />
-      )}
+      {libraryOpen && <SceneLibrary onClose={() => setLibraryOpen(false)} />}
     </div>
   )
 }

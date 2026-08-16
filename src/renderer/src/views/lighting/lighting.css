@@ -669,6 +669,136 @@
   color: var(--text-secondary);
 }
 
+/* --- Merged scene + preset library (animated tiles + dark action bar) --- */
+.preset-drawer.scene-library {
+  width: min(560px, 94vw);
+}
+
+.lib-category {
+  margin-bottom: 6px;
+}
+
+.lib-category h3 {
+  margin: 4px 0 8px;
+  font-size: 13px;
+  color: var(--text-secondary);
+}
+
+.lib-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(118px, 1fr));
+  gap: 10px;
+  margin-bottom: 14px;
+}
+
+.lib-tile {
+  --tile: #666;
+  position: relative;
+  aspect-ratio: 1 / 1;
+  border-radius: var(--radius-lg);
+  overflow: hidden;
+  border: 1px solid var(--border-subtle);
+  display: flex;
+  flex-direction: column;
+  transition: box-shadow 0.12s ease, border-color 0.12s ease;
+}
+
+.lib-tile.active {
+  border-color: var(--tile);
+  box-shadow: 0 0 0 2px color-mix(in srgb, var(--tile) 70%, transparent);
+}
+
+.lib-tile.dim {
+  opacity: 0.5;
+}
+
+/* The animated preview fills the tile; a soft top scrim keeps the name legible
+   while most of the color/motion shows through. */
+.lib-tile-top {
+  position: relative;
+  z-index: 1;
+  flex: 1;
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 4px;
+  padding: 8px;
+  background: linear-gradient(to bottom, rgba(0, 0, 0, 0.45), transparent 60%);
+}
+
+.lib-tile-name {
+  font-size: 12px;
+  font-weight: 700;
+  color: #fff;
+  text-shadow: 0 1px 4px rgba(0, 0, 0, 0.8);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+}
+
+.lib-tile-tags {
+  display: flex;
+  gap: 3px;
+  flex: 0 0 auto;
+}
+
+.lib-tag {
+  font-size: 8px;
+  font-weight: 800;
+  letter-spacing: 0.5px;
+  padding: 1px 4px;
+  border-radius: 3px;
+}
+
+.lib-tag.hold {
+  background: rgba(255, 255, 255, 0.85);
+  color: #111;
+}
+
+.lib-tag.new {
+  background: var(--accent, #38bdf8);
+  color: #06121a;
+}
+
+/* Solid dark bar so the buttons are always readable over any preview. */
+.lib-tile-bar {
+  position: relative;
+  z-index: 1;
+  display: flex;
+  background: rgba(6, 6, 10, 0.94);
+  border-top: 1px solid rgba(255, 255, 255, 0.08);
+}
+
+.lib-tile-btn {
+  flex: 1;
+  border: none;
+  background: transparent;
+  color: var(--text-secondary);
+  font-size: 11px;
+  font-weight: 700;
+  padding: 7px 4px;
+  cursor: pointer;
+}
+
+.lib-tile-btn.play {
+  color: #fff;
+}
+
+.lib-tile-btn.pad {
+  border-left: 1px solid rgba(255, 255, 255, 0.1);
+}
+
+.lib-tile-btn:hover:not(:disabled) {
+  background: rgba(255, 255, 255, 0.09);
+}
+
+.lib-tile-btn:disabled {
+  color: var(--text-tertiary);
+  cursor: default;
+}
+
 .pad-hold {
   position: absolute;
   top: 8px;
