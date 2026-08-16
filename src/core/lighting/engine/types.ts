@@ -202,6 +202,14 @@ export interface StageProp {
  *  A touch below neutral so echoes don't drive the lights out of the box. */
 export const DEFAULT_MELODY_SENSITIVITY = 0.55
 
+/** A named snapshot of the performance pad grid (size + assignments). */
+export interface PadConfig {
+  id: string
+  name: string
+  padCount: number
+  padSceneIds: (string | null)[]
+}
+
 export interface SmartSettings {
   pools: { chill: string[]; main: string[]; peak: string[] }
   /** Rotate the main pool every N 8-bar phrases while steady. */
@@ -232,6 +240,9 @@ export interface LightingProject {
   padSceneIds: (string | null)[]
   /** Number of performance pads: 8, 16, 32, or 64. */
   padCount: number
+  /** Saved pad layouts you can switch between (like scenes, but for the whole
+   *  pad grid). Undefined on older stages. */
+  padConfigs?: PadConfig[]
   /** Scene / pool lists render as a grid of tiles or a compact list. */
   sceneViewMode: 'grid' | 'list'
   autopilot: AutopilotSettings

@@ -459,6 +459,30 @@
   color: var(--text-primary);
 }
 
+.pad-config-list {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  margin-top: 6px;
+}
+
+.pad-config-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.pad-config-name {
+  flex: 1 1 auto;
+  min-width: 0;
+  background: var(--bg-2);
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-sm);
+  padding: 5px 8px;
+  color: var(--text-primary);
+  font-size: 13px;
+}
+
 .autopilot-now {
   display: flex;
   align-items: baseline;

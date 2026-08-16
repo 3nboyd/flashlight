@@ -1515,8 +1515,8 @@ export function SetupPanel({ view }: { view: SetupView }): JSX.Element {
         )}
       </SetupSection>
 
-      <SetupSection id="pads" title="Performance pads" help={<>Assign scenes to the pad grid used in Perform mode. Change the grid size here; you can
-          also reassign any pad live from Perform with its corner menu.</>}>
+      <SetupSection id="pads" title="Performance pads" help={<>Set the grid size and save/switch pad layouts. Assign which scene sits on each pad
+          from the Live screen (Scenes -&gt; + Pad) or a pad&apos;s corner menu.</>}>
         <div className="setup-row">
           <label>Grid size</label>
           <div className="segmented">
@@ -1537,28 +1537,81 @@ export function SetupPanel({ view }: { view: SetupView }): JSX.Element {
             ))}
           </div>
         </div>
-        <div className={`pad-assign-grid cols-${padColumns(project.padCount)}`}>
-          {project.padSceneIds.map((sceneId, index) => (
-            <select
-              key={index}
-              value={sceneId ?? ''}
-              onChange={(e) =>
-                updateProject((p) => {
-                  const padSceneIds = [...p.padSceneIds]
-                  padSceneIds[index] = e.target.value || null
-                  return { ...p, padSceneIds }
-                })
-              }
-            >
-              <option value="">empty</option>
-              {project.scenes.map((scene) => (
-                <option key={scene.id} value={scene.id}>
-                  {scene.name}
-                </option>
-              ))}
-            </select>
-          ))}
+
+        <div className="setup-row">
+          <label>Pad layouts</label>
+          <button
+            className="secondary-button"
+            title="Snapshot the current pad grid so you can switch back to it later"
+            onClick={() =>
+              updateProject((p) => ({
+                ...p,
+                padConfigs: [
+                  ...(p.padConfigs ?? []),
+                  {
+                    id: `padcfg-${Date.now()}`,
+                    name: `Layout ${(p.padConfigs ?? []).length + 1}`,
+                    padCount: p.padCount,
+                    padSceneIds: [...p.padSceneIds]
+                  }
+                ]
+              }))
+            }
+          >
+            + Save current layout
+          </button>
         </div>
+        {(project.padConfigs ?? []).length === 0 ? (
+          <p className="settings-hint">
+            No saved layouts yet. Arrange your pads, then Save current layout to keep different sets
+            (like different scenes, but for the whole pad grid) and load them back anytime.
+          </p>
+        ) : (
+          <div className="pad-config-list">
+            {(project.padConfigs ?? []).map((cfg) => (
+              <div key={cfg.id} className="pad-config-row">
+                <input
+                  className="pad-config-name"
+                  value={cfg.name}
+                  onChange={(e) =>
+                    updateProject((p) => ({
+                      ...p,
+                      padConfigs: (p.padConfigs ?? []).map((c) =>
+                        c.id === cfg.id ? { ...c, name: e.target.value } : c
+                      )
+                    }))
+                  }
+                />
+                <span className="settings-hint" style={{ margin: 0 }}>
+                  {cfg.padCount} pads
+                </span>
+                <button
+                  className="secondary-button"
+                  onClick={() =>
+                    updateProject((p) => ({
+                      ...p,
+                      padCount: cfg.padCount,
+                      padSceneIds: [...cfg.padSceneIds]
+                    }))
+                  }
+                >
+                  Load
+                </button>
+                <button
+                  className="text-button"
+                  onClick={() =>
+                    updateProject((p) => ({
+                      ...p,
+                      padConfigs: (p.padConfigs ?? []).filter((c) => c.id !== cfg.id)
+                    }))
+                  }
+                >
+                  Delete
+                </button>
+              </div>
+            ))}
+          </div>
+        )}
       </SetupSection>
     </div>
     </SetupViewContext.Provider>
