@@ -12,39 +12,112 @@
   min-height: 0;
   display: flex;
   flex-direction: column;
-  overflow: auto;
+  overflow: hidden;
 }
 
 .operator-pane--lighting {
   flex: 1.5 1 0;
+  min-width: 440px;
 }
 
 .operator-pane--camera {
   flex: 1 1 0;
+  min-width: 320px;
   border-left: 1px solid var(--border-subtle, #26262e);
 }
 
-/* The embedded camera view fills its pane with no page padding. */
+/* When one side is collapsed, the other takes the whole width. */
+.collapsed-camera .operator-pane--lighting,
+.collapsed-lighting .operator-pane--camera {
+  flex: 1 1 auto;
+}
+
+.operator-pane-head {
+  flex: 0 0 auto;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 8px 12px;
+  border-bottom: 1px solid var(--border-subtle, #26262e);
+}
+
+.operator-pane-title {
+  font-weight: 600;
+  font-size: 14px;
+  white-space: nowrap;
+}
+
+.operator-pane-actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+}
+
+.operator-pane-body {
+  flex: 1;
+  min-height: 0;
+  overflow: auto;
+}
+
+.operator-collapse {
+  flex: 0 0 auto;
+  border: 1px solid var(--border-strong, #3a3a44);
+  background: transparent;
+  color: var(--text-primary);
+  border-radius: 6px;
+  padding: 3px 9px;
+  cursor: pointer;
+  font-size: 12px;
+}
+
+.operator-collapse:hover {
+  border-color: var(--accent, #38bdf8);
+}
+
+/* A collapsed pane becomes a thin rail to bring it back. */
+.operator-rail {
+  flex: 0 0 auto;
+  width: 34px;
+  writing-mode: vertical-rl;
+  transform: rotate(180deg);
+  border: none;
+  background: var(--bg-2, #16161c);
+  color: var(--text-secondary, #9a9aa8);
+  cursor: pointer;
+  font-size: 12px;
+  font-weight: 600;
+  letter-spacing: 1px;
+  padding: 12px 0;
+}
+
+.operator-rail:hover {
+  color: var(--text-primary);
+}
+
+.operator-rail--lighting {
+  border-right: 1px solid var(--border-subtle, #26262e);
+}
+
+.operator-rail--camera {
+  border-left: 1px solid var(--border-subtle, #26262e);
+}
+
+/* Embedded camera fills its pane with no page padding. */
 .operator-pane--camera .camera-view--embedded {
   flex: 1;
   padding: 0;
   min-height: 0;
+  height: 100%;
 }
 
 .camera-view--embedded .camera-layout {
   padding: 8px;
 }
 
-.operator-cam-bar {
-  display: flex;
-  flex-direction: column;
-  gap: 6px;
-  padding: 8px;
-  border-bottom: 1px solid var(--border-subtle, #26262e);
-}
-
-/* Stack on narrow windows so neither side gets crushed. */
-@media (max-width: 1100px) {
+/* Too narrow to sit side by side: stack, and drop the min-widths. */
+@media (max-width: 1000px) {
   .operator-view {
     flex-direction: column;
     overflow: auto;
@@ -53,11 +126,30 @@
   .operator-pane {
     overflow: visible;
     flex: none;
+    min-width: 0;
   }
 
   .operator-pane--camera {
     border-left: none;
     border-top: 1px solid var(--border-subtle, #26262e);
-    min-height: 60vh;
+    min-height: 55vh;
+  }
+
+  .operator-rail {
+    writing-mode: horizontal-tb;
+    transform: none;
+    width: auto;
+    padding: 8px 12px;
+    text-align: left;
+  }
+
+  .operator-rail--lighting {
+    border-right: none;
+    border-bottom: 1px solid var(--border-subtle, #26262e);
+  }
+
+  .operator-rail--camera {
+    border-left: none;
+    border-top: 1px solid var(--border-subtle, #26262e);
   }
 }

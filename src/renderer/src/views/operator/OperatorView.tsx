@@ -1,27 +1,111 @@
-import type { JSX } from 'react'
+import { useEffect, useState, type JSX } from 'react'
+import { useLightingStore } from '../../state/lightingStore'
+import { Banner } from '../../components/Banner'
 import { PerformPanel } from '../lighting/PerformPanel'
+import { PresetBrowser } from '../lighting/PresetBrowser'
+import { autoStartAudioIfConfigured } from '../lighting/runtime'
 import { CameraView } from '../camera/CameraView'
 import './OperatorView.css'
 
+type Collapsed = 'none' | 'lighting' | 'camera'
+
 /**
- * Phase E: the unified "Live" operator surface. One screen combining the
- * lighting perform controls (rig visualizer, pads, master/knobs) and the camera
- * program (auto-director cut + record), so the DJ performs both without changing
- * sections. Each side reuses its full component; the camera side renders in
- * `embedded` mode (grid + auto-switch + record, no setup chrome).
- *
- * Only one app section mounts at a time, so this composition owns the single
- * live instance of the MIDI/audio/camera runtime while it is shown.
+ * The "Live" cockpit - the app's main screen. Lighting perform + camera program
+ * side by side, each in a collapsible pane so the DJ can run both, just
+ * lighting, or just camera. Output start/stop and Presets live in the lighting
+ * pane header; per-section overflow settings live behind gear icons in each
+ * pane. Owns the single live load of the lighting project (Live may be the first
+ * and only section the user opens).
  */
 export function OperatorView(): JSX.Element {
+  const { load, loaded, status, startEngine, stopEngine, project } = useLightingStore()
+  const [collapsed, setCollapsed] = useState<Collapsed>('none')
+  const [presetsOpen, setPresetsOpen] = useState(false)
+
+  useEffect(() => {
+    if (!loaded) load()
+  }, [load, loaded])
+  useEffect(() => {
+    if (loaded) autoStartAudioIfConfigured(project.audio)
+  }, [loaded, project.audio])
+
+  if (!loaded) return <div className="operator-view" />
+
+  const running = status?.running ?? false
+  const showLighting = collapsed !== 'lighting'
+  const showCamera = collapsed !== 'camera'
+
   return (
-    <div className="operator-view">
-      <section className="operator-pane operator-pane--lighting">
-        <PerformPanel />
-      </section>
-      <section className="operator-pane operator-pane--camera">
-        <CameraView embedded />
-      </section>
+    <div className={`operator-view collapsed-${collapsed}`}>
+      {showLighting ? (
+        <section className="operator-pane operator-pane--lighting">
+          <header className="operator-pane-head">
+            <span className="operator-pane-title">Lighting</span>
+            <div className="operator-pane-actions">
+              <button
+                className={running ? 'danger-button' : 'primary-button'}
+                onClick={() => (running ? stopEngine() : startEngine())}
+              >
+                {running ? '■ Stop Output' : '▶ Start Output'}
+              </button>
+              <button className="secondary-button" onClick={() => setPresetsOpen(true)}>
+                Presets
+              </button>
+              <button
+                className="operator-collapse"
+                title="Collapse lighting (camera only)"
+                onClick={() => setCollapsed('lighting')}
+              >
+                ◀
+              </button>
+            </div>
+          </header>
+          {status?.outputError && (
+            <Banner kind="error">DMX output error: {status.outputError}</Banner>
+          )}
+          <div className="operator-pane-body">
+            <PerformPanel />
+          </div>
+        </section>
+      ) : (
+        <button
+          className="operator-rail operator-rail--lighting"
+          onClick={() => setCollapsed('none')}
+          title="Show lighting"
+        >
+          ▶ Lighting
+        </button>
+      )}
+
+      {showCamera ? (
+        <section className="operator-pane operator-pane--camera">
+          <header className="operator-pane-head">
+            <span className="operator-pane-title">Camera / Screen</span>
+            <div className="operator-pane-actions">
+              <button
+                className="operator-collapse"
+                title="Collapse camera (lighting only)"
+                onClick={() => setCollapsed('camera')}
+              >
+                ▶
+              </button>
+            </div>
+          </header>
+          <div className="operator-pane-body">
+            <CameraView embedded />
+          </div>
+        </section>
+      ) : (
+        <button
+          className="operator-rail operator-rail--camera"
+          onClick={() => setCollapsed('none')}
+          title="Show camera"
+        >
+          ◀ Camera
+        </button>
+      )}
+
+      {presetsOpen && <PresetBrowser onClose={() => setPresetsOpen(false)} showStage={false} />}
     </div>
   )
 }

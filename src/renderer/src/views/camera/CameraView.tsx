@@ -136,6 +136,8 @@ export function CameraView({ embedded = false }: { embedded?: boolean } = {}): J
     }
   })
   const [midiLearn, setMidiLearn] = useState<CamMidiAction | null>(null)
+  // Embedded (operator) mode: the setup sidebar becomes a gear-triggered drawer.
+  const [camGear, setCamGear] = useState(false)
   const [fxParams, setFxParams] = useState<FxParams>(() => {
     try {
       return JSON.parse(localStorage.getItem(FX_KEY) ?? '{}') as FxParams
@@ -527,8 +529,16 @@ export function CameraView({ embedded = false }: { embedded?: boolean } = {}): J
       )}
 
       <div className="camera-layout">
-        {!embedded && (
-        <aside className="camera-side">
+        {(!embedded || camGear) && (
+        <aside className={`camera-side${embedded ? ' camera-drawer' : ''}`}>
+          {embedded && (
+            <div className="camera-drawer-head">
+              <strong>Camera setup</strong>
+              <button className="cam-icon-btn" title="Close" onClick={() => setCamGear(false)}>
+                ✕
+              </button>
+            </div>
+          )}
           <h3>Cameras</h3>
           {needsPermission ? (
             <button className="primary-button" onClick={requestPermission}>
@@ -713,13 +723,18 @@ export function CameraView({ embedded = false }: { embedded?: boolean } = {}): J
 
         <div className="camera-main">
           {embedded && (
-            <div className="operator-cam-bar">
-              <label className="cam-out-row">
-                <span>Auto-switch</span>
+            <div className="operator-cam-topbar">
+              <label className="cam-out-row cam-auto-row">
                 <input type="checkbox" checked={auto} onChange={(e) => setAuto(e.target.checked)} />
+                <span>Auto-switch cameras</span>
               </label>
-              <RecordingPanel getCanvas={() => programCanvasRef.current} />
-              <span className="settings-hint">Roles / effects: set up in the Camera tab.</span>
+              <button
+                className={`cam-icon-btn${camGear ? ' active' : ''}`}
+                title="Camera setup (roles, effects, screen output, MIDI)"
+                onClick={() => setCamGear((v) => !v)}
+              >
+                ⚙
+              </button>
             </div>
           )}
           <div className="camera-stage">
@@ -808,6 +823,13 @@ export function CameraView({ embedded = false }: { embedded?: boolean } = {}): J
                   </label>
                 )
               })}
+            </div>
+          )}
+
+          {embedded && (
+            <div className="operator-cam-record">
+              <span className="cam-hud-label">Record</span>
+              <RecordingPanel getCanvas={() => programCanvasRef.current} />
             </div>
           )}
         </div>

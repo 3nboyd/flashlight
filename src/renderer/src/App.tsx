@@ -6,7 +6,6 @@ import { FileExplorerView } from './views/FileExplorerView'
 import { RenameView } from './views/RenameView'
 import { BackupsView } from './views/BackupsView'
 import { LightingView } from './views/lighting/LightingView'
-import { CameraView } from './views/camera/CameraView'
 import { OperatorView } from './views/operator/OperatorView'
 import { useSettingsStore } from './state/settingsStore'
 import './styles/views.css'
@@ -26,10 +25,8 @@ function MusicRouter({ view }: { view: NavState['musicView'] }): JSX.Element {
 
 function App(): JSX.Element {
   const [nav, setNav] = useState<NavState>({
-    section: 'music',
+    section: 'live',
     musicView: 'library',
-    lightingView: 'perform',
-    cameraView: 'preview',
     lightingSection: null
   })
   const { load, loaded } = useSettingsStore()
@@ -42,16 +39,18 @@ function App(): JSX.Element {
     return <div className="app-shell" />
   }
 
+  const appearance = nav.section === 'settings' && nav.lightingSection === 'appearance'
+
   return (
     <div className="app-shell">
       <Sidebar nav={nav} onChange={setNav} />
       {nav.section === 'music' && <MusicRouter view={nav.musicView} />}
-      {nav.section === 'lighting' && (
-        <LightingView mode={nav.lightingView} scrollSection={nav.lightingSection} />
+      {nav.section === 'live' && <OperatorView />}
+      {nav.section === 'setup' && <LightingView mode="setup" scrollSection={nav.lightingSection} />}
+      {nav.section === 'settings' && !appearance && (
+        <LightingView mode="settings" scrollSection={nav.lightingSection} />
       )}
-      {nav.section === 'camera' && <CameraView />}
-      {nav.section === 'operator' && <OperatorView />}
-      {nav.section === 'settings' && <SettingsView />}
+      {appearance && <SettingsView />}
     </div>
   )
 }

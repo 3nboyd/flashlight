@@ -146,6 +146,73 @@
   gap: 8px;
 }
 
+/* ---- Embedded (operator) camera ---- */
+.camera-view--embedded .camera-layout {
+  position: relative;
+}
+
+.operator-cam-topbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  flex: 0 0 auto;
+}
+
+.cam-auto-row {
+  justify-content: flex-start;
+  gap: 8px;
+}
+
+.cam-icon-btn {
+  flex: 0 0 auto;
+  width: 30px;
+  height: 28px;
+  border: 1px solid var(--border-strong);
+  background: transparent;
+  color: var(--text-primary);
+  border-radius: 7px;
+  cursor: pointer;
+  font-size: 14px;
+  line-height: 1;
+}
+
+.cam-icon-btn.active {
+  background: var(--accent, #38bdf8);
+  color: #06121a;
+  border-color: transparent;
+}
+
+.operator-cam-record {
+  flex: 0 0 auto;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  padding-top: 8px;
+  border-top: 1px solid var(--border-subtle, #26262e);
+}
+
+/* The setup sidebar as an overlay drawer in embedded mode. */
+.camera-side.camera-drawer {
+  position: absolute;
+  top: 0;
+  right: 0;
+  bottom: 0;
+  z-index: 20;
+  width: min(300px, 88%);
+  padding: 10px 12px;
+  background: var(--bg-1, #101015);
+  border-left: 1px solid var(--border-strong);
+  box-shadow: -12px 0 30px rgba(0, 0, 0, 0.45);
+}
+
+.camera-drawer-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 6px;
+}
+
 .camera-stage {
   position: relative;
   flex: 1;
