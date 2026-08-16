@@ -45,12 +45,6 @@ export function OperatorView(): JSX.Element {
             <span className="operator-pane-title">Lighting</span>
             <div className="operator-pane-actions">
               <button
-                className={running ? 'danger-button' : 'primary-button'}
-                onClick={() => (running ? stopEngine() : startEngine())}
-              >
-                {running ? '■ Stop Output' : '▶ Start Output'}
-              </button>
-              <button
                 className="secondary-button"
                 title="Preset library: import ready-made looks onto your rig"
                 onClick={() => setPresetsOpen(true)}
@@ -63,6 +57,12 @@ export function OperatorView(): JSX.Element {
                 onClick={() => setBrowseOpen(true)}
               >
                 Scenes
+              </button>
+              <button
+                className={running ? 'danger-button' : 'primary-button'}
+                onClick={() => (running ? stopEngine() : startEngine())}
+              >
+                {running ? '■ Stop Output' : '▶ Start Output'}
               </button>
               <button
                 className="operator-collapse"

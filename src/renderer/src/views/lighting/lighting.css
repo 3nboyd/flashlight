@@ -1671,11 +1671,13 @@
   border-radius: var(--radius-lg);
 }
 
-/* Strobe + Blackout live at the end of the knob row, in the spare space. */
+/* Strobe + Blackout live at the end of the knob row, in the spare space.
+   Top-align them so the two button faces line up (the blackout mode toggle
+   hangs below without pushing STROBE off-center). */
 .perform-knobs-macros {
   margin-left: auto;
   display: flex;
-  align-items: center;
+  align-items: flex-start;
   gap: 10px;
 }
 
