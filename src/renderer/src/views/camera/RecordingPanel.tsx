@@ -38,9 +38,62 @@ function fmtElapsed(ms: number): string {
   return `${p(m)}:${p(s % 60)}`
 }
 
+/** A tiny live level meter for the selected audio input (5 bars). */
+function AudioMeter({ deviceId, active }: { deviceId: string | null; active: boolean }): JSX.Element {
+  const barsRef = useRef<HTMLDivElement>(null)
+  useEffect(() => {
+    if (!active) return
+    let stream: MediaStream | null = null
+    let ctx: AudioContext | null = null
+    let raf = 0
+    let cancelled = false
+    navigator.mediaDevices
+      .getUserMedia({ audio: deviceId ? { deviceId: { exact: deviceId } } : true })
+      .then((s) => {
+        if (cancelled) return s.getTracks().forEach((t) => t.stop())
+        stream = s
+        ctx = new AudioContext()
+        const analyser = ctx.createAnalyser()
+        analyser.fftSize = 128
+        ctx.createMediaStreamSource(s).connect(analyser)
+        const data = new Uint8Array(analyser.frequencyBinCount)
+        const BANDS = 5
+        const band = Math.floor(data.length / BANDS)
+        const tick = (): void => {
+          raf = requestAnimationFrame(tick)
+          analyser.getByteFrequencyData(data)
+          const bars = barsRef.current?.children
+          if (!bars) return
+          for (let i = 0; i < BANDS; i++) {
+            let sum = 0
+            for (let j = 0; j < band; j++) sum += data[i * band + j]
+            const v = Math.min(1, sum / band / 170)
+            ;(bars[i] as HTMLElement).style.height = `${12 + v * 88}%`
+          }
+        }
+        tick()
+      })
+      .catch(() => undefined)
+    return () => {
+      cancelled = true
+      cancelAnimationFrame(raf)
+      stream?.getTracks().forEach((t) => t.stop())
+      ctx?.close().catch(() => undefined)
+    }
+  }, [deviceId, active])
+  return (
+    <div className="rec-eq" ref={barsRef} title="Audio input level">
+      {Array.from({ length: 5 }).map((_, i) => (
+        <span key={i} className="rec-eq-bar" />
+      ))}
+    </div>
+  )
+}
+
 /**
- * Records the primary camera visual to disk. Sits alongside the projector
- * output (the "background" use) as the "record" use of the same visual.
+ * Records the live program to disk. A compact bar (Record + timer + input level
+ * + input picker) keeps the common controls one row; everything else lives
+ * behind the settings gear.
  */
 export function RecordingPanel({
   getCanvas
@@ -69,6 +122,7 @@ export function RecordingPanel({
   const [converting, setConverting] = useState(false)
   const [saved, setSaved] = useState<string[]>([])
   const [error, setError] = useState('')
+  const [settingsOpen, setSettingsOpen] = useState(false)
   const recorderRef = useRef(new Recorder())
 
   useEffect(() => {
@@ -156,19 +210,69 @@ export function RecordingPanel({
   }
 
   const folderLabel = folder ? folder.split('/').pop() || folder : 'No folder chosen'
+  const audioSelectValue = !includeAudio ? 'off' : (audioDevice ?? 'default')
+  const setAudioSelect = (v: string): void => {
+    if (v === 'off') {
+      setIncludeAudio(false)
+      localStorage.setItem(AUDIO_KEY, '0')
+      return
+    }
+    setIncludeAudio(true)
+    localStorage.setItem(AUDIO_KEY, '1')
+    if (v === 'default') {
+      setAudioDevice(null)
+      localStorage.removeItem(AUDIODEV_KEY)
+    } else {
+      setAudioDevice(v)
+      localStorage.setItem(AUDIODEV_KEY, v)
+    }
+  }
+
+  if (formats.length === 0) {
+    return <p className="settings-hint">Recording is not supported in this build.</p>
+  }
 
   return (
     <div className="cam-rec">
-      <div className="cam-rec-row">
-        <button className="cam-output-btn" onClick={chooseFolder} title={folder ?? ''}>
-          Folder: {folderLabel}
+      <div className="rec-bar">
+        <button
+          className={`cam-rec-btn${recording ? ' recording' : ''}`}
+          onClick={recording ? stop : start}
+          disabled={converting}
+        >
+          {converting ? 'Converting…' : recording ? '■ Stop' : '● Record'}
+        </button>
+        <span className={`rec-timer${recording ? ' on' : ''}`}>{fmtElapsed(elapsed)}</span>
+        <AudioMeter deviceId={audioDevice} active={includeAudio} />
+        <select
+          className="rec-audio-select"
+          value={audioSelectValue}
+          disabled={recording}
+          title="Audio input to record"
+          onChange={(e) => setAudioSelect(e.target.value)}
+        >
+          <option value="off">No audio</option>
+          <option value="default">Default input</option>
+          {audioInputs.map((d, i) => (
+            <option key={d.deviceId} value={d.deviceId}>
+              {d.label || `Input ${i + 1}`}
+            </option>
+          ))}
+        </select>
+        <button
+          className={`cam-icon-btn${settingsOpen ? ' active' : ''}`}
+          title="Recording settings (folder, format, quality)"
+          onClick={() => setSettingsOpen((v) => !v)}
+        >
+          ⚙
         </button>
       </div>
 
-      {formats.length === 0 ? (
-        <p className="settings-hint">Recording is not supported in this build.</p>
-      ) : (
-        <>
+      {settingsOpen && (
+        <div className="rec-settings">
+          <button className="cam-output-btn" onClick={chooseFolder} title={folder ?? ''}>
+            Folder: {folderLabel}
+          </button>
           <label className="cam-rec-field">
             <span>Output</span>
             <select
@@ -187,7 +291,6 @@ export function RecordingPanel({
               ))}
             </select>
           </label>
-
           {output !== 'webm' && (
             <label className="cam-rec-field">
               <span>Quality</span>
@@ -208,7 +311,6 @@ export function RecordingPanel({
               </select>
             </label>
           )}
-
           <label className="cam-rec-field">
             <span>Codec</span>
             <select value={formatMime} onChange={(e) => setFormat(e.target.value)} disabled={recording || converting}>
@@ -219,43 +321,6 @@ export function RecordingPanel({
               ))}
             </select>
           </label>
-
-          <label className="cam-rec-check">
-            <input
-              type="checkbox"
-              checked={includeAudio}
-              disabled={recording}
-              onChange={(e) => {
-                setIncludeAudio(e.target.checked)
-                localStorage.setItem(AUDIO_KEY, e.target.checked ? '1' : '0')
-              }}
-            />
-            Record audio
-          </label>
-
-          {includeAudio && (
-            <label className="cam-rec-field">
-              <span>Audio in</span>
-              <select
-                value={audioDevice ?? ''}
-                disabled={recording}
-                onChange={(e) => {
-                  const v = e.target.value || null
-                  setAudioDevice(v)
-                  if (v) localStorage.setItem(AUDIODEV_KEY, v)
-                  else localStorage.removeItem(AUDIODEV_KEY)
-                }}
-              >
-                <option value="">Default input</option>
-                {audioInputs.map((d, i) => (
-                  <option key={d.deviceId} value={d.deviceId}>
-                    {d.label || `Input ${i + 1}`}
-                  </option>
-                ))}
-              </select>
-            </label>
-          )}
-
           {includeAudio && (
             <label className="cam-rec-check">
               <input
@@ -270,31 +335,19 @@ export function RecordingPanel({
               Separate audio + video files
             </label>
           )}
-
-          <button
-            className={`cam-rec-btn${recording ? ' recording' : ''}`}
-            onClick={recording ? stop : start}
-            disabled={converting}
-          >
-            {converting
-              ? 'Converting…'
-              : recording
-                ? `■ Stop (${fmtElapsed(elapsed)})`
-                : '● Record'}
-          </button>
-
-          {saved.length > 0 && (
-            <div className="cam-rec-saved">
-              {saved.map((p) => (
-                <button key={p} className="cam-rec-saved-link" onClick={() => window.djCompanion.recording.reveal(p)}>
-                  Saved: {p.split('/').pop()}
-                </button>
-              ))}
-            </div>
-          )}
-          {error && <p className="settings-hint">{error}</p>}
-        </>
+        </div>
       )}
+
+      {saved.length > 0 && (
+        <div className="cam-rec-saved">
+          {saved.map((p) => (
+            <button key={p} className="cam-rec-saved-link" onClick={() => window.djCompanion.recording.reveal(p)}>
+              Saved: {p.split('/').pop()}
+            </button>
+          ))}
+        </div>
+      )}
+      {error && <p className="settings-hint">{error}</p>}
     </div>
   )
 }

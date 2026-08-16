@@ -346,6 +346,62 @@
   display: flex;
 }
 
+/* Compact record bar: [Record] [timer] [meter] [input] [gear] */
+.rec-bar {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.rec-timer {
+  font-variant-numeric: tabular-nums;
+  font-size: 12px;
+  color: var(--text-tertiary, #6b7280);
+  min-width: 40px;
+}
+
+.rec-timer.on {
+  color: #ff5b5b;
+  font-weight: 700;
+}
+
+.rec-eq {
+  display: flex;
+  align-items: flex-end;
+  gap: 2px;
+  height: 22px;
+  width: 30px;
+  flex: 0 0 auto;
+}
+
+.rec-eq-bar {
+  flex: 1;
+  height: 12%;
+  align-self: flex-end;
+  background: var(--accent, #38bdf8);
+  border-radius: 1px;
+  transition: height 60ms linear;
+}
+
+.rec-audio-select {
+  flex: 1 1 auto;
+  min-width: 0;
+  font-size: 11px;
+  padding: 4px 6px;
+  border-radius: 6px;
+  border: 1px solid var(--border-strong);
+  background: var(--surface-2, #1a1a22);
+  color: var(--text-primary);
+}
+
+.rec-settings {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding-top: 8px;
+  border-top: 1px solid var(--border-subtle, #26262e);
+}
+
 .cam-rec-field {
   display: flex;
   align-items: center;

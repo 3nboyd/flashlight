@@ -2,7 +2,6 @@ import { useEffect, useState, type JSX } from 'react'
 import { useLightingStore } from '../../state/lightingStore'
 import { Banner } from '../../components/Banner'
 import { PerformPanel } from '../lighting/PerformPanel'
-import { PresetBrowser } from '../lighting/PresetBrowser'
 import { autoStartAudioIfConfigured } from '../lighting/runtime'
 import { CameraView } from '../camera/CameraView'
 import './OperatorView.css'
@@ -20,7 +19,6 @@ type Collapsed = 'none' | 'lighting' | 'camera'
 export function OperatorView(): JSX.Element {
   const { load, loaded, status, startEngine, stopEngine, project } = useLightingStore()
   const [collapsed, setCollapsed] = useState<Collapsed>('none')
-  const [presetsOpen, setPresetsOpen] = useState(false)
 
   useEffect(() => {
     if (!loaded) load()
@@ -47,9 +45,6 @@ export function OperatorView(): JSX.Element {
                 onClick={() => (running ? stopEngine() : startEngine())}
               >
                 {running ? '■ Stop Output' : '▶ Start Output'}
-              </button>
-              <button className="secondary-button" onClick={() => setPresetsOpen(true)}>
-                Presets
               </button>
               <button
                 className="operator-collapse"
@@ -104,8 +99,6 @@ export function OperatorView(): JSX.Element {
           ◀ Camera
         </button>
       )}
-
-      {presetsOpen && <PresetBrowser onClose={() => setPresetsOpen(false)} showStage={false} />}
     </div>
   )
 }

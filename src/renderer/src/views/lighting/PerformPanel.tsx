@@ -11,6 +11,7 @@ import {
 import { StageVisualizer } from './StageVisualizer'
 import { Knob } from './Knob'
 import { SceneBrowser } from './SceneBrowser'
+import { PresetBrowser } from './PresetBrowser'
 import { SceneEditorModal } from './SceneEditorModal'
 import { padColumns } from './padGrid'
 import { parsePadFunction, padFunctionInfo, type PadFunctionKind } from './padFunctions'
@@ -39,6 +40,8 @@ export function PerformPanel(): JSX.Element {
   const [reassignPad, setReassignPad] = useState<number | null>(null)
   /** When true, the browser switches the live scene instead of assigning a pad. */
   const [browseSwitch, setBrowseSwitch] = useState(false)
+  /** Preset library browser (import ready-made scenes onto the rig). */
+  const [presetsOpen, setPresetsOpen] = useState(false)
   /** The pad whose corner (three-dot) menu is open, anchored at x/y. */
   const [padMenu, setPadMenu] = useState<{ index: number; x: number; y: number } | null>(null)
   /** Scene being edited from a pad's menu (opens the full scene editor). */
@@ -420,11 +423,46 @@ export function PerformPanel(): JSX.Element {
       <div className="pad-grid-toolbar">
         <button
           className="secondary-button"
-          title="Browse every scene by category and switch the live look"
+          title="Preset library: import ready-made looks onto your rig"
+          onClick={() => setPresetsOpen(true)}
+        >
+          Presets
+        </button>
+        <button
+          className="secondary-button"
+          title="Browse every scene by category (with previews) and switch the live look"
           onClick={() => setBrowseSwitch(true)}
         >
           Browse scenes
         </button>
+        <div className="pad-grid-toolbar-spacer" />
+        <button
+          className={`strobe-button${overrides.strobe ? ' held' : ''}`}
+          onMouseDown={() => setOverrides({ strobe: true })}
+          onMouseUp={() => setOverrides({ strobe: false })}
+          onMouseLeave={() => overrides.strobe && setOverrides({ strobe: false })}
+        >
+          STROBE
+        </button>
+        <div className="blackout-group">
+          <button
+            className={`blackout-button${overrides.blackout ? ' engaged' : ''}`}
+            onClick={() => setOverrides({ blackout: !overrides.blackout })}
+          >
+            BLACKOUT
+          </button>
+          <button
+            className="blackout-mode"
+            title={
+              project.blackoutHolds === false
+                ? 'Blackout clears when you pick a scene. Click to make it stay on instead.'
+                : 'Blackout stays on when you pick a scene. Click to make scenes clear it.'
+            }
+            onClick={() => updateProject((p) => ({ ...p, blackoutHolds: p.blackoutHolds === false }))}
+          >
+            {project.blackoutHolds === false ? 'clears on scene' : 'stays on'}
+          </button>
+        </div>
       </div>
 
       <div className={`pad-grid cols-${padColumns(project.padCount)}`}>
@@ -546,6 +584,7 @@ export function PerformPanel(): JSX.Element {
           onClose={() => setBrowseSwitch(false)}
         />
       )}
+      {presetsOpen && <PresetBrowser onClose={() => setPresetsOpen(false)} showStage={false} />}
 
       {padMenu &&
         (() => {
@@ -679,36 +718,6 @@ export function PerformPanel(): JSX.Element {
               />
             )
           })}
-        </div>
-
-        <button
-          className={`strobe-button${overrides.strobe ? ' held' : ''}`}
-          onMouseDown={() => setOverrides({ strobe: true })}
-          onMouseUp={() => setOverrides({ strobe: false })}
-          onMouseLeave={() => overrides.strobe && setOverrides({ strobe: false })}
-        >
-          STROBE
-        </button>
-        <div className="blackout-group">
-          <button
-            className={`blackout-button${overrides.blackout ? ' engaged' : ''}`}
-            onClick={() => setOverrides({ blackout: !overrides.blackout })}
-          >
-            BLACKOUT
-          </button>
-          <button
-            className="blackout-mode"
-            title={
-              project.blackoutHolds === false
-                ? 'Blackout clears when you pick a scene. Click to make it stay on instead.'
-                : 'Blackout stays on when you pick a scene. Click to make scenes clear it.'
-            }
-            onClick={() =>
-              updateProject((p) => ({ ...p, blackoutHolds: p.blackoutHolds === false }))
-            }
-          >
-            {project.blackoutHolds === false ? 'clears on scene' : 'stays on'}
-          </button>
         </div>
       </div>
 

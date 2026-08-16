@@ -706,7 +706,7 @@ export function CameraView({ embedded = false }: { embedded?: boolean } = {}): J
           </p>
           <RecordingPanel getCanvas={() => programCanvasRef.current} />
 
-          <h3 style={{ marginTop: 8 }}>Body features</h3>
+          <h3 style={{ marginTop: 8 }}>Body features (for testing purposes)</h3>
           <Meter label="Present" value={feat.present} />
           <Meter label="Hands up" value={feat.handsUp} />
           <Meter label="Arm spread" value={feat.armSpread} />

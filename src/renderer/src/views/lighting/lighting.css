@@ -1402,8 +1402,13 @@
 
 .pad-grid-toolbar {
   display: flex;
-  justify-content: flex-end;
+  align-items: center;
+  gap: 8px;
   margin-bottom: 8px;
+}
+
+.pad-grid-toolbar-spacer {
+  flex: 1 1 auto;
 }
 
 .pad-grid {
