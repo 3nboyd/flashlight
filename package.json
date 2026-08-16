@@ -21,6 +21,7 @@
   "dependencies": {
     "@mediapipe/tasks-vision": "^1.0.1",
     "fast-xml-parser": "^4.5.0",
+    "ffmpeg-static": "^5.3.0",
     "music-metadata": "^10.6.4",
     "node-id3": "^0.2.6",
     "serialport": "^13.0.0",

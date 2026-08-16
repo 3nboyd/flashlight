@@ -119,6 +119,12 @@ const api = {
   recording: {
     save: (dir: string, filename: string, data: ArrayBuffer): Promise<string> =>
       ipcRenderer.invoke('recording:save', dir, filename, data),
+    convert: (
+      dir: string,
+      outName: string,
+      data: ArrayBuffer,
+      quality: 'high' | 'balanced' | 'small'
+    ): Promise<string> => ipcRenderer.invoke('recording:convert', dir, outName, data, quality),
     reveal: (path: string): Promise<boolean> => ipcRenderer.invoke('recording:reveal', path)
   }
 }

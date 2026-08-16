@@ -6,6 +6,30 @@ const FORMAT_KEY = 'djc.rec.format'
 const AUDIO_KEY = 'djc.rec.audio'
 const AUDIODEV_KEY = 'djc.rec.audioDevice'
 const SEPARATE_KEY = 'djc.rec.separate'
+const OUTPUT_KEY = 'djc.rec.output'
+const QUALITY_KEY = 'djc.rec.quality'
+
+type OutputFormat = 'mp4' | 'mov' | 'webm'
+type Quality = 'high' | 'balanced' | 'small'
+const OUTPUT_LABELS: Record<OutputFormat, string> = {
+  mp4: 'MP4 (H.264) - recommended',
+  mov: 'MOV (H.264)',
+  webm: 'WebM (as recorded, no convert)'
+}
+const QUALITY_LABELS: Record<Quality, string> = {
+  high: 'High',
+  balanced: 'Balanced',
+  small: 'Small file'
+}
+
+/** The recorded WebM name -> the final output name for the chosen container. */
+function outputName(recordedName: string, output: OutputFormat): string {
+  const base = recordedName.replace(/\.[^.]+$/, '')
+  if (output === 'webm') return `${base}.webm`
+  // Audio-only sidecar files become .m4a; video (or muxed) become the container.
+  if (/-audio$/.test(base)) return `${base}.m4a`
+  return `${base}.${output}`
+}
 
 function fmtElapsed(ms: number): string {
   const s = Math.floor(ms / 1000)
@@ -33,8 +57,16 @@ export function RecordingPanel({
   const [audioDevice, setAudioDevice] = useState<string | null>(() => localStorage.getItem(AUDIODEV_KEY))
   const [audioInputs, setAudioInputs] = useState<MediaDeviceInfo[]>([])
 
+  const [output, setOutput] = useState<OutputFormat>(
+    () => (localStorage.getItem(OUTPUT_KEY) as OutputFormat) ?? 'mp4'
+  )
+  const [quality, setQuality] = useState<Quality>(
+    () => (localStorage.getItem(QUALITY_KEY) as Quality) ?? 'balanced'
+  )
+
   const [recording, setRecording] = useState(false)
   const [elapsed, setElapsed] = useState(0)
+  const [converting, setConverting] = useState(false)
   const [saved, setSaved] = useState<string[]>([])
   const [error, setError] = useState('')
   const recorderRef = useRef(new Recorder())
@@ -65,7 +97,7 @@ export function RecordingPanel({
     setError('')
     const canvas = getCanvas()
     if (!canvas) {
-      setError('No primary camera to record. Enable a camera and set it primary.')
+      setError('No program to record. Enable a camera (the auto-director/selected camera is recorded).')
       return
     }
     if (!folder) {
@@ -96,14 +128,24 @@ export function RecordingPanel({
     try {
       const files = await recorderRef.current.stop()
       setRecording(false)
+      if (output !== 'webm') setConverting(true)
       const paths: string[] = []
       for (const f of files) {
-        const path = await window.djCompanion.recording.save(folder!, f.name, f.buffer)
+        // Convert transcodes to MP4/MOV via FFmpeg in the main process; WebM is
+        // written straight through.
+        const path = await window.djCompanion.recording.convert(
+          folder!,
+          outputName(f.name, output),
+          f.buffer,
+          quality
+        )
         paths.push(path)
       }
+      setConverting(false)
       setSaved(paths)
     } catch (err) {
       setRecording(false)
+      setConverting(false)
       setError(`Could not save recording: ${(err as Error)?.message ?? err}`)
     }
   }
@@ -128,8 +170,48 @@ export function RecordingPanel({
       ) : (
         <>
           <label className="cam-rec-field">
-            <span>Format</span>
-            <select value={formatMime} onChange={(e) => setFormat(e.target.value)} disabled={recording}>
+            <span>Output</span>
+            <select
+              value={output}
+              disabled={recording || converting}
+              onChange={(e) => {
+                const v = e.target.value as OutputFormat
+                setOutput(v)
+                localStorage.setItem(OUTPUT_KEY, v)
+              }}
+            >
+              {(Object.keys(OUTPUT_LABELS) as OutputFormat[]).map((o) => (
+                <option key={o} value={o}>
+                  {OUTPUT_LABELS[o]}
+                </option>
+              ))}
+            </select>
+          </label>
+
+          {output !== 'webm' && (
+            <label className="cam-rec-field">
+              <span>Quality</span>
+              <select
+                value={quality}
+                disabled={recording || converting}
+                onChange={(e) => {
+                  const v = e.target.value as Quality
+                  setQuality(v)
+                  localStorage.setItem(QUALITY_KEY, v)
+                }}
+              >
+                {(Object.keys(QUALITY_LABELS) as Quality[]).map((q) => (
+                  <option key={q} value={q}>
+                    {QUALITY_LABELS[q]}
+                  </option>
+                ))}
+              </select>
+            </label>
+          )}
+
+          <label className="cam-rec-field">
+            <span>Codec</span>
+            <select value={formatMime} onChange={(e) => setFormat(e.target.value)} disabled={recording || converting}>
               {formats.map((f: RecordFormat) => (
                 <option key={f.mimeType} value={f.mimeType}>
                   {f.label}
@@ -192,8 +274,13 @@ export function RecordingPanel({
           <button
             className={`cam-rec-btn${recording ? ' recording' : ''}`}
             onClick={recording ? stop : start}
+            disabled={converting}
           >
-            {recording ? `■ Stop (${fmtElapsed(elapsed)})` : '● Record'}
+            {converting
+              ? 'Converting…'
+              : recording
+                ? `■ Stop (${fmtElapsed(elapsed)})`
+                : '● Record'}
           </button>
 
           {saved.length > 0 && (
