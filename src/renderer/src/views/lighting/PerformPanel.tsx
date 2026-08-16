@@ -4,9 +4,7 @@ import type { ControlAction, PadAction } from '../../midi/MidiPads'
 import {
   audioAnalyzer,
   midiPads as midi,
-  onAudioStateChange,
-  startAudioListening,
-  stopAudioListening
+  onAudioStateChange
 } from './runtime'
 import { StageVisualizer } from './StageVisualizer'
 import { Knob } from './Knob'
@@ -318,6 +316,11 @@ export function PerformPanel(): JSX.Element {
               +
             </button>
           </div>
+          {midiDevices.length > 0 && (
+            <div className="midi-indicator" title={midiDevices.join(', ')}>
+              ● MIDI: {midiDevices[0]}
+            </div>
+          )}
         </div>
 
         <div className="stage-mini" title="Live stage preview - click to expand">
@@ -374,44 +377,12 @@ export function PerformPanel(): JSX.Element {
             />
             bars
           </div>
-          <div
-            className="autopilot-sensitivity"
-            title="How much the adaptive scenes + live pulse react to faint sound (echoes, reverb tails, ambience). Lower ignores those and stops/dims the lights quicker; higher reacts to fainter sound."
-          >
-            <span className="autopilot-sens-label">Echo filter</span>
-            <input
-              type="range"
-              min={0}
-              max={1}
-              step={0.05}
-              // Slider left = filter more (less sensitive); we store sensitivity,
-              // so invert for display.
-              value={1 - (project.melodySensitivity ?? DEFAULT_MELODY_SENSITIVITY)}
-              onChange={(e) =>
-                updateProject((p) => ({ ...p, melodySensitivity: 1 - Number(e.target.value) }))
-              }
-            />
+          <div className="autopilot-now" title="Scene playing right now">
+            <span className="autopilot-now-label">Now</span>
+            <span className="autopilot-now-scene">
+              {project.scenes.find((s) => s.id === activeSceneId)?.name ?? '-'}
+            </span>
           </div>
-          <button
-            className={`audio-toggle${audioRunning ? ' on' : ''}`}
-            title={
-              project.audio.deviceId
-                ? 'Audio-reactive effects: toggle listening to the saved audio input (works alongside OS2L)'
-                : 'Pick an audio input in Setup first'
-            }
-            disabled={!project.audio.deviceId}
-            onClick={async () => {
-              if (audioRunning) await stopAudioListening()
-              else if (project.audio.deviceId) await startAudioListening(project.audio.deviceId)
-            }}
-          >
-            {audioRunning ? '● Audio On' : '○ Audio Off'}
-          </button>
-          {midiDevices.length > 0 && (
-            <div className="midi-indicator" title={midiDevices.join(', ')}>
-              ● MIDI: {midiDevices[0]}
-            </div>
-          )}
         </div>
       </div>
 
@@ -620,6 +591,15 @@ export function PerformPanel(): JSX.Element {
           resetValue={1}
           format={(v) => `${Math.round(v * 100)}%`}
           onChange={(v) => setOverrides({ reactivity: v })}
+        />
+        <Knob
+          label="Echo"
+          value={project.melodySensitivity ?? DEFAULT_MELODY_SENSITIVITY}
+          min={0}
+          max={1}
+          resetValue={DEFAULT_MELODY_SENSITIVITY}
+          format={(v) => `${Math.round(v * 100)}%`}
+          onChange={(v) => updateProject((p) => ({ ...p, melodySensitivity: v }))}
         />
         <div className="perform-knobs-macros">
           <button

@@ -454,6 +454,30 @@
   color: var(--text-primary);
 }
 
+.autopilot-now {
+  display: flex;
+  align-items: baseline;
+  gap: 6px;
+  font-size: 12px;
+  min-width: 0;
+}
+
+.autopilot-now-label {
+  color: var(--text-tertiary);
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  font-size: 10px;
+  flex: 0 0 auto;
+}
+
+.autopilot-now-scene {
+  color: var(--text-primary);
+  font-weight: 600;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
 .autopilot-sensitivity {
   display: flex;
   align-items: center;
