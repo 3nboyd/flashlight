@@ -60,6 +60,11 @@
   border-radius: var(--radius-lg);
 }
 
+/* Breathing room between the manual-BPM row and the MIDI indicator. */
+.bpm-block .midi-indicator {
+  margin-top: 10px;
+}
+
 .bpm-value {
   font-size: 40px;
   font-weight: 700;
@@ -686,7 +691,7 @@
 
 .lib-grid {
   display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(118px, 1fr));
+  grid-template-columns: repeat(auto-fill, minmax(132px, 1fr));
   gap: 10px;
   margin-bottom: 14px;
 }
@@ -772,14 +777,18 @@
 }
 
 .lib-tile-btn {
-  flex: 1;
+  flex: 1 1 0;
+  min-width: 0;
   border: none;
   background: transparent;
   color: var(--text-secondary);
   font-size: 11px;
   font-weight: 700;
-  padding: 7px 4px;
+  padding: 7px 2px;
   cursor: pointer;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 
 .lib-tile-btn.play {

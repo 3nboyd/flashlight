@@ -101,7 +101,7 @@ export interface SceneTarget {
  *  - peak:    full-rig, rainbow-crazy, drop-time energy
  *  - adaptive: one scene that follows the song (build/drop-aware)
  */
-export type SceneCategory = 'normal' | 'build' | 'flash' | 'peak' | 'adaptive'
+export type SceneCategory = 'normal' | 'build' | 'flash' | 'peak' | 'adaptive' | 'experimental'
 
 export interface Scene {
   id: string

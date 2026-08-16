@@ -324,7 +324,7 @@ export function PerformPanel(): JSX.Element {
         </div>
 
         <div className="stage-mini" title="Live stage preview - click to expand">
-          <StageVisualizer height={172} fitContent onBackgroundClick={() => setStageExpanded(true)} />
+          <StageVisualizer height={248} fitContent onBackgroundClick={() => setStageExpanded(true)} />
           <span className="stage-mini-hint">click to expand</span>
         </div>
 
@@ -334,7 +334,7 @@ export function PerformPanel(): JSX.Element {
             title="Smart Mode: automatic scene changes on phrases, builds, drops, and breakdowns - driven by OS2L + live audio"
             onClick={() => window.djCompanion.lighting.setSmartMode(!status?.smartEnabled)}
           >
-            ⚡ SMART
+            SMART
           </button>
           {status?.smartEnabled && (
             <div className={`smart-phase ${status.smartPhase}`}>

@@ -72,8 +72,15 @@ describe('kind targeting', () => {
 
 describe('preset library integrity', () => {
   it('has presets across the buckets with unique ids and a category each', () => {
-    expect(PRESET_LIBRARY.length).toBe(5)
-    expect(PRESET_LIBRARY.map((c) => c.category)).toEqual(['normal', 'build', 'flash', 'peak', 'adaptive'])
+    expect(PRESET_LIBRARY.length).toBe(6)
+    expect(PRESET_LIBRARY.map((c) => c.category)).toEqual([
+      'normal',
+      'build',
+      'flash',
+      'peak',
+      'adaptive',
+      'experimental'
+    ])
     expect(PRESET_SCENES.length).toBeGreaterThanOrEqual(24)
     const ids = new Set(PRESET_SCENES.map((s) => s.id))
     expect(ids.size).toBe(PRESET_SCENES.length)

@@ -1,14 +1,22 @@
 import type { Scene, SceneCategory } from '@core/lighting/engine/types'
 
 /** Display order and labels for the four scene buckets, plus custom scenes. */
-export const SCENE_CATEGORY_ORDER: SceneCategory[] = ['normal', 'build', 'flash', 'peak', 'adaptive']
+export const SCENE_CATEGORY_ORDER: SceneCategory[] = [
+  'normal',
+  'build',
+  'flash',
+  'peak',
+  'adaptive',
+  'experimental'
+]
 
 export const SCENE_CATEGORY_LABEL: Record<SceneCategory, string> = {
   normal: 'Normals',
   build: 'Builds',
   flash: 'Flashing',
   peak: 'Peaks',
-  adaptive: 'Adaptive'
+  adaptive: 'Adaptive',
+  experimental: 'Experimental (Beta)'
 }
 
 export interface SceneGroup {

@@ -376,6 +376,113 @@ export const PRESET_LIBRARY: PresetCategory[] = [
         { group: 'all', color: { r: 0, g: 200, b: 80 }, dimmer: 1, effect: { type: 'melodyBeat', amplitude: 0.5 } }
       ])
     ]
+  ),
+  group(
+    'Experimental (Beta)',
+    'Fresh, unproven looks to try out - explosions, side sweeps, screen-aware and adaptive ideas. Keep the ones you like.',
+    'experimental',
+    [
+      // --- Bursts / explosions -------------------------------------------
+      scene('xp-supernova', 'Supernova', '#ffd24a', [
+        { group: 'all', color: { r: 255, g: 190, b: 60, w: 200 }, dimmer: 1, effect: { type: 'strike', beats: 4 } },
+        { group: 'kind:par', color: WHITE, dimmer: 0.9, effect: { type: 'sparkle', beats: 1 } },
+        { group: 'kind:movingHead', color: { r: 255, g: 140, b: 0 }, dimmer: 1, effect: { type: 'movementRandom', amplitude: 0.8 } }
+      ]),
+      scene('xp-detonate', 'Detonate', '#ff3b3b', [
+        { group: 'all', color: { r: 255, g: 30, b: 20, w: 120 }, dimmer: 1, effect: { type: 'strike', beats: 2 } },
+        { group: 'kind:strobe', color: WHITE, dimmer: 1, effect: { type: 'eighthStrobe' } }
+      ]),
+      scene('xp-shockwave', 'Shockwave', '#22d3ee', [
+        { group: 'all', color: { r: 0, g: 230, b: 255 }, dimmer: 1, effect: { type: 'sweep', beats: 1 } },
+        { group: 'kind:par', color: { r: 120, g: 0, b: 255 }, dimmer: 0.8, effect: { type: 'bassPulse' } }
+      ]),
+      // --- Side sweeps / left-right ---------------------------------------
+      scene('xp-twin-sweep', 'Twin Sweep', '#38bdf8', [
+        { group: 'all', color: { r: 0, g: 200, b: 255 }, dimmer: 0.95, effect: { type: 'sweep', beats: 2 } }
+      ]),
+      scene('xp-sunset-sweep', 'Sunset Sweep', '#fb7185', [
+        { group: 'all', color: { r: 255, g: 90, b: 60 }, dimmer: 0.9, effect: { type: 'sweep', beats: 4 } },
+        { group: 'kind:screen', color: { r: 255, g: 60, b: 120 }, dimmer: 0.8, effect: { type: 'breathe' } }
+      ]),
+      scene('xp-ping-pong', 'Ping-Pong', '#e879f9', [
+        {
+          group: 'all',
+          color: { r: 255, g: 0, b: 200 },
+          dimmer: 0.95,
+          effect: { type: 'alternate', beats: 1, colors: [{ r: 255, g: 0, b: 200 }, { r: 0, g: 230, b: 255 }] }
+        }
+      ]),
+      scene('xp-comet-chase', 'Comet Chase', '#f59e0b', [
+        { group: 'all', color: { r: 255, g: 150, b: 20 }, dimmer: 1, effect: { type: 'chase', beats: 1 } }
+      ]),
+      scene('xp-kinetic-grid', 'Kinetic Grid', '#06b6d4', [
+        {
+          group: 'kind:par',
+          color: { r: 0, g: 220, b: 255 },
+          dimmer: 0.9,
+          effect: { type: 'alternate', beats: 0.5, colors: [{ r: 0, g: 220, b: 255 }, { r: 255, g: 130, b: 0 }] }
+        },
+        { group: 'kind:movingHead', color: WHITE, dimmer: 1, effect: { type: 'movementSweep', amplitude: 0.9 } }
+      ]),
+      // --- Beams / movers -------------------------------------------------
+      scene('xp-beam-carousel', 'Beam Carousel', '#a78bfa', [
+        { group: 'kind:movingHead', color: { r: 160, g: 0, b: 255 }, dimmer: 1, effect: { type: 'movementCircle', amplitude: 0.85 } },
+        { group: 'kind:par', color: { r: 120, g: 0, b: 255 }, dimmer: 0.7, effect: { type: 'colorCycle', beats: 8, colors: PARTY } }
+      ]),
+      scene('xp-blue-figure8', 'Blue Figure-8', '#3b82f6', [
+        { group: 'kind:movingHead', color: { r: 20, g: 80, b: 255 }, dimmer: 1, effect: { type: 'movementFigure8', amplitude: 0.8 } },
+        { group: 'kind:par', color: { r: 20, g: 80, b: 255 }, dimmer: 0.6, effect: { type: 'breathe' } },
+        { group: 'kind:screen', color: { r: 20, g: 80, b: 255 }, dimmer: 0.8, effect: { type: 'breathe' } }
+      ]),
+      scene('xp-nod-off', 'Nod Off', '#e5e7eb', [
+        { group: 'kind:movingHead', color: WHITE, dimmer: 1, effect: { type: 'movementNod', amplitude: 0.7 } },
+        { group: 'kind:par', color: { r: 200, g: 220, b: 255 }, dimmer: 0.8, effect: { type: 'beatPulse' } }
+      ]),
+      scene('xp-ballyhoo', 'Ballyhoo Blast', '#f43f5e', [
+        { group: 'kind:movingHead', color: { r: 255, g: 0, b: 80 }, dimmer: 1, effect: { type: 'movementRandom', amplitude: 1 } },
+        { group: 'kind:par', color: WHITE, dimmer: 1, effect: { type: 'sparkle', beats: 0.5 } }
+      ]),
+      // --- Screen / TV aware ----------------------------------------------
+      scene('xp-screen-bloom', 'Screen Bloom', '#8b5cf6', [
+        { group: 'kind:screen', color: { r: 150, g: 0, b: 255 }, dimmer: 1, effect: { type: 'colorCycle', beats: 8, colors: [{ r: 150, g: 0, b: 255 }, { r: 255, g: 0, b: 180 }, { r: 0, g: 180, b: 255 }] } },
+        { group: 'kind:par', color: { r: 150, g: 0, b: 255 }, dimmer: 0.7, effect: { type: 'beatPulse' } }
+      ]),
+      scene('xp-cinema-room', 'Cinema Room', '#64748b', [
+        { group: 'kind:screen', color: { r: 40, g: 90, b: 200 }, dimmer: 0.9, effect: { type: 'colorCycle', beats: 16, colors: [{ r: 40, g: 90, b: 200 }, { r: 120, g: 30, b: 160 }, { r: 20, g: 40, b: 120 }] } },
+        { group: 'kind:movingHead', color: { r: 60, g: 90, b: 220 }, dimmer: 0.35, effect: { type: 'drift' } }
+      ]),
+      scene('xp-tv-takeover', 'TV Takeover', '#f472b6', [
+        { group: 'kind:screen', color: WHITE, dimmer: 1, effect: { type: 'rainbowStrobe', beats: 1, flashBeats: 1 } },
+        { group: 'kind:par', color: { r: 255, g: 0, b: 160 }, dimmer: 0.4, effect: { type: 'static' } }
+      ]),
+      // --- Lasers / strobes -----------------------------------------------
+      scene('xp-laser-web', 'Laser Web', '#22c55e', [
+        { group: 'kind:laser', color: { r: 0, g: 255, b: 80 }, dimmer: 1, effect: { type: 'sparkle', beats: 0.5 } },
+        { group: 'kind:strobe', color: WHITE, dimmer: 1, effect: { type: 'eighthStrobe' } }
+      ]),
+      scene('xp-strobe-rain', 'Strobe Rain', '#60a5fa', [
+        { group: 'kind:strobe', color: WHITE, dimmer: 1, effect: { type: 'eighthStrobe' } },
+        { group: 'kind:par', color: { r: 30, g: 90, b: 255 }, dimmer: 0.9, effect: { type: 'bassPulse' } }
+      ]),
+      // --- Eerie / ambient -------------------------------------------------
+      scene('xp-lone-star', 'Lone Star', '#f8fafc', [
+        { group: 'all', color: { r: 235, g: 240, b: 255 }, dimmer: 1, effect: { type: 'solo', beats: 2, size: 0.2 } }
+      ]),
+      scene('xp-phantom-drift', 'Phantom Drift', '#7c3aed', [
+        { group: 'all', color: { r: 130, g: 0, b: 255 }, dimmer: 0.8, effect: { type: 'drift' } },
+        { group: 'kind:fog', color: WHITE, dimmer: 1, effect: { type: 'strike', beats: 16 } }
+      ]),
+      // --- Adaptive (song-aware) variants ---------------------------------
+      scene('xp-spectrum-arc', 'Spectrum Arc', '#f97316', [
+        { group: 'all', color: { r: 255, g: 120, b: 0 }, dimmer: 1, effect: { type: 'songRainbow' } }
+      ]),
+      scene('xp-glacier', 'Glacier', '#7dd3fc', [
+        { group: 'all', color: { r: 120, g: 200, b: 255 }, dimmer: 1, effect: { type: 'melodyBeat', amplitude: 0.4 } }
+      ]),
+      scene('xp-club-bounce', 'Club Bounce', '#facc15', [
+        { group: 'all', color: { r: 255, g: 210, b: 40 }, dimmer: 1, effect: { type: 'jerseyClub' } }
+      ])
+    ]
   )
 ]
 
