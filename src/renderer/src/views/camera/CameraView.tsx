@@ -109,7 +109,7 @@ function Meter({ label, value }: { label: string; value: number }): JSX.Element 
   )
 }
 
-export function CameraView(): JSX.Element {
+export function CameraView({ embedded = false }: { embedded?: boolean } = {}): JSX.Element {
   const [devices, setDevices] = useState<MediaDeviceInfo[]>([])
   const [enabled, setEnabled] = useState<string[]>(() => {
     try {
@@ -515,16 +515,19 @@ export function CameraView(): JSX.Element {
   )
 
   return (
-    <div className="view camera-view">
-      <div className="view-header">
-        <h1>Camera</h1>
-        <p className="view-sub">
-          Live cameras with per-camera roles and effects. The auto-director cuts the recording
-          between cameras; each camera can carry its own effect, or none.
-        </p>
-      </div>
+    <div className={`view camera-view${embedded ? ' camera-view--embedded' : ''}`}>
+      {!embedded && (
+        <div className="view-header">
+          <h1>Camera</h1>
+          <p className="view-sub">
+            Live cameras with per-camera roles and effects. The auto-director cuts the recording
+            between cameras; each camera can carry its own effect, or none.
+          </p>
+        </div>
+      )}
 
       <div className="camera-layout">
+        {!embedded && (
         <aside className="camera-side">
           <h3>Cameras</h3>
           {needsPermission ? (
@@ -706,8 +709,19 @@ export function CameraView(): JSX.Element {
             </p>
           )}
         </aside>
+        )}
 
         <div className="camera-main">
+          {embedded && (
+            <div className="operator-cam-bar">
+              <label className="cam-out-row">
+                <span>Auto-switch</span>
+                <input type="checkbox" checked={auto} onChange={(e) => setAuto(e.target.checked)} />
+              </label>
+              <RecordingPanel getCanvas={() => programCanvasRef.current} />
+              <span className="settings-hint">Roles / effects: set up in the Camera tab.</span>
+            </div>
+          )}
           <div className="camera-stage">
             {enabled.length === 0 ? (
               <div className="camera-empty">Enable a camera to preview it here.</div>

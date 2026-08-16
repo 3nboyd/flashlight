@@ -9,7 +9,7 @@ import './Sidebar.css'
  * into jump-links for their sections, so nothing needs a long scroll.
  */
 
-export type Section = 'music' | 'lighting' | 'camera' | 'settings'
+export type Section = 'music' | 'lighting' | 'camera' | 'operator' | 'settings'
 
 export type MusicViewId = 'library' | 'explorer' | 'rename' | 'backups'
 export type LightingViewId = 'perform' | 'setup' | 'settings'
@@ -47,6 +47,11 @@ const RAIL_ITEMS: { id: Section; label: string; icon: JSX.Element; disabled?: bo
     id: 'camera',
     label: 'Camera',
     icon: <Icon path="M4 8h3l2-2h6l2 2h3v11H4V8Zm8 9a3.5 3.5 0 1 0 0-7 3.5 3.5 0 0 0 0 7Z" />
+  },
+  {
+    id: 'operator',
+    label: 'Live',
+    icon: <Icon path="M12 2a7 7 0 0 0-7 7c0 3 2 5 2 7h10c0-2 2-4 2-7a7 7 0 0 0-7-7ZM9 21h6M10 18v3M14 18v3" />
   }
 ]
 
