@@ -1,14 +1,30 @@
 import { describe, it, expect } from 'vitest'
-import { CameraDirector, type CameraSignal, type DirectorContext } from './CameraDirector'
+import {
+  CameraDirector,
+  holdBoundsFromAverage,
+  type CameraSignal,
+  type DirectorContext
+} from './CameraDirector'
 import type { CameraRole } from './roles'
 
 function sig(id: string, role: CameraRole, over: Partial<CameraSignal> = {}): CameraSignal {
-  return { id, role, present: 0, motion: 0, facing: 0, lookingAtBoard: 0, ...over }
+  // Look-to-cut is on by default for every role except the side-mounted laptop.
+  return {
+    id,
+    role,
+    present: 0,
+    motion: 0,
+    facing: 0,
+    lookingAtBoard: 0,
+    lookSwitch: role !== 'laptop',
+    ...over
+  }
 }
 const ctx = (nowMs: number, over: Partial<DirectorContext> = {}): DirectorContext => ({
   nowMs,
   audioLevel: 0,
   surge: 0,
+  onBeat: true,
   ...over
 })
 
@@ -99,5 +115,43 @@ describe('CameraDirector', () => {
     d.setManual(null)
     // Auto takes over again; head-on is the strong shot.
     expect(d.update(cams, ctx(20000)).activeId).toBe('head')
+  })
+
+  it('does not cut to a looked-at camera when its look-switch is off', () => {
+    // Big maxHold so the forced-variety rule never fires during the window.
+    const d = new CameraDirector({ maxHoldMs: 600000 })
+    const a = sig('sideA', 'side', { present: 1, motion: 0.5 })
+    const b = sig('sideB', 'side', { present: 1, facing: 1, lookSwitch: false })
+    d.update([a, b], ctx(0))
+    // Past min hold: facing B (lookSwitch off) must not pull the program onto it.
+    expect(d.update([a, b], ctx(5000)).activeId).toBe('sideA')
+    // With lookSwitch on, the same facing wins.
+    const b2 = sig('sideB', 'side', { present: 1, facing: 1, lookSwitch: true })
+    const d2 = new CameraDirector({ maxHoldMs: 600000 })
+    d2.update([a, b2], ctx(0))
+    expect(d2.update([a, b2], ctx(5000)).activeId).toBe('sideB')
+  })
+
+  it('quantizes discretionary cuts to the beat when switchOnBeat is on', () => {
+    const d = new CameraDirector({ switchOnBeat: true, minHoldMs: 1000, maxHoldMs: 60000 })
+    const head = sig('head', 'headon', { present: 1, facing: 0.2 })
+    const crowd = sig('crowd', 'crowd')
+    d.update([head, crowd], ctx(0, { onBeat: true })) // opens on head
+    // A clearly-better crowd on a drop, but off-beat -> hold.
+    const off = d.update([head, crowd], ctx(3000, { onBeat: false, audioLevel: 1, surge: 1 }))
+    expect(off.cut).toBe(false)
+    // Same moment, on the beat -> it cuts.
+    const on = d.update([head, crowd], ctx(3200, { onBeat: true, audioLevel: 1, surge: 1 }))
+    expect(on.cut).toBe(true)
+    expect(on.activeId).toBe('crowd')
+  })
+})
+
+describe('holdBoundsFromAverage', () => {
+  it('brackets the average with a min below and a max above', () => {
+    const { minHoldMs, maxHoldMs } = holdBoundsFromAverage(5000)
+    expect(minHoldMs).toBeLessThan(5000)
+    expect(maxHoldMs).toBeGreaterThan(5000)
+    expect(minHoldMs).toBeLessThan(maxHoldMs)
   })
 })

@@ -23,6 +23,9 @@ export interface CameraSignal {
   /** Subject is looking down/at the deck rather than at this camera. Drives the
    *  laptop rule: the laptop cam is only useful when the DJ works the board. */
   lookingAtBoard: number
+  /** When true, facing this camera strongly cuts to it ("look = switch"); when
+   *  false, looking at it never drives a cut. Per-camera, user-controlled. */
+  lookSwitch: boolean
 }
 
 /** Music/context the director can lean on (e.g. cut to crowd on a drop). */
@@ -30,6 +33,8 @@ export interface DirectorContext {
   nowMs: number
   audioLevel: number
   surge: number
+  /** True on the tick a beat lands - used when cuts are quantized to the beat. */
+  onBeat: boolean
 }
 
 export interface DirectorConfig {
@@ -39,12 +44,21 @@ export interface DirectorConfig {
   maxHoldMs: number
   /** A challenger must beat the current shot's score by this fraction to cut. */
   hysteresis: number
+  /** Quantize discretionary cuts to the beat (forced variety still cuts). */
+  switchOnBeat: boolean
 }
 
 export const DEFAULT_DIRECTOR_CONFIG: DirectorConfig = {
   minHoldMs: 2500,
   maxHoldMs: 12000,
-  hysteresis: 0.18
+  hysteresis: 0.18,
+  switchOnBeat: false
+}
+
+/** Map a single "average shot length" (ms) onto min/max hold bounds. */
+export function holdBoundsFromAverage(avgMs: number): { minHoldMs: number; maxHoldMs: number } {
+  const avg = Math.max(800, avgMs)
+  return { minHoldMs: Math.round(avg * 0.45), maxHoldMs: Math.round(avg * 1.9) }
 }
 
 const ROLE_BASE: Record<CameraRole, number> = {
@@ -72,6 +86,11 @@ export class CameraDirector {
     this.cfg = { ...DEFAULT_DIRECTOR_CONFIG, ...config }
   }
 
+  /** Live-update timing/behavior from the settings UI. */
+  setConfig(config: Partial<DirectorConfig>): void {
+    this.cfg = { ...this.cfg, ...config }
+  }
+
   /** Force a specific camera (operator override), or null to resume auto. */
   setManual(id: string | null): void {
     this.manualId = id
@@ -91,8 +110,8 @@ export class CameraDirector {
     this.manualId = null
   }
 
-  /** Score how much we want to be on a camera right now (0 = ineligible). */
-  score(s: CameraSignal, ctx: DirectorContext): number {
+  /** Role/framing/music score WITHOUT the "look at me" boost. */
+  private roleScore(s: CameraSignal, ctx: DirectorContext): number {
     const base = ROLE_BASE[s.role]
     switch (s.role) {
       case 'laptop': {
@@ -104,8 +123,10 @@ export class CameraDirector {
         return 0.9 * s.lookingAtBoard + 0.2 * s.motion
       }
       case 'headon':
+        // Modest base (facing is added separately as the look boost), so when
+        // the DJ turns away the head-on shot drops and others can take over.
         if (s.present < 0.25) return 0.06
-        return base * (0.35 + 0.65 * s.facing) * (0.5 + 0.5 * s.present) + 0.2 * s.motion
+        return base * (0.22 + 0.26 * s.present) + 0.12 * s.motion
       case 'crowd':
         // The dancefloor pops on louder / build moments.
         return base * (0.55 + 0.6 * ctx.audioLevel) + 0.35 * ctx.surge + 0.1 * s.motion
@@ -118,6 +139,17 @@ export class CameraDirector {
       default:
         return base * (0.4 + 0.6 * s.present) + 0.2 * s.motion
     }
+  }
+
+  /**
+   * How much we want to be on a camera now. Role base + a strong "look at me"
+   * boost for cameras the user allowed to be looked-into (facing them cuts to
+   * them); cameras with lookSwitch off never win on facing alone.
+   */
+  score(s: CameraSignal, ctx: DirectorContext): number {
+    const role = this.roleScore(s, ctx)
+    const look = s.lookSwitch ? 1.5 * s.facing * Math.max(0.35, s.present) : 0
+    return role + look
   }
 
   /** Decide the active camera for this frame. */
@@ -160,11 +192,17 @@ export class CameraDirector {
     const clearlyBetter =
       bestOther != null && bestOther.score > current.score * (1 + this.cfg.hysteresis)
 
-    if (bestOther && (clearlyBetter || (forceVariety && bestOther.score > 0.05))) {
-      this.activeId = bestOther.id
-      this.lastCutMs = ctx.nowMs
-      return { activeId: this.activeId, cut: true }
+    const wantCut = bestOther != null && (clearlyBetter || (forceVariety && bestOther.score > 0.05))
+    if (!wantCut) return { activeId: this.activeId, cut: false }
+
+    // Quantize discretionary cuts to the beat; forced-variety cuts still fire so
+    // the program never stalls on a silent/beatless passage.
+    if (this.cfg.switchOnBeat && !ctx.onBeat && !forceVariety) {
+      return { activeId: this.activeId, cut: false }
     }
-    return { activeId: this.activeId, cut: false }
+
+    this.activeId = bestOther!.id
+    this.lastCutMs = ctx.nowMs
+    return { activeId: this.activeId, cut: true }
   }
 }

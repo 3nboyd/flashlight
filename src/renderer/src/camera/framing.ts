@@ -15,7 +15,8 @@ export function framingSignal(
   id: string,
   role: CameraRole,
   feat: PoseFeatureState,
-  face: FaceFrame | null
+  face: FaceFrame | null,
+  lookSwitch: boolean
 ): CameraSignal {
   const present = feat.present
   const motion = feat.motion
@@ -37,5 +38,5 @@ export function framingSignal(
   }
 
   const lookingAtBoard = present > 0.3 ? Math.max(0, Math.min(1, 1 - facing)) : 0
-  return { id, role, present, motion, facing, lookingAtBoard }
+  return { id, role, present, motion, facing, lookingAtBoard, lookSwitch }
 }

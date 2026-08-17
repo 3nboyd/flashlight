@@ -4,8 +4,14 @@ import { VISUALS, getVisual, defaultParams, type AudioReact, type VisualModule }
 import type { PoseFeatureState } from '../../camera/PoseFeatures'
 import type { FaceFrame } from '../../camera/FaceEngine'
 import { framingSignal } from '../../camera/framing'
-import { CameraDirector, type CameraSignal } from '@core/camera/CameraDirector'
-import { CAMERA_ROLES, DEFAULT_CAMERA_ROLE, type CameraRole } from '@core/camera/roles'
+import { CameraDirector, holdBoundsFromAverage, type CameraSignal } from '@core/camera/CameraDirector'
+import { CAMERA_ROLES, DEFAULT_CAMERA_ROLE, defaultLookSwitch, type CameraRole } from '@core/camera/roles'
+import {
+  loadDirectorSettings,
+  saveDirectorSettings,
+  type DirectorSettings
+} from '../../camera/directorSettings'
+import { DirectorSettingsPanel } from './DirectorSettingsPanel'
 import { RecordingPanel } from './RecordingPanel'
 import { midiPads } from '../lighting/runtime'
 import './CameraView.css'
@@ -25,7 +31,7 @@ const OVERLAY_OP_KEY = 'djc.output.overlayOpacity'
 
 type FxParams = Record<string, Record<string, number>>
 type ScreenInfo = { patchId: string; label: string }
-type CameraConfig = { role: CameraRole; effect: string }
+type CameraConfig = { role: CameraRole; effect: string; lookSwitch?: boolean }
 /** A MIDI note bound to a camera action: cut the program to a camera, or toggle
  *  the auto-director. */
 type CamMidiAction = { kind: 'cut'; deviceId: string } | { kind: 'auto' }
@@ -138,6 +144,8 @@ export function CameraView({ embedded = false }: { embedded?: boolean } = {}): J
   const [midiLearn, setMidiLearn] = useState<CamMidiAction | null>(null)
   // Embedded (operator) mode: the setup sidebar becomes a gear-triggered drawer.
   const [camGear, setCamGear] = useState(false)
+  const [directorOpen, setDirectorOpen] = useState(false)
+  const [director, setDirector] = useState<DirectorSettings>(() => loadDirectorSettings())
   const [fxParams, setFxParams] = useState<FxParams>(() => {
     try {
       return JSON.parse(localStorage.getItem(FX_KEY) ?? '{}') as FxParams
@@ -175,12 +183,23 @@ export function CameraView({ embedded = false }: { embedded?: boolean } = {}): J
   const autoRef = useRef(false)
   const manualIdRef = useRef<string | null>(null)
   const camMidiRef = useRef<Record<number, CamMidiAction>>({})
+  const directorRefSettings = useRef<DirectorSettings>(director)
+  const lastBeatPhaseRef = useRef(0)
+  const surgeArmedRef = useRef(true)
+  // Transient beat-drop effect override: { effect, until } for the program cam.
+  const [dropFx, setDropFx] = useState<{ effect: string; until: number } | null>(null)
+  const dropFxRef = useRef(dropFx)
   programIdRef.current = programId
   autoRef.current = auto
   camMidiRef.current = camMidi
+  directorRefSettings.current = director
+  dropFxRef.current = dropFx
 
   const getConfig = useCallback(
-    (id: string): CameraConfig => configs[id] ?? { role: DEFAULT_CAMERA_ROLE, effect: 'camera' },
+    (id: string): Required<CameraConfig> => {
+      const c = configs[id] ?? { role: DEFAULT_CAMERA_ROLE, effect: 'camera' }
+      return { role: c.role, effect: c.effect, lookSwitch: c.lookSwitch ?? defaultLookSwitch(c.role) }
+    },
     [configs]
   )
 
@@ -214,12 +233,38 @@ export function CameraView({ embedded = false }: { embedded?: boolean } = {}): J
           surge: s.audioSurge ?? 0
         }
         if (s.lightColor) lightRef.current = s.lightColor
+
+        // Beat-drop effect: a big surge (silence->boom / drop) fires a random
+        // allowed effect on the program for a moment. Armed/disarmed with
+        // hysteresis so one drop triggers once.
+        const surge = s.audioSurge ?? 0
+        const d = directorRefSettings.current.drop
+        if (surge < 0.25) surgeArmedRef.current = true
+        if (
+          d.enabled &&
+          d.effects.length > 0 &&
+          surge > 0.6 &&
+          surgeArmedRef.current &&
+          (dropFxRef.current === null || dropFxRef.current.until < performance.now())
+        ) {
+          surgeArmedRef.current = false
+          const effect = d.effects[Math.floor(Math.random() * d.effects.length)]
+          setDropFx({ effect, until: performance.now() + d.durationMs })
+        }
       } catch {
         /* lighting not ready */
       }
     }, 45)
     return () => clearInterval(id)
   }, [])
+
+  // Clear the beat-drop override when its window ends.
+  useEffect(() => {
+    if (!dropFx) return
+    const left = dropFx.until - performance.now()
+    const t = setTimeout(() => setDropFx(null), Math.max(0, left))
+    return () => clearTimeout(t)
+  }, [dropFx])
 
   // Track whether the projector output window is open.
   useEffect(() => {
@@ -271,7 +316,8 @@ export function CameraView({ embedded = false }: { embedded?: boolean } = {}): J
       const next = { ...prev }
       enabled.forEach((id, i) => {
         if (!next[id]) {
-          next[id] = { role: i === 0 ? 'headon' : 'other', effect: 'camera' }
+          const role: CameraRole = i === 0 ? 'headon' : 'other'
+          next[id] = { role, effect: 'camera', lookSwitch: defaultLookSwitch(role) }
           changed = true
         }
       })
@@ -317,18 +363,36 @@ export function CameraView({ embedded = false }: { embedded?: boolean } = {}): J
             present: 0,
             motion: 0,
             facing: 0,
-            lookingAtBoard: 0
+            lookingAtBoard: 0,
+            lookSwitch: configsRef.current[cid]?.lookSwitch ?? true
           }
       )
+      // A beat lands when beatPhase wraps (drops back toward 0).
+      const bp = beatRef.current
+      const onBeat = bp < lastBeatPhaseRef.current
+      lastBeatPhaseRef.current = bp
       const dec = director.update(signals, {
         nowMs: performance.now(),
         audioLevel: audioRef.current.level,
-        surge: audioRef.current.surge
+        surge: audioRef.current.surge,
+        onBeat
       })
       setProgramId((p) => (p === dec.activeId ? p : dec.activeId))
-    }, 200)
+    }, 120)
     return () => clearInterval(id)
   }, [])
+
+  // Push settings-panel values into the pure director whenever they change.
+  useEffect(() => {
+    saveDirectorSettings(director)
+    const { minHoldMs, maxHoldMs } = holdBoundsFromAverage(director.avgHoldMs)
+    directorRef.current.setConfig({
+      minHoldMs,
+      maxHoldMs,
+      hysteresis: director.hysteresis,
+      switchOnBeat: director.switchOnBeat
+    })
+  }, [director])
 
   // Program compositor: copy the active camera's canvas into one canvas so
   // recording follows the auto-switch without restarting the recorder.
@@ -404,18 +468,30 @@ export function CameraView({ embedded = false }: { embedded?: boolean } = {}): J
   }, [])
   const onFraming = useCallback(
     (id: string, f: PoseFeatureState, face: FaceFrame | null) => {
-      const role = configsRef.current[id]?.role ?? 'other'
-      framingsRef.current[id] = framingSignal(id, role, f, face)
+      const cfg = configsRef.current[id]
+      const role = cfg?.role ?? 'other'
+      const lookSwitch = cfg?.lookSwitch ?? defaultLookSwitch(role)
+      framingsRef.current[id] = framingSignal(id, role, f, face, lookSwitch)
     },
     []
   )
   const setRole = useCallback((id: string, role: CameraRole) => {
-    setConfigs((prev) => ({ ...prev, [id]: { role, effect: prev[id]?.effect ?? 'camera' } }))
+    setConfigs((prev) => ({ ...prev, [id]: { ...prev[id], role, effect: prev[id]?.effect ?? 'camera' } }))
   }, [])
   const setEffect = useCallback((id: string, effect: string) => {
     setConfigs((prev) => ({
       ...prev,
-      [id]: { role: prev[id]?.role ?? DEFAULT_CAMERA_ROLE, effect }
+      [id]: { ...prev[id], role: prev[id]?.role ?? DEFAULT_CAMERA_ROLE, effect }
+    }))
+  }, [])
+  const setLook = useCallback((id: string, lookSwitch: boolean) => {
+    setConfigs((prev) => ({
+      ...prev,
+      [id]: {
+        role: prev[id]?.role ?? DEFAULT_CAMERA_ROLE,
+        effect: prev[id]?.effect ?? 'camera',
+        lookSwitch
+      }
     }))
   }, [])
   const onTileClick = useCallback((id: string) => {
@@ -726,14 +802,21 @@ export function CameraView({ embedded = false }: { embedded?: boolean } = {}): J
             <div className="operator-cam-topbar">
               <label className="cam-out-row cam-auto-row">
                 <input type="checkbox" checked={auto} onChange={(e) => setAuto(e.target.checked)} />
-                <span>Auto-switch cameras</span>
+                <span>Auto-switch cameras (Beta)</span>
               </label>
+              <button
+                className="cam-icon-btn"
+                title="Auto-director settings (how it cuts, on-beat, drop effect)"
+                onClick={() => setDirectorOpen(true)}
+              >
+                ⚙
+              </button>
               <button
                 className={`cam-icon-btn${camGear ? ' active' : ''}`}
                 title="Camera setup (roles, effects, screen output, MIDI)"
                 onClick={() => setCamGear((v) => !v)}
               >
-                ⚙
+                ☰
               </button>
             </div>
           )}
@@ -744,15 +827,19 @@ export function CameraView({ embedded = false }: { embedded?: boolean } = {}): J
               <div className={`cam-grid count-${Math.min(enabled.length, 4)}`}>
                 {enabled.map((id) => {
                   const cfg = getConfig(id)
+                  // On a beat drop, the program camera temporarily wears the
+                  // chosen drop effect instead of its own.
+                  const effect =
+                    dropFx && programId === id && auto ? dropFx.effect : cfg.effect
                   return (
                     <CameraTile
                       key={id}
                       deviceId={id}
                       role={cfg.role}
-                      effect={cfg.effect}
+                      effect={effect}
                       params={{
-                        ...defaultParams(getVisual(cfg.effect)),
-                        ...(fxParams[cfg.effect] ?? {})
+                        ...defaultParams(getVisual(effect)),
+                        ...(fxParams[effect] ?? {})
                       }}
                       program={programId === id}
                       focused={focused === id}
@@ -834,6 +921,28 @@ export function CameraView({ embedded = false }: { embedded?: boolean } = {}): J
           )}
         </div>
       </div>
+
+      {directorOpen && (
+        <DirectorSettingsPanel
+          settings={director}
+          onChange={setDirector}
+          cameras={enabled.map((id) => {
+            const cfg = getConfig(id)
+            return {
+              deviceId: id,
+              label: devices.find((d) => d.deviceId === id)?.label || 'Camera',
+              role: cfg.role,
+              lookSwitch: cfg.lookSwitch
+            }
+          })}
+          onLookSwitch={setLook}
+          effectOptions={VISUALS.filter((v) => v.id !== 'camera').map((v) => ({
+            id: v.id,
+            name: v.name
+          }))}
+          onClose={() => setDirectorOpen(false)}
+        />
+      )}
     </div>
   )
 }

@@ -11,3 +11,12 @@ export const CAMERA_ROLES: { role: CameraRole; label: string; hint: string }[] =
 ]
 
 export const DEFAULT_CAMERA_ROLE: CameraRole = 'headon'
+
+export const ROLE_LABEL: Record<CameraRole, string> = Object.fromEntries(
+  CAMERA_ROLES.map((r) => [r.role, r.label])
+) as Record<CameraRole, string>
+
+/** Whether "look = switch" is on by default for a role (off for the laptop). */
+export function defaultLookSwitch(role: CameraRole): boolean {
+  return role !== 'laptop'
+}
