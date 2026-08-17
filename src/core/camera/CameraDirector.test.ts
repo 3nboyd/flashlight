@@ -134,7 +134,7 @@ describe('CameraDirector', () => {
   })
 
   it('quantizes discretionary cuts to the beat when switchOnBeat is on', () => {
-    const d = new CameraDirector({ switchOnBeat: true, minHoldMs: 1000, maxHoldMs: 60000 })
+    const d = new CameraDirector({ switchOnBeat: 1, minHoldMs: 1000, maxHoldMs: 60000 })
     const head = sig('head', 'headon', { present: 1, facing: 0.2 })
     const crowd = sig('crowd', 'crowd')
     d.update([head, crowd], ctx(0, { onBeat: true })) // opens on head

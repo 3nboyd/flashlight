@@ -183,6 +183,21 @@
   border-color: transparent;
 }
 
+.cam-help {
+  flex: 0 0 auto;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 17px;
+  height: 17px;
+  border-radius: 50%;
+  border: 1px solid var(--border-strong, #3a3a44);
+  color: var(--text-tertiary, #6b7280);
+  font-size: 11px;
+  font-weight: 700;
+  cursor: help;
+}
+
 .operator-cam-record {
   flex: 0 0 auto;
   display: flex;

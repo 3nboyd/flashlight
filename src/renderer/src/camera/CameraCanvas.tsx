@@ -156,7 +156,8 @@ export function CameraCanvas({
       const ready = video != null && video.readyState >= 2
       const wantFraming = framingRef.current
       const effectPose = visual.needsPose || skelRef.current
-      const effectFace = visual.needsFace || faceOverlayRef.current
+      // The skeleton overlay also draws detailed face dots, so it needs face too.
+      const effectFace = visual.needsFace || faceOverlayRef.current || skelRef.current
       const needPose = effectPose || wantFraming
       const needFace = effectFace || (wantFraming && framingFaceRef.current)
       // When detection is only for the director (the effect doesn't need it),

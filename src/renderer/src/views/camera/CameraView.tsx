@@ -817,16 +817,33 @@ export function CameraView({ embedded = false }: { embedded?: boolean } = {}): J
           </p>
           <RecordingPanel getCanvas={() => programCanvasRef.current} />
 
-          <h3 style={{ marginTop: 8 }}>Body features (for testing purposes)</h3>
-          <Meter label="Present" value={feat.present} />
-          <Meter label="Hands up" value={feat.handsUp} />
-          <Meter label="Arm spread" value={feat.armSpread} />
-          <Meter label="Motion" value={feat.motion} />
-          <Meter label="Hand pulse" value={feat.handPulse} />
-          <Meter label="Jump" value={feat.jump} />
+          <h3 style={{ marginTop: 8 }}>Testing Purposes / Beta Features</h3>
+          <label className="cam-device-head">
+            <input
+              type="checkbox"
+              checked={showSkeleton}
+              onChange={(e) => setShowSkeleton(e.target.checked)}
+            />
+            <span>Skeleton + face dots overlay</span>
+          </label>
+          <label className="cam-device-head">
+            <input
+              type="checkbox"
+              checked={showFaceMesh}
+              onChange={(e) => setShowFaceMesh(e.target.checked)}
+            />
+            <span>Face mesh overlay</span>
+          </label>
+          <div className="cam-testing-meters">
+            <Meter label="Present" value={feat.present} />
+            <Meter label="Hands up" value={feat.handsUp} />
+            <Meter label="Arm spread" value={feat.armSpread} />
+            <Meter label="Motion" value={feat.motion} />
+            <Meter label="Jump" value={feat.jump} />
+          </div>
           {!tracksBody && (
             <p className="settings-hint">
-              Pick a body effect (Neon Stickman) or a debug overlay to see these move.
+              Turn on an overlay above (or pick Neon Stickman) to see these move.
             </p>
           )}
         </aside>
@@ -837,11 +854,17 @@ export function CameraView({ embedded = false }: { embedded?: boolean } = {}): J
             <div className="operator-cam-topbar">
               <label className="cam-out-row cam-auto-row">
                 <input type="checkbox" checked={auto} onChange={(e) => setAuto(e.target.checked)} />
-                <span>Auto-switch cameras (Beta)</span>
+                <span>Director Mode</span>
               </label>
+              <span
+                className="cam-help"
+                title="Beta. When on, the recording auto-cuts between your cameras by role, framing, priority, and the music. Tune it with the gear. It doesn't change what's on the live screen."
+              >
+                ?
+              </span>
               <button
                 className="cam-icon-btn"
-                title="Auto-director settings (how it cuts, on-beat, drop effect)"
+                title="Director settings (how it cuts, on-beat, drop effect, camera frame)"
                 onClick={() => setDirectorOpen(true)}
               >
                 ⚙
@@ -903,18 +926,6 @@ export function CameraView({ embedded = false }: { embedded?: boolean } = {}): J
             )}
             {/* Hidden program compositor - the recording source. */}
             <canvas ref={programCanvasRef} className="cam-program-hidden" />
-            {enabled.length > 0 && (
-              <div className="cam-debug">
-                <label className="cam-debug-toggle">
-                  <input type="checkbox" checked={showSkeleton} onChange={(e) => setShowSkeleton(e.target.checked)} />
-                  Show skeleton
-                </label>
-                <label className="cam-debug-toggle">
-                  <input type="checkbox" checked={showFaceMesh} onChange={(e) => setShowFaceMesh(e.target.checked)} />
-                  Show face mesh
-                </label>
-              </div>
-            )}
           </div>
 
           <div className="cam-hud">

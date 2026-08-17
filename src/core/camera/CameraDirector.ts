@@ -47,15 +47,16 @@ export interface DirectorConfig {
   maxHoldMs: number
   /** A challenger must beat the current shot's score by this fraction to cut. */
   hysteresis: number
-  /** Quantize discretionary cuts to the beat (forced variety still cuts). */
-  switchOnBeat: boolean
+  /** 0-1 chance a discretionary cut waits for the beat (0 = never, 1 = always,
+   *  in between = sometimes). Forced variety still cuts regardless. */
+  switchOnBeat: number
 }
 
 export const DEFAULT_DIRECTOR_CONFIG: DirectorConfig = {
   minHoldMs: 2500,
   maxHoldMs: 12000,
   hysteresis: 0.18,
-  switchOnBeat: false
+  switchOnBeat: 0
 }
 
 /** Map a single "average shot length" (ms) onto min/max hold bounds. */
@@ -84,6 +85,9 @@ export class CameraDirector {
   private activeId: string | null = null
   private lastCutMs = 0
   private manualId: string | null = null
+  // Per-cut beat-sync: decided once when a cut first becomes wanted.
+  private pendingCut = false
+  private cutWaitsForBeat = false
 
   constructor(config: Partial<DirectorConfig> = {}) {
     this.cfg = { ...DEFAULT_DIRECTOR_CONFIG, ...config }
@@ -111,6 +115,7 @@ export class CameraDirector {
     this.activeId = null
     this.lastCutMs = 0
     this.manualId = null
+    this.pendingCut = false
   }
 
   /** Role/framing/music score WITHOUT the "look at me" boost. */
@@ -196,14 +201,23 @@ export class CameraDirector {
       bestOther != null && bestOther.score > current.score * (1 + this.cfg.hysteresis)
 
     const wantCut = bestOther != null && (clearlyBetter || (forceVariety && bestOther.score > 0.05))
-    if (!wantCut) return { activeId: this.activeId, cut: false }
-
-    // Quantize discretionary cuts to the beat; forced-variety cuts still fire so
-    // the program never stalls on a silent/beatless passage.
-    if (this.cfg.switchOnBeat && !ctx.onBeat && !forceVariety) {
+    if (!wantCut) {
+      this.pendingCut = false
       return { activeId: this.activeId, cut: false }
     }
 
+    // Decide once (when this cut first becomes wanted) whether it waits for the
+    // beat, with probability switchOnBeat. Forced variety never waits, so the
+    // program can't stall on a silent/beatless passage.
+    if (!this.pendingCut) {
+      this.pendingCut = true
+      this.cutWaitsForBeat = Math.random() < this.cfg.switchOnBeat
+    }
+    if (this.cutWaitsForBeat && !ctx.onBeat && !forceVariety) {
+      return { activeId: this.activeId, cut: false }
+    }
+
+    this.pendingCut = false
     this.activeId = bestOther!.id
     this.lastCutMs = ctx.nowMs
     return { activeId: this.activeId, cut: true }

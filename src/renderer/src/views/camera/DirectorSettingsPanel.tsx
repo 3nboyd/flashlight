@@ -153,15 +153,29 @@ export function DirectorSettingsPanel({
                 </span>
               </label>
 
-              <label className="director-check">
-                <input
-                  type="checkbox"
-                  checked={settings.switchOnBeat}
-                  onChange={(e) => set({ switchOnBeat: e.target.checked })}
-                />
-                <span>
+              <label className="director-row">
+                <span className="director-row-label">
                   Switch on the beat
-                  <em>cuts land on the beat instead of any moment</em>
+                  <em>
+                    {settings.switchOnBeat <= 0
+                      ? 'never'
+                      : settings.switchOnBeat >= 1
+                        ? 'always'
+                        : `${Math.round(settings.switchOnBeat * 100)}%`}
+                  </em>
+                </span>
+                <input
+                  type="range"
+                  min={0}
+                  max={1}
+                  step={0.1}
+                  value={settings.switchOnBeat}
+                  onChange={(e) => set({ switchOnBeat: Number(e.target.value) })}
+                />
+                <span className="director-row-ends">
+                  <span>never</span>
+                  <span>sometimes</span>
+                  <span>always</span>
                 </span>
               </label>
             </section>

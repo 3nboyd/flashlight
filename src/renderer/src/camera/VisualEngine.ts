@@ -830,6 +830,9 @@ const outline: VisualModule = {
 // Debug overlays (drawn over any effect from the "Show ___" testing toggles)
 // ---------------------------------------------------------------------------
 
+/** Pose landmarks 17-22 are the fingers; we skip them (hands read as noise). */
+const isHandLm = (i: number): boolean => i >= 17 && i <= 22
+
 export function drawSkeletonOverlay(ctx: CanvasRenderingContext2D, input: VisualInput): void {
   if (!input.pose?.present) return
   const r = inputRect(input)
@@ -840,17 +843,30 @@ export function drawSkeletonOverlay(ctx: CanvasRenderingContext2D, input: Visual
   ctx.lineWidth = Math.max(1.5, input.w / 320)
   ctx.beginPath()
   for (const [a, b] of POSE_BONES) {
+    if (isHandLm(a) || isHandLm(b)) continue
     if (lm[a].visibility < 0.35 || lm[b].visibility < 0.35) continue
     ctx.moveTo(mapX(r, lm[a].x), mapY(r, lm[a].y))
     ctx.lineTo(mapX(r, lm[b].x), mapY(r, lm[b].y))
   }
   ctx.stroke()
   const dot = Math.max(2, input.w / 260)
-  for (const p of lm) {
-    if (p.visibility < 0.35) continue
+  for (let i = 0; i < lm.length; i++) {
+    if (isHandLm(i) || lm[i].visibility < 0.35) continue
     ctx.beginPath()
-    ctx.arc(mapX(r, p.x), mapY(r, p.y), dot, 0, Math.PI * 2)
+    ctx.arc(mapX(r, lm[i].x), mapY(r, lm[i].y), dot, 0, Math.PI * 2)
     ctx.fill()
+  }
+
+  // Detailed face dots (head shape / expression) when face detection is on.
+  const fl = input.face?.present ? input.face.landmarks : null
+  if (fl && fl.length > 0) {
+    ctx.fillStyle = 'rgba(120,230,255,0.9)'
+    const fdot = Math.max(0.9, input.w / 480)
+    for (let i = 0; i < fl.length; i++) {
+      ctx.beginPath()
+      ctx.arc(mapX(r, fl[i].x), mapY(r, fl[i].y), fdot, 0, Math.PI * 2)
+      ctx.fill()
+    }
   }
   ctx.restore()
 }
