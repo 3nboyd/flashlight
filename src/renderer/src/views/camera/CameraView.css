@@ -601,6 +601,31 @@
   grid-template-rows: 1fr 1fr;
 }
 
+/* Stack cameras in their true aspect ratio, filling the width, so horizontal
+   cams sit one above another (big, no black bars) instead of being crammed
+   into squares. Overflows scroll rather than shrink below the aspect. */
+.cam-grid.cam-stack {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding: 4px;
+  overflow-y: auto;
+  justify-content: safe center;
+}
+
+.cam-stack .cam-tile {
+  width: 100%;
+  flex: 0 0 auto;
+  aspect-ratio: var(--cam-aspect, 16 / 9);
+}
+
+/* "Match camera": no fixed aspect - tiles share the height. */
+.cam-stack.aspect-source .cam-tile {
+  aspect-ratio: auto;
+  flex: 1 1 0;
+  min-height: 0;
+}
+
 .cam-tile {
   position: relative;
   background: #000;

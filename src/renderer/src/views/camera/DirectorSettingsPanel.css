@@ -10,7 +10,7 @@
 }
 
 .director-panel {
-  width: min(460px, 96vw);
+  width: min(760px, 96vw);
   max-height: 90vh;
   overflow: auto;
   background: var(--bg-1, #101015);
@@ -18,6 +18,83 @@
   border-radius: 14px;
   box-shadow: 0 24px 60px rgba(0, 0, 0, 0.5);
   padding: 16px 18px;
+}
+
+.director-cols {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 18px;
+}
+
+@media (max-width: 640px) {
+  .director-cols {
+    grid-template-columns: 1fr;
+  }
+}
+
+.director-sec-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.director-subgroup {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  margin-top: 12px;
+}
+
+/* Greyed out (disabled) rather than hidden, so all options stay visible. */
+.director-disabled {
+  opacity: 0.42;
+  pointer-events: none;
+}
+
+.director-cam {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+}
+
+.director-cam-name {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 13px;
+}
+
+.director-cam-name em {
+  font-style: normal;
+  color: var(--text-tertiary, #6b7280);
+  font-size: 11px;
+}
+
+.director-cam-controls {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex: 0 0 auto;
+}
+
+.director-cam-controls select {
+  font-size: 12px;
+  padding: 3px 6px;
+  border-radius: 6px;
+  border: 1px solid var(--border-strong, #3a3a44);
+  background: var(--surface-2, #1a1a22);
+  color: var(--text-primary);
+}
+
+.director-cam-look {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  font-size: 11px;
+  color: var(--text-secondary, #9a9aa8);
+  white-space: nowrap;
 }
 
 .director-head {

@@ -17,6 +17,7 @@ function sig(id: string, role: CameraRole, over: Partial<CameraSignal> = {}): Ca
     facing: 0,
     lookingAtBoard: 0,
     lookSwitch: role !== 'laptop',
+    priority: 1,
     ...over
   }
 }

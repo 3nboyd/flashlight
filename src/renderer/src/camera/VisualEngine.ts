@@ -32,6 +32,10 @@ export interface VisualInput {
   light: { r: number; g: number; b: number }
   /** Per-effect user settings (e.g. intensity), keyed by param id. */
   params: Record<string, number>
+  /** How the camera frame maps into the tile: 'fill' crops to fill, 'fit'
+   *  letterboxes the whole frame. Applies to the plain feed, effects, and the
+   *  detection overlays alike, so they all line up. */
+  fit: 'fit' | 'fill'
   w: number
   h: number
 }
@@ -90,8 +94,25 @@ function coverRect(vw: number, vh: number, w: number, h: number): Rect {
   return { dx: (w - dw) / 2, dy: (h - dh) / 2, dw, dh }
 }
 
+function containRect(vw: number, vh: number, w: number, h: number): Rect {
+  if (!vw || !vh) return { dx: 0, dy: 0, dw: w, dh: h }
+  const scale = Math.min(w / vw, h / vh)
+  const dw = vw * scale
+  const dh = vh * scale
+  return { dx: (w - dw) / 2, dy: (h - dh) / 2, dw, dh }
+}
+
+/**
+ * Where the frame is drawn inside the tile - honoring the fit setting. Every
+ * effect and overlay maps through this, so the plain feed, effects, and the
+ * skeleton/face overlays all use the same box (no more "effect is zoomed in").
+ */
 function inputRect(input: VisualInput): Rect {
-  return coverRect(input.video?.videoWidth ?? input.w, input.video?.videoHeight ?? input.h, input.w, input.h)
+  const vw = input.video?.videoWidth ?? input.w
+  const vh = input.video?.videoHeight ?? input.h
+  return input.fit === 'fit'
+    ? containRect(vw, vh, input.w, input.h)
+    : coverRect(vw, vh, input.w, input.h)
 }
 
 function drawVideoRaw(ctx: CanvasRenderingContext2D, input: VisualInput): boolean {
@@ -102,28 +123,17 @@ function drawVideoRaw(ctx: CanvasRenderingContext2D, input: VisualInput): boolea
   return true
 }
 
+/** Draw the frame honoring the fit setting; letterbox bars are painted black. */
 function drawVideoCover(ctx: CanvasRenderingContext2D, input: VisualInput): Rect {
   const r = inputRect(input)
-  if (!drawVideoRaw(ctx, input)) {
+  // Fill mode covers the tile, so a clear is only needed to paint the bars in
+  // fit mode (or when there's no frame yet).
+  if (input.fit === 'fit' || !input.video || input.video.readyState < 2) {
     ctx.fillStyle = '#000'
     ctx.fillRect(0, 0, input.w, input.h)
   }
+  drawVideoRaw(ctx, input)
   return r
-}
-
-/** object-fit: contain - the whole frame, uncropped, letterboxed on black. */
-function drawVideoContain(ctx: CanvasRenderingContext2D, input: VisualInput): void {
-  ctx.fillStyle = '#000'
-  ctx.fillRect(0, 0, input.w, input.h)
-  const v = input.video
-  if (!v || v.readyState < 2) return
-  const vw = v.videoWidth
-  const vh = v.videoHeight
-  if (!vw || !vh) return
-  const scale = Math.min(input.w / vw, input.h / vh)
-  const dw = vw * scale
-  const dh = vh * scale
-  ctx.drawImage(v, (input.w - dw) / 2, (input.h - dh) / 2, dw, dh)
 }
 
 const mapX = (r: Rect, x: number): number => r.dx + x * r.dw
@@ -171,10 +181,9 @@ const camera: VisualModule = {
   usesCamera: true,
   needsPose: false,
   needsFace: false,
-  // Show the true frame, uncropped (a horizontal cam stays horizontal), so a
-  // multi-cam grid reads as a natural collage rather than cropped squares.
+  // The tile carries the chosen aspect ratio; fit/fill decides letterbox vs crop.
   render: (ctx, input) => {
-    drawVideoContain(ctx, input)
+    drawVideoCover(ctx, input)
   }
 }
 

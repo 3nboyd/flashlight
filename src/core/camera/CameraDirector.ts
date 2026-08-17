@@ -26,6 +26,9 @@ export interface CameraSignal {
   /** When true, facing this camera strongly cuts to it ("look = switch"); when
    *  false, looking at it never drives a cut. Per-camera, user-controlled. */
   lookSwitch: boolean
+  /** Usage weight (1 = equal). Higher = the director favors this camera; lower =
+   *  it appears less. Multiplies the score. */
+  priority: number
 }
 
 /** Music/context the director can lean on (e.g. cut to crowd on a drop). */
@@ -149,7 +152,7 @@ export class CameraDirector {
   score(s: CameraSignal, ctx: DirectorContext): number {
     const role = this.roleScore(s, ctx)
     const look = s.lookSwitch ? 1.5 * s.facing * Math.max(0.35, s.present) : 0
-    return role + look
+    return (role + look) * (s.priority > 0 ? s.priority : 1)
   }
 
   /** Decide the active camera for this frame. */

@@ -37,6 +37,7 @@ export function CameraCanvas({
   audioRef,
   lightRef,
   params,
+  fit = 'fill',
   showSkeleton = false,
   showFaceMesh = false,
   detectFraming = false,
@@ -55,6 +56,8 @@ export function CameraCanvas({
   lightRef?: React.MutableRefObject<{ r: number; g: number; b: number }>
   /** Per-effect settings for the active visual (e.g. { intensity: 1 }). */
   params?: Record<string, number>
+  /** How the frame maps into the tile: 'fill' (crop) or 'fit' (letterbox). */
+  fit?: 'fit' | 'fill'
   showSkeleton?: boolean
   showFaceMesh?: boolean
   /** Run body (and optionally face) detection to feed the auto-director, even
@@ -71,6 +74,8 @@ export function CameraCanvas({
 }): JSX.Element {
   const videoRef = useRef<HTMLVideoElement>(null)
   const canvasRef = useRef<HTMLCanvasElement>(null)
+  const fitRef = useRef(fit)
+  fitRef.current = fit
   const visualIdRef = useRef(visualId)
   const skelRef = useRef(showSkeleton)
   const faceOverlayRef = useRef(showFaceMesh)
@@ -208,6 +213,7 @@ export function CameraCanvas({
         audio: audioRef.current,
         light: lightRef?.current ?? BLACK,
         params: paramsRef.current,
+        fit: fitRef.current,
         w,
         h
       }

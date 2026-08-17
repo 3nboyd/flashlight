@@ -23,6 +23,16 @@ const FX_KEY = 'djc.camera.fx'
 const CONFIGS_KEY = 'djc.camera.configs'
 const AUTO_KEY = 'djc.camera.autodirector'
 const CAM_MIDI_KEY = 'djc.camera.midi'
+const DISPLAY_KEY = 'djc.camera.display'
+
+/** Aspect-ratio options for the camera tiles (CSS aspect-ratio value). */
+const ASPECTS: { id: string; label: string; css: string }[] = [
+  { id: '16:9', label: 'Landscape 16:9', css: '16 / 9' },
+  { id: '4:3', label: 'Landscape 4:3', css: '4 / 3' },
+  { id: '1:1', label: 'Square 1:1', css: '1 / 1' },
+  { id: '9:16', label: 'Portrait 9:16', css: '9 / 16' },
+  { id: 'source', label: 'Match camera', css: 'auto' }
+]
 const MODE_KEY = 'djc.output.mode'
 const LOOK_KEY = 'djc.output.screenLook'
 const SOURCE_KEY = 'djc.output.screenSource'
@@ -31,7 +41,13 @@ const OVERLAY_OP_KEY = 'djc.output.overlayOpacity'
 
 type FxParams = Record<string, Record<string, number>>
 type ScreenInfo = { patchId: string; label: string }
-type CameraConfig = { role: CameraRole; effect: string; lookSwitch?: boolean }
+type CameraConfig = {
+  role: CameraRole
+  effect: string
+  lookSwitch?: boolean
+  /** Director usage weight (1 = equal). */
+  priority?: number
+}
 /** A MIDI note bound to a camera action: cut the program to a camera, or toggle
  *  the auto-director. */
 type CamMidiAction = { kind: 'cut'; deviceId: string } | { kind: 'auto' }
@@ -47,6 +63,7 @@ function CameraTile({
   role,
   effect,
   params,
+  fit,
   program,
   focused,
   showSkeleton,
@@ -64,6 +81,7 @@ function CameraTile({
   role: CameraRole
   effect: string
   params: Record<string, number>
+  fit: 'fit' | 'fill'
   program: boolean
   focused: boolean
   showSkeleton: boolean
@@ -86,6 +104,7 @@ function CameraTile({
         deviceId={deviceId}
         visualId={effect}
         params={params}
+        fit={fit}
         showSkeleton={focused && showSkeleton}
         showFaceMesh={focused && showFaceMesh}
         detectFraming
@@ -146,6 +165,13 @@ export function CameraView({ embedded = false }: { embedded?: boolean } = {}): J
   const [camGear, setCamGear] = useState(false)
   const [directorOpen, setDirectorOpen] = useState(false)
   const [director, setDirector] = useState<DirectorSettings>(() => loadDirectorSettings())
+  const [display, setDisplay] = useState<{ aspect: string; fit: 'fit' | 'fill' }>(() => {
+    try {
+      return { aspect: '16:9', fit: 'fill', ...JSON.parse(localStorage.getItem(DISPLAY_KEY) ?? '{}') }
+    } catch {
+      return { aspect: '16:9', fit: 'fill' }
+    }
+  })
   const [fxParams, setFxParams] = useState<FxParams>(() => {
     try {
       return JSON.parse(localStorage.getItem(FX_KEY) ?? '{}') as FxParams
@@ -198,7 +224,12 @@ export function CameraView({ embedded = false }: { embedded?: boolean } = {}): J
   const getConfig = useCallback(
     (id: string): Required<CameraConfig> => {
       const c = configs[id] ?? { role: DEFAULT_CAMERA_ROLE, effect: 'camera' }
-      return { role: c.role, effect: c.effect, lookSwitch: c.lookSwitch ?? defaultLookSwitch(c.role) }
+      return {
+        role: c.role,
+        effect: c.effect,
+        lookSwitch: c.lookSwitch ?? defaultLookSwitch(c.role),
+        priority: c.priority ?? 1
+      }
     },
     [configs]
   )
@@ -335,6 +366,7 @@ export function CameraView({ embedded = false }: { embedded?: boolean } = {}): J
   }, [configs])
   useEffect(() => localStorage.setItem(FX_KEY, JSON.stringify(fxParams)), [fxParams])
   useEffect(() => localStorage.setItem(AUTO_KEY, auto ? '1' : '0'), [auto])
+  useEffect(() => localStorage.setItem(DISPLAY_KEY, JSON.stringify(display)), [display])
 
   // Mirror the program camera to the projector's camera-mode + recording source.
   useEffect(() => {
@@ -364,7 +396,8 @@ export function CameraView({ embedded = false }: { embedded?: boolean } = {}): J
             motion: 0,
             facing: 0,
             lookingAtBoard: 0,
-            lookSwitch: configsRef.current[cid]?.lookSwitch ?? true
+            lookSwitch: configsRef.current[cid]?.lookSwitch ?? true,
+            priority: configsRef.current[cid]?.priority ?? 1
           }
       )
       // A beat lands when beatPhase wraps (drops back toward 0).
@@ -471,7 +504,7 @@ export function CameraView({ embedded = false }: { embedded?: boolean } = {}): J
       const cfg = configsRef.current[id]
       const role = cfg?.role ?? 'other'
       const lookSwitch = cfg?.lookSwitch ?? defaultLookSwitch(role)
-      framingsRef.current[id] = framingSignal(id, role, f, face, lookSwitch)
+      framingsRef.current[id] = framingSignal(id, role, f, face, lookSwitch, cfg?.priority ?? 1)
     },
     []
   )
@@ -485,14 +518,16 @@ export function CameraView({ embedded = false }: { embedded?: boolean } = {}): J
     }))
   }, [])
   const setLook = useCallback((id: string, lookSwitch: boolean) => {
-    setConfigs((prev) => ({
-      ...prev,
-      [id]: {
-        role: prev[id]?.role ?? DEFAULT_CAMERA_ROLE,
-        effect: prev[id]?.effect ?? 'camera',
-        lookSwitch
-      }
-    }))
+    setConfigs((prev) => {
+      const base = prev[id] ?? { role: DEFAULT_CAMERA_ROLE, effect: 'camera' }
+      return { ...prev, [id]: { ...base, lookSwitch } }
+    })
+  }, [])
+  const setPriority = useCallback((id: string, priority: number) => {
+    setConfigs((prev) => {
+      const base = prev[id] ?? { role: DEFAULT_CAMERA_ROLE, effect: 'camera' }
+      return { ...prev, [id]: { ...base, priority } }
+    })
   }, [])
   const onTileClick = useCallback((id: string) => {
     setFocused(id)
@@ -824,7 +859,14 @@ export function CameraView({ embedded = false }: { embedded?: boolean } = {}): J
             {enabled.length === 0 ? (
               <div className="camera-empty">Enable a camera to preview it here.</div>
             ) : (
-              <div className={`cam-grid count-${Math.min(enabled.length, 4)}`}>
+              <div
+                className={`cam-grid cam-stack count-${Math.min(enabled.length, 4)}${display.aspect === 'source' ? ' aspect-source' : ''}`}
+                style={
+                  {
+                    '--cam-aspect': ASPECTS.find((a) => a.id === display.aspect)?.css ?? '16 / 9'
+                  } as React.CSSProperties
+                }
+              >
                 {enabled.map((id) => {
                   const cfg = getConfig(id)
                   // On a beat drop, the program camera temporarily wears the
@@ -841,6 +883,7 @@ export function CameraView({ embedded = false }: { embedded?: boolean } = {}): J
                         ...defaultParams(getVisual(effect)),
                         ...(fxParams[effect] ?? {})
                       }}
+                      fit={display.fit}
                       program={programId === id}
                       focused={focused === id}
                       showSkeleton={showSkeleton}
@@ -932,14 +975,26 @@ export function CameraView({ embedded = false }: { embedded?: boolean } = {}): J
               deviceId: id,
               label: devices.find((d) => d.deviceId === id)?.label || 'Camera',
               role: cfg.role,
-              lookSwitch: cfg.lookSwitch
+              lookSwitch: cfg.lookSwitch,
+              priority: cfg.priority
             }
           })}
           onLookSwitch={setLook}
+          onPriority={setPriority}
+          onAllEqual={() =>
+            setConfigs((prev) => {
+              const next: Record<string, CameraConfig> = {}
+              for (const [k, v] of Object.entries(prev)) next[k] = { ...v, priority: 1 }
+              return next
+            })
+          }
           effectOptions={VISUALS.filter((v) => v.id !== 'camera').map((v) => ({
             id: v.id,
             name: v.name
           }))}
+          display={display}
+          onDisplay={setDisplay}
+          aspects={ASPECTS.map((a) => ({ id: a.id, label: a.label }))}
           onClose={() => setDirectorOpen(false)}
         />
       )}
