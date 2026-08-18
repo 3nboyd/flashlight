@@ -83,6 +83,9 @@ function CameraTile({
   fit,
   program,
   focused,
+  detectFraming,
+  recordCanvas,
+  recordAspect,
   showSkeleton,
   showFaceMesh,
   beatRef,
@@ -91,7 +94,6 @@ function CameraTile({
   onFraming,
   onFeatures,
   onStatus,
-  onCanvasReady,
   onClick
 }: {
   deviceId: string
@@ -103,6 +105,11 @@ function CameraTile({
   fit: 'fit' | 'fill'
   program: boolean
   focused: boolean
+  /** Run detection for the auto-director (only worth it when Director Mode is on). */
+  detectFraming: boolean
+  /** Full-res record canvas, non-null only for the program tile. */
+  recordCanvas: HTMLCanvasElement | null
+  recordAspect: number | null
   showSkeleton: boolean
   showFaceMesh: boolean
   beatRef: React.MutableRefObject<number>
@@ -111,7 +118,6 @@ function CameraTile({
   onFraming: (feat: PoseFeatureState, face: FaceFrame | null) => void
   onFeatures?: (f: PoseFeatureState) => void
   onStatus?: (s: string) => void
-  onCanvasReady: (el: HTMLCanvasElement | null) => void
   onClick: () => void
 }): JSX.Element {
   return (
@@ -126,9 +132,11 @@ function CameraTile({
         params={params}
         overlayParams={overlayParams}
         fit={fit}
+        recordCanvas={recordCanvas}
+        recordAspect={recordAspect}
         showSkeleton={focused && showSkeleton}
         showFaceMesh={focused && showFaceMesh}
-        detectFraming
+        detectFraming={detectFraming}
         framingNeedsFace={role === 'headon' || role === 'laptop'}
         beatRef={beatRef}
         audioRef={audioRef}
@@ -136,7 +144,6 @@ function CameraTile({
         onFraming={onFraming}
         onFeatures={focused ? onFeatures : undefined}
         onStatus={onStatus}
-        onCanvasReady={onCanvasReady}
       />
       <span className="cam-badge role">{ROLE_LABEL[role]}</span>
       {program && <span className="cam-badge program">● PROGRAM</span>}
@@ -222,7 +229,6 @@ export function CameraView({ embedded = false }: { embedded?: boolean } = {}): J
   // Auto-director + program compositor plumbing.
   const directorRef = useRef(new CameraDirector())
   const framingsRef = useRef<Record<string, CameraSignal>>({})
-  const tileCanvases = useRef<Record<string, HTMLCanvasElement | null>>({})
   const programCanvasRef = useRef<HTMLCanvasElement | null>(null)
   // Visible mirrors of the program: a small corner preview and an enlarged popup.
   const programPreviewRef = useRef<HTMLCanvasElement | null>(null)
@@ -238,12 +244,16 @@ export function CameraView({ embedded = false }: { embedded?: boolean } = {}): J
   const surgeArmedRef = useRef(true)
   // Whether the corner program preview is enlarged into a popup.
   const [programBig, setProgramBig] = useState(false)
+  // The hidden record canvas element, tracked in state so the program tile
+  // receives it as a prop (a plain ref would be null on the first render).
+  const [recCanvasEl, setRecCanvasEl] = useState<HTMLCanvasElement | null>(null)
+  const setProgramCanvas = useCallback((el: HTMLCanvasElement | null) => {
+    programCanvasRef.current = el
+    setRecCanvasEl(el)
+  }, [])
   // Transient beat-drop effect override: { effect, until } for the program cam.
   const [dropFx, setDropFx] = useState<{ effect: string; until: number } | null>(null)
   const dropFxRef = useRef(dropFx)
-  // Chosen recording aspect ratio (null = match source), read by the compositor.
-  const aspectRatioRef = useRef<number | null>(null)
-  aspectRatioRef.current = ASPECTS.find((a) => a.id === display.aspect)?.ratio ?? null
   programIdRef.current = programId
   autoRef.current = auto
   camMidiRef.current = camMidi
@@ -457,22 +467,11 @@ export function CameraView({ embedded = false }: { embedded?: boolean } = {}): J
     })
   }, [director])
 
-  // Program compositor: render the active camera into one canvas so recording
-  // follows the auto-switch without restarting the recorder. The record canvas
-  // is reshaped to the chosen aspect ratio (cover-crop) so the final cut keeps a
-  // consistent shape no matter what grid cell the source tile occupies; the
-  // visible corner + popup mirrors then copy that record canvas 1:1.
+  // Preview mirror: the program tile renders the full-res final cut into the
+  // hidden record canvas (see CameraCanvas recordCanvas); here we just copy that
+  // into the visible corner + popup + collage-cell previews (downscaled by CSS).
   useEffect(() => {
     let raf = 0
-    // Cover-draw src into dst at dst's own dimensions (crops overflow, centered).
-    const coverDraw = (dst: HTMLCanvasElement, src: HTMLCanvasElement): void => {
-      const ctx = dst.getContext('2d')
-      if (!ctx) return
-      const scale = Math.max(dst.width / src.width, dst.height / src.height)
-      const dw = src.width * scale
-      const dh = src.height * scale
-      ctx.drawImage(src, (dst.width - dw) / 2, (dst.height - dh) / 2, dw, dh)
-    }
     const copy = (dst: HTMLCanvasElement | null, src: HTMLCanvasElement): void => {
       if (!dst) return
       if (dst.width !== src.width || dst.height !== src.height) {
@@ -484,19 +483,8 @@ export function CameraView({ embedded = false }: { embedded?: boolean } = {}): J
     }
     const loop = (): void => {
       raf = requestAnimationFrame(loop)
-      const src = programIdRef.current ? tileCanvases.current[programIdRef.current] : null
       const rec = programCanvasRef.current
-      if (!src || src.width === 0 || !rec) return
-      // Size the record canvas to the chosen aspect (or the source's own shape).
-      const ar = aspectRatioRef.current
-      const targetH = src.height
-      const targetW = ar == null ? src.width : Math.round(targetH * ar)
-      if (rec.width !== targetW || rec.height !== targetH) {
-        rec.width = targetW
-        rec.height = targetH
-      }
-      coverDraw(rec, src)
-      // The visible mirrors copy the finished record canvas so they match it.
+      if (!rec || rec.width === 0) return
       copy(programPreviewRef.current, rec)
       copy(programBigRef.current, rec)
     }
@@ -553,9 +541,6 @@ export function CameraView({ embedded = false }: { embedded?: boolean } = {}): J
     setEnabled((cur) => (cur.includes(id) ? cur.filter((x) => x !== id) : [...cur, id]))
 
   const onFeatures = useCallback((f: PoseFeatureState) => setFeat({ ...f }), [])
-  const registerCanvas = useCallback((id: string, el: HTMLCanvasElement | null) => {
-    tileCanvases.current[id] = el
-  }, [])
   const onFraming = useCallback(
     (id: string, f: PoseFeatureState, face: FaceFrame | null) => {
       const cfg = configsRef.current[id]
@@ -1003,6 +988,9 @@ export function CameraView({ embedded = false }: { embedded?: boolean } = {}): J
                       fit={display.fit}
                       program={programId === id}
                       focused={focused === id}
+                      detectFraming={auto}
+                      recordCanvas={programId === id ? recCanvasEl : null}
+                      recordAspect={ASPECTS.find((a) => a.id === display.aspect)?.ratio ?? null}
                       showSkeleton={showSkeleton}
                       showFaceMesh={showFaceMesh}
                       beatRef={beatRef}
@@ -1011,7 +999,6 @@ export function CameraView({ embedded = false }: { embedded?: boolean } = {}): J
                       onFraming={(f, face) => onFraming(id, f, face)}
                       onFeatures={onFeatures}
                       onStatus={setStatus}
-                      onCanvasReady={(el) => registerCanvas(id, el)}
                       onClick={() => onTileClick(id)}
                     />
                   )
@@ -1030,8 +1017,8 @@ export function CameraView({ embedded = false }: { embedded?: boolean } = {}): J
                 )}
               </div>
             )}
-            {/* Hidden program compositor - the recording source. */}
-            <canvas ref={programCanvasRef} className="cam-program-hidden" />
+            {/* Hidden full-res record canvas - authored by the program tile. */}
+            <canvas ref={setProgramCanvas} className="cam-program-hidden" />
             {/* Floating final-cut preview, only when the grid has no spare cell
                 for it (otherwise the program lives in the collage cell above). */}
             {enabled.length >= 2 && !showProgramCell && (

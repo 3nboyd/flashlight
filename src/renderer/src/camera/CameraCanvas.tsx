@@ -45,6 +45,8 @@ export function CameraCanvas({
   showFaceMesh = false,
   detectFraming = false,
   framingNeedsFace = false,
+  recordCanvas = null,
+  recordAspect = null,
   className = 'cam-canvas',
   onFeatures,
   onFraming,
@@ -57,6 +59,11 @@ export function CameraCanvas({
   overlayId?: string
   /** Per-effect settings for the overlay visual. */
   overlayParams?: Record<string, number>
+  /** When this tile is the program, the shared canvas to render the recorded
+   *  final cut into at full camera resolution (independent of the preview size). */
+  recordCanvas?: HTMLCanvasElement | null
+  /** Aspect ratio to shape the record canvas to (null = the source's own). */
+  recordAspect?: number | null
   beatRef: React.MutableRefObject<number>
   audioRef: React.MutableRefObject<AudioReact>
   /** Live dominant lighting color (0-255) for effects that match the rig. */
@@ -83,6 +90,10 @@ export function CameraCanvas({
   const canvasRef = useRef<HTMLCanvasElement>(null)
   const fitRef = useRef(fit)
   fitRef.current = fit
+  const recordCanvasRef = useRef(recordCanvas)
+  const recordAspectRef = useRef(recordAspect)
+  recordCanvasRef.current = recordCanvas
+  recordAspectRef.current = recordAspect
   const overlayIdRef = useRef(overlayId)
   const overlayParamsRef = useRef<Record<string, number>>(overlayParams ?? {})
   overlayIdRef.current = overlayId
@@ -237,6 +248,30 @@ export function CameraCanvas({
       }
       visual.render(ctx, input)
       if (overlay) renderOverlayLayer(ctx, input, overlay, overlayParamsRef.current)
+
+      // When this tile is the program, render the same effect a second time at
+      // full camera resolution into the shared record canvas, so the saved file
+      // is full-res no matter how small the preview tile is. Reuses the pose/face
+      // already detected this frame; skips the debug overlays.
+      const rec = recordCanvasRef.current
+      if (rec && ready && video) {
+        const vw = video.videoWidth || w
+        const vh = video.videoHeight || h
+        const ar = recordAspectRef.current
+        const rh = vh
+        const rw = ar == null ? vw : Math.max(1, Math.round(vh * ar))
+        if (rec.width !== rw || rec.height !== rh) {
+          rec.width = rw
+          rec.height = rh
+        }
+        const rctx = rec.getContext('2d')
+        if (rctx) {
+          const recInput: VisualInput = { ...input, w: rw, h: rh }
+          visual.render(rctx, recInput)
+          if (overlay) renderOverlayLayer(rctx, recInput, overlay, overlayParamsRef.current)
+        }
+      }
+
       if (skelRef.current) drawSkeletonOverlay(ctx, input)
       if (faceOverlayRef.current) drawFaceMeshOverlay(ctx, input)
     }
