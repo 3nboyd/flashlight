@@ -4,6 +4,7 @@ import { FaceEngine, type FaceFrame } from './FaceEngine'
 import { PoseFeatures, type PoseFeatureState } from './PoseFeatures'
 import {
   getVisual,
+  renderOverlayLayer,
   drawSkeletonOverlay,
   drawFaceMeshOverlay,
   type VisualInput,
@@ -33,6 +34,8 @@ const BLACK = { r: 0, g: 0, b: 0 }
 export function CameraCanvas({
   deviceId,
   visualId,
+  overlayId = '',
+  overlayParams,
   beatRef,
   audioRef,
   lightRef,
@@ -50,6 +53,10 @@ export function CameraCanvas({
 }: {
   deviceId: string
   visualId: string
+  /** Optional second effect layered over the base (the "combine" feature). */
+  overlayId?: string
+  /** Per-effect settings for the overlay visual. */
+  overlayParams?: Record<string, number>
   beatRef: React.MutableRefObject<number>
   audioRef: React.MutableRefObject<AudioReact>
   /** Live dominant lighting color (0-255) for effects that match the rig. */
@@ -76,6 +83,10 @@ export function CameraCanvas({
   const canvasRef = useRef<HTMLCanvasElement>(null)
   const fitRef = useRef(fit)
   fitRef.current = fit
+  const overlayIdRef = useRef(overlayId)
+  const overlayParamsRef = useRef<Record<string, number>>(overlayParams ?? {})
+  overlayIdRef.current = overlayId
+  overlayParamsRef.current = overlayParams ?? {}
   const visualIdRef = useRef(visualId)
   const skelRef = useRef(showSkeleton)
   const faceOverlayRef = useRef(showFaceMesh)
@@ -153,11 +164,17 @@ export function CameraCanvas({
       if (!ctx) return
 
       const visual = getVisual(visualIdRef.current)
+      // A combined overlay (Shift+click) layers a second effect on top; it may
+      // need its own detection, so fold its requirements in below.
+      const overlayId = overlayIdRef.current
+      const overlay =
+        overlayId && overlayId !== visualIdRef.current ? getVisual(overlayId) : null
       const ready = video != null && video.readyState >= 2
       const wantFraming = framingRef.current
-      const effectPose = visual.needsPose || skelRef.current
+      const effectPose = visual.needsPose || (overlay?.needsPose ?? false) || skelRef.current
       // The skeleton overlay also draws detailed face dots, so it needs face too.
-      const effectFace = visual.needsFace || faceOverlayRef.current || skelRef.current
+      const effectFace =
+        visual.needsFace || (overlay?.needsFace ?? false) || faceOverlayRef.current || skelRef.current
       const needPose = effectPose || wantFraming
       const needFace = effectFace || (wantFraming && framingFaceRef.current)
       // When detection is only for the director (the effect doesn't need it),
@@ -219,6 +236,7 @@ export function CameraCanvas({
         h
       }
       visual.render(ctx, input)
+      if (overlay) renderOverlayLayer(ctx, input, overlay, overlayParamsRef.current)
       if (skelRef.current) drawSkeletonOverlay(ctx, input)
       if (faceOverlayRef.current) drawFaceMeshOverlay(ctx, input)
     }

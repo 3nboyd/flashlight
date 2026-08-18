@@ -569,6 +569,31 @@
   border-color: transparent;
 }
 
+/* The second, combined (overlay) layer picked with shift+click. */
+.cam-fx-btn.overlay {
+  border-color: #c084fc;
+  color: #e9d5ff;
+  box-shadow: inset 0 0 0 1px rgba(192, 132, 252, 0.55);
+}
+.cam-fx-btn.active.overlay {
+  background: var(--accent, #38bdf8);
+  color: #06121a;
+  box-shadow: inset 0 0 0 2px #c084fc;
+}
+.cam-fx-tag.combine {
+  border-color: #c084fc;
+  color: #e9d5ff;
+  opacity: 1;
+  font-size: 11px;
+  line-height: 1;
+  padding: 0 2px;
+}
+
+.cam-hud-hint {
+  color: var(--text-tertiary, #6b7280);
+  font-weight: 400;
+}
+
 .cam-fx-tag {
   font-size: 8px;
   text-transform: uppercase;

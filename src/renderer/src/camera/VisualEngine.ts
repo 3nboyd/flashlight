@@ -933,3 +933,29 @@ export const VISUALS: VisualModule[] = [
 export function getVisual(id: string): VisualModule {
   return VISUALS.find((v) => v.id === id) ?? camera
 }
+
+/**
+ * Composite one visual as a top layer over whatever is already drawn on `ctx`
+ * (the base effect). The overlay renders onto its own scratch canvas, then
+ * blends in with 'lighten' so its dark background drops out and only the bright
+ * content survives - the neon stickman lines, sketch ink, sparks, or the lit
+ * parts of the live camera - floating over the base. This powers the "combine"
+ * feature (Shift+click a second effect): camera-of-me over a generative, a
+ * drawn-me over the camera, and so on, with no per-effect changes.
+ */
+export function renderOverlayLayer(
+  ctx: CanvasRenderingContext2D,
+  input: VisualInput,
+  overlay: VisualModule,
+  overlayParams: Record<string, number>
+): void {
+  const layer = getScratch('combineLayer', input.w, input.h)
+  const lctx = layer.getContext('2d')
+  if (!lctx) return
+  lctx.clearRect(0, 0, input.w, input.h)
+  overlay.render(lctx, { ...input, params: overlayParams })
+  ctx.save()
+  ctx.globalCompositeOperation = 'lighten'
+  ctx.drawImage(layer, 0, 0)
+  ctx.restore()
+}

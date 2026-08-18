@@ -44,6 +44,8 @@ type ScreenInfo = { patchId: string; label: string }
 type CameraConfig = {
   role: CameraRole
   effect: string
+  /** Optional second effect layered over the base (Shift+click to combine). */
+  overlay?: string
   lookSwitch?: boolean
   /** Director usage weight (1 = equal). */
   priority?: number
@@ -62,7 +64,9 @@ function CameraTile({
   deviceId,
   role,
   effect,
+  overlay,
   params,
+  overlayParams,
   fit,
   program,
   focused,
@@ -80,7 +84,9 @@ function CameraTile({
   deviceId: string
   role: CameraRole
   effect: string
+  overlay: string
   params: Record<string, number>
+  overlayParams: Record<string, number>
   fit: 'fit' | 'fill'
   program: boolean
   focused: boolean
@@ -103,7 +109,9 @@ function CameraTile({
       <CameraCanvas
         deviceId={deviceId}
         visualId={effect}
+        overlayId={overlay}
         params={params}
+        overlayParams={overlayParams}
         fit={fit}
         showSkeleton={focused && showSkeleton}
         showFaceMesh={focused && showFaceMesh}
@@ -232,6 +240,7 @@ export function CameraView({ embedded = false }: { embedded?: boolean } = {}): J
       return {
         role: c.role,
         effect: c.effect,
+        overlay: c.overlay && c.overlay !== c.effect ? c.overlay : '',
         lookSwitch: c.lookSwitch ?? defaultLookSwitch(c.role),
         priority: c.priority ?? 1
       }
@@ -525,10 +534,21 @@ export function CameraView({ embedded = false }: { embedded?: boolean } = {}): J
     setConfigs((prev) => ({ ...prev, [id]: { ...prev[id], role, effect: prev[id]?.effect ?? 'camera' } }))
   }, [])
   const setEffect = useCallback((id: string, effect: string) => {
-    setConfigs((prev) => ({
-      ...prev,
-      [id]: { ...prev[id], role: prev[id]?.role ?? DEFAULT_CAMERA_ROLE, effect }
-    }))
+    setConfigs((prev) => {
+      const base = prev[id] ?? { role: DEFAULT_CAMERA_ROLE, effect: 'camera' }
+      // Don't leave an overlay equal to the new base (it would be a no-op layer).
+      const overlay = base.overlay === effect ? undefined : base.overlay
+      return { ...prev, [id]: { ...base, role: base.role ?? DEFAULT_CAMERA_ROLE, effect, overlay } }
+    })
+  }, [])
+  // Shift+click sets/toggles a second effect layered over the base.
+  const setCombine = useCallback((id: string, combineId: string) => {
+    setConfigs((prev) => {
+      const base = prev[id] ?? { role: DEFAULT_CAMERA_ROLE, effect: 'camera' }
+      // Clicking the current overlay (or the base itself) clears the combo.
+      const next = base.overlay === combineId || combineId === base.effect ? undefined : combineId
+      return { ...prev, [id]: { ...base, overlay: next } }
+    })
   }, [])
   const setLook = useCallback((id: string, lookSwitch: boolean) => {
     setConfigs((prev) => {
@@ -608,6 +628,7 @@ export function CameraView({ embedded = false }: { embedded?: boolean } = {}): J
   }
 
   const focusedEffect = focused ? getConfig(focused).effect : 'camera'
+  const focusedOverlay = focused ? getConfig(focused).overlay : ''
   const activeVisual = getVisual(focusedEffect)
   const tracksBody = activeVisual.needsPose || activeVisual.needsFace || showSkeleton || showFaceMesh
   const activeParams = useMemo(
@@ -628,17 +649,31 @@ export function CameraView({ embedded = false }: { embedded?: boolean } = {}): J
   )
   const cameraFx = VISUALS.filter((v) => v.usesCamera)
   const genFx = VISUALS.filter((v) => !v.usesCamera)
-  const fxButton = (v: VisualModule): JSX.Element => (
-    <button
-      key={v.id}
-      className={`cam-fx-btn${focusedEffect === v.id ? ' active' : ''}`}
-      onClick={() => focused && setEffect(focused, v.id)}
-      disabled={!focused}
-    >
-      {v.name}
-      {(v.needsPose || v.needsFace) && <span className="cam-fx-tag">body</span>}
-    </button>
-  )
+  const fxButton = (v: VisualModule): JSX.Element => {
+    const isBase = focusedEffect === v.id
+    const isOverlay = focusedOverlay === v.id
+    return (
+      <button
+        key={v.id}
+        className={`cam-fx-btn${isBase ? ' active' : ''}${isOverlay ? ' overlay' : ''}`}
+        onClick={(e) => {
+          if (!focused) return
+          if (e.shiftKey) setCombine(focused, v.id)
+          else setEffect(focused, v.id)
+        }}
+        disabled={!focused}
+        title={
+          isOverlay
+            ? 'Overlay layer. Shift+click to remove.'
+            : 'Click to set. Shift+click to combine as an overlay.'
+        }
+      >
+        {v.name}
+        {(v.needsPose || v.needsFace) && <span className="cam-fx-tag">body</span>}
+        {isOverlay && <span className="cam-fx-tag combine">＋</span>}
+      </button>
+    )
+  }
 
   return (
     <div className={`view camera-view${embedded ? ' camera-view--embedded' : ''}`}>
@@ -909,16 +944,23 @@ export function CameraView({ embedded = false }: { embedded?: boolean } = {}): J
                   // chosen drop effect instead of its own.
                   const effect =
                     dropFx && programId === id && auto ? dropFx.effect : cfg.effect
+                  const combineId = cfg.overlay && cfg.overlay !== effect ? cfg.overlay : ''
                   return (
                     <CameraTile
                       key={id}
                       deviceId={id}
                       role={cfg.role}
                       effect={effect}
+                      overlay={combineId}
                       params={{
                         ...defaultParams(getVisual(effect)),
                         ...(fxParams[effect] ?? {})
                       }}
+                      overlayParams={
+                        combineId
+                          ? { ...defaultParams(getVisual(combineId)), ...(fxParams[combineId] ?? {}) }
+                          : {}
+                      }
                       fit={display.fit}
                       program={programId === id}
                       focused={focused === id}
@@ -957,6 +999,13 @@ export function CameraView({ embedded = false }: { embedded?: boolean } = {}): J
               {focused
                 ? `Effect for: ${devices.find((d) => d.deviceId === focused)?.label || 'selected camera'} (${ROLE_LABEL[getConfig(focused).role]})`
                 : 'Select a camera tile to set its effect'}
+              {focused && (
+                <span className="cam-hud-hint">
+                  {focusedOverlay
+                    ? ` — combined: ${getVisual(focusedEffect).name} ＋ ${getVisual(focusedOverlay).name} (shift+click to change)`
+                    : ' — shift+click a second effect to combine'}
+                </span>
+              )}
             </div>
             <div className="cam-fx-group">
               <span className="cam-hud-label">Camera</span>
