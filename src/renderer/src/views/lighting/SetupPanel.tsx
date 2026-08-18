@@ -1253,9 +1253,10 @@ export function SetupPanel({ view }: { view: SetupView }): JSX.Element {
         </div>
       </SetupSection>
 
-      <SetupSection id="midi" views={['settings']} title="MIDI controller" help={<>Bind pads to scenes/buttons and knobs or faders to live controls (master brightness, pan,
+      <SetupSection id="midi" views={['setup', 'settings']} title="MIDI controller" help={<>Bind pads to scenes/buttons and knobs or faders to live controls (master brightness, pan,
           tilt, speed, sensitivity). Click a Learn button, then hit the pad or move the knob - click
-          again to cancel.</>}>
+          again to cancel. This is also where you check/clear a mapping - e.g. if a controller
+          button is triggering Blackout, open Assign MIDI and hit its ✕.</>}>
         <div className="setup-row">
           <button className="secondary-button" onClick={() => setMidiModalOpen(true)}>
             Assign MIDI…
@@ -1516,7 +1517,18 @@ export function SetupPanel({ view }: { view: SetupView }): JSX.Element {
       </SetupSection>
 
       <SetupSection id="pads" title="Performance pads" help={<>Set the grid size and save/switch pad layouts. Assign which scene sits on each pad
-          from the Live screen (Scenes -&gt; + Pad) or a pad&apos;s corner menu.</>}>
+          from the Live screen (Scenes -&gt; + Pad) or a pad&apos;s corner menu. To map a hardware
+          controller to pads/buttons, use Assign MIDI below (or the MIDI Controller section).</>}>
+        <div className="setup-row">
+          <label>MIDI mapping</label>
+          <button className="secondary-button" onClick={() => setMidiModalOpen(true)}>
+            Assign MIDI…
+          </button>
+          <span className="settings-hint" style={{ margin: 0 }}>
+            Map controller pads/buttons to scenes and actions (and see/clear what a button like
+            Blackout is bound to).
+          </span>
+        </div>
         <div className="setup-row">
           <label>Grid size</label>
           <div className="segmented">

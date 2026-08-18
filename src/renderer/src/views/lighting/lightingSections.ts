@@ -16,7 +16,8 @@ export const SETUP_SECTIONS: SectionDef[] = [
   { id: 'scenes', label: 'Scenes' },
   { id: 'smart', label: 'Smart Mode' },
   { id: 'autopilot', label: 'Autopilot' },
-  { id: 'pads', label: 'Performance Pads' }
+  { id: 'pads', label: 'Performance Pads' },
+  { id: 'midi', label: 'MIDI Controller' }
 ]
 
 export const SETTINGS_SECTIONS: SectionDef[] = [
