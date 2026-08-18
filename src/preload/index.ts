@@ -116,6 +116,17 @@ const api = {
     close: (): Promise<boolean> => ipcRenderer.invoke('output:close'),
     isOpen: (): Promise<boolean> => ipcRenderer.invoke('output:isOpen')
   },
+  popout: {
+    open: (name: string): Promise<boolean> => ipcRenderer.invoke('popout:open', name),
+    close: (name: string): Promise<boolean> => ipcRenderer.invoke('popout:close', name),
+    isOpen: (name: string): Promise<boolean> => ipcRenderer.invoke('popout:isOpen', name),
+    /** Subscribe to pop-out open/close from any window. Returns an unsubscribe. */
+    onChanged: (cb: (name: string, open: boolean) => void): (() => void) => {
+      const handler = (_e: unknown, p: { name: string; open: boolean }): void => cb(p.name, p.open)
+      ipcRenderer.on('popout:changed', handler)
+      return () => ipcRenderer.removeListener('popout:changed', handler)
+    }
+  },
   recording: {
     save: (dir: string, filename: string, data: ArrayBuffer): Promise<string> =>
       ipcRenderer.invoke('recording:save', dir, filename, data),

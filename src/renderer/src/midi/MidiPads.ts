@@ -218,6 +218,14 @@ export class MidiPads {
     return this.access !== null
   }
 
+  /** Stop firing lighting pad/control actions from this window without dropping
+   *  the MIDI connection or note listeners. Used when the Lighting pane is
+   *  popped out to another window, which becomes the sole pad authority; the
+   *  next `start()` (when the pane returns) re-registers the handlers. */
+  suspendActions(): void {
+    this.events = null
+  }
+
   deviceNames(): string[] {
     if (!this.access) return []
     return [...this.access.inputs.values()].map((i) => i.name ?? 'MIDI device')

@@ -76,6 +76,33 @@
   border-color: var(--accent, #38bdf8);
 }
 
+/* Detach the pane into its own window (matches the collapse button's look). */
+.operator-popout {
+  flex: 0 0 auto;
+  border: 1px solid var(--border-strong, #3a3a44);
+  background: transparent;
+  color: var(--text-primary);
+  border-radius: 6px;
+  padding: 3px 9px;
+  cursor: pointer;
+  font-size: 13px;
+  line-height: 1;
+}
+.operator-popout:hover {
+  border-color: var(--accent, #38bdf8);
+}
+
+/* A pane that is currently detached shows a highlighted "bring back" rail. */
+.operator-rail--popped {
+  writing-mode: horizontal-tb;
+  transform: none;
+  width: auto;
+  color: var(--accent, #38bdf8);
+  background: color-mix(in srgb, var(--accent, #38bdf8) 12%, var(--bg-2, #16161c));
+  letter-spacing: 0.3px;
+  padding: 10px 14px;
+}
+
 /* A collapsed pane becomes a thin rail to bring it back. */
 .operator-rail {
   flex: 0 0 auto;

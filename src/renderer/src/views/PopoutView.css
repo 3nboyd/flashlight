@@ -1,0 +1,30 @@
+/* A single detached Live pane filling its own window. */
+.popout-view {
+  display: flex;
+  flex-direction: column;
+  height: 100vh;
+  min-height: 0;
+  background: var(--bg, #0a0d14);
+  color: var(--text-primary, #e8e8ef);
+}
+
+.popout-head {
+  padding: 10px 16px;
+  border-bottom: 1px solid var(--border-strong);
+  flex-shrink: 0;
+}
+
+.popout-body {
+  flex: 1;
+  min-height: 0;
+  overflow: auto;
+  padding: 14px 16px;
+}
+
+/* The camera view already manages its own full-height layout; give it the room. */
+.popout-view--camera {
+  padding: 0;
+}
+.popout-view--camera .camera-view {
+  height: 100vh;
+}
