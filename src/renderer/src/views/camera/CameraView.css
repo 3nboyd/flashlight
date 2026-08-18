@@ -671,6 +671,26 @@
   font-weight: 700;
 }
 
+.cam-cameras-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+.cam-clear-btn {
+  font-size: 11px;
+  padding: 3px 8px;
+  border-radius: 6px;
+  border: 1px solid var(--border-strong);
+  background: transparent;
+  color: var(--text-secondary);
+  cursor: pointer;
+}
+.cam-clear-btn:hover {
+  border-color: #ef4444;
+  color: #ef4444;
+}
+
 /* The live final cut sitting in a spare collage cell. */
 .cam-program-cell {
   padding: 0;

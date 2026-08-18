@@ -20,6 +20,8 @@ export interface DirectorSettings {
   hysteresis: number
   /** 0-1 chance a cut waits for the beat (0 = never, 1 = always, mid = sometimes). */
   switchOnBeat: number
+  /** Skip cameras that have been black/frozen for a few seconds (dead feed). */
+  avoidDeadCameras: boolean
   drop: DropEffectSettings
 }
 
@@ -27,6 +29,7 @@ export const DEFAULT_DIRECTOR_SETTINGS: DirectorSettings = {
   avgHoldMs: 5000,
   hysteresis: 0.18,
   switchOnBeat: 0,
+  avoidDeadCameras: true,
   drop: { enabled: false, durationMs: 3000, effects: [] }
 }
 

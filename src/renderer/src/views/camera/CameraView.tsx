@@ -25,6 +25,11 @@ const AUTO_KEY = 'djc.camera.autodirector'
 const CAM_MIDI_KEY = 'djc.camera.midi'
 const DISPLAY_KEY = 'djc.camera.display'
 
+// Dead-feed detection: a camera whose average brightness stays below DARK_LUMA
+// for DEAD_MS is treated as a dead/black feed the director should skip.
+const DARK_LUMA = 0.02
+const DEAD_MS = 4000
+
 /** Aspect-ratio options for the camera tiles (CSS aspect-ratio value). */
 const ASPECTS: { id: string; label: string; css: string; ratio: number | null }[] = [
   { id: '16:9', label: 'Landscape 16:9', css: '16 / 9', ratio: 16 / 9 },
@@ -115,7 +120,7 @@ function CameraTile({
   beatRef: React.MutableRefObject<number>
   audioRef: React.MutableRefObject<AudioReact>
   lightRef: React.MutableRefObject<{ r: number; g: number; b: number }>
-  onFraming: (feat: PoseFeatureState, face: FaceFrame | null) => void
+  onFraming: (feat: PoseFeatureState, face: FaceFrame | null, luma: number) => void
   onFeatures?: (f: PoseFeatureState) => void
   onStatus?: (s: string) => void
   onClick: () => void
@@ -229,6 +234,9 @@ export function CameraView({ embedded = false }: { embedded?: boolean } = {}): J
   // Auto-director + program compositor plumbing.
   const directorRef = useRef(new CameraDirector())
   const framingsRef = useRef<Record<string, CameraSignal>>({})
+  // Per-camera timestamp of when its feed first went near-black (for dead-feed
+  // avoidance); absent = the feed is live.
+  const deadTimersRef = useRef<Record<string, number>>({})
   const programCanvasRef = useRef<HTMLCanvasElement | null>(null)
   // Visible mirrors of the program: a small corner preview and an enlarged popup.
   const programPreviewRef = useRef<HTMLCanvasElement | null>(null)
@@ -279,7 +287,18 @@ export function CameraView({ embedded = false }: { embedded?: boolean } = {}): J
       const list = await navigator.mediaDevices.enumerateDevices()
       const cams = list.filter((d) => d.kind === 'videoinput')
       setDevices(cams)
-      if (cams.length > 0 && cams[0].label) setNeedsPermission(false)
+      // Once the real list is known (permission granted, labels present), drop
+      // any enabled id that no longer maps to a present camera. macOS rotates
+      // camera deviceIds between sessions, so stale ids accumulated and each
+      // rendered a phantom tile; pruning makes the grid self-heal.
+      if (cams.length > 0 && cams.some((c) => c.label)) {
+        setNeedsPermission(false)
+        const present = new Set(cams.map((c) => c.deviceId))
+        setEnabled((cur) => {
+          const kept = cur.filter((id) => present.has(id))
+          return kept.length === cur.length ? cur : kept
+        })
+      }
     } catch {
       /* ignore */
     }
@@ -427,7 +446,18 @@ export function CameraView({ embedded = false }: { embedded?: boolean } = {}): J
       }
       const director = directorRef.current
       director.setManual(autoRef.current ? null : manualIdRef.current)
-      const signals: CameraSignal[] = ids.map(
+      let candidates = ids
+      // Skip cameras whose feed has been black/frozen for a few seconds, unless
+      // that would leave nothing (then fall back to all so we never go blank).
+      if (directorRefSettings.current.avoidDeadCameras) {
+        const now = performance.now()
+        const live = ids.filter((cid) => {
+          const since = deadTimersRef.current[cid]
+          return since == null || now - since < DEAD_MS
+        })
+        if (live.length > 0) candidates = live
+      }
+      const signals: CameraSignal[] = candidates.map(
         (cid) =>
           framingsRef.current[cid] ?? {
             id: cid,
@@ -542,11 +572,16 @@ export function CameraView({ embedded = false }: { embedded?: boolean } = {}): J
 
   const onFeatures = useCallback((f: PoseFeatureState) => setFeat({ ...f }), [])
   const onFraming = useCallback(
-    (id: string, f: PoseFeatureState, face: FaceFrame | null) => {
+    (id: string, f: PoseFeatureState, face: FaceFrame | null, luma: number) => {
       const cfg = configsRef.current[id]
       const role = cfg?.role ?? 'other'
       const lookSwitch = cfg?.lookSwitch ?? defaultLookSwitch(role)
       framingsRef.current[id] = framingSignal(id, role, f, face, lookSwitch, cfg?.priority ?? 1)
+      // Track how long this feed has been near-black, to spot a dead camera.
+      const now = performance.now()
+      const t = deadTimersRef.current
+      if (luma < DARK_LUMA) t[id] = t[id] ?? now
+      else delete t[id]
     },
     []
   )
@@ -723,7 +758,22 @@ export function CameraView({ embedded = false }: { embedded?: boolean } = {}): J
               </button>
             </div>
           )}
-          <h3>Cameras</h3>
+          <div className="cam-cameras-head">
+            <h3>Cameras</h3>
+            {enabled.length > 0 && (
+              <button
+                className="cam-clear-btn"
+                title="Turn off all cameras (start fresh, then add them one by one)"
+                onClick={() => {
+                  setEnabled([])
+                  setProgramId(null)
+                  manualIdRef.current = null
+                }}
+              >
+                Remove all
+              </button>
+            )}
+          </div>
           {needsPermission ? (
             <button className="primary-button" onClick={requestPermission}>
               Allow camera access
@@ -996,7 +1046,7 @@ export function CameraView({ embedded = false }: { embedded?: boolean } = {}): J
                       beatRef={beatRef}
                       audioRef={audioRef}
                       lightRef={lightRef}
-                      onFraming={(f, face) => onFraming(id, f, face)}
+                      onFraming={(f, face, luma) => onFraming(id, f, face, luma)}
                       onFeatures={onFeatures}
                       onStatus={setStatus}
                       onClick={() => onTileClick(id)}

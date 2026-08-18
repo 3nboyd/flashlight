@@ -80,8 +80,9 @@ export function CameraCanvas({
   framingNeedsFace?: boolean
   className?: string
   onFeatures?: (f: PoseFeatureState) => void
-  /** Throttled framing report for the director (pose features + face frame). */
-  onFraming?: (feat: PoseFeatureState, face: FaceFrame | null) => void
+  /** Throttled framing report for the director (pose features + face frame +
+   *  average frame luminance 0-1, used to spot a dead/black feed). */
+  onFraming?: (feat: PoseFeatureState, face: FaceFrame | null, luma: number) => void
   onStatus?: (s: string) => void
   /** Reports the underlying canvas element (for recording); null on unmount. */
   onCanvasReady?: (el: HTMLCanvasElement | null) => void
@@ -137,12 +138,10 @@ export function CameraCanvas({
         audio: false
       })
       .then(attach)
-      .catch(() =>
-        navigator.mediaDevices
-          .getUserMedia({ video: true, audio: false })
-          .then(attach)
-          .catch((err) => onStatus?.(`Camera unavailable: ${err?.name ?? err}`))
-      )
+      // No fallback to a default camera: a missing/rotated deviceId must stay
+      // black (and report unavailable), never open some other camera - that was
+      // painting the same default feed into every stale tile.
+      .catch((err) => onStatus?.(`Camera unavailable: ${err?.name ?? err}`))
     return () => {
       cancelled = true
       stream?.getTracks().forEach((t) => t.stop())
@@ -159,6 +158,19 @@ export function CameraCanvas({
     let faceLoading = false
     let lastFeat = ZERO_FEAT
     let lastFramingMs = 0
+    // Tiny offscreen buffer to measure average brightness (dead/black feed).
+    const lumaCanvas = document.createElement('canvas')
+    lumaCanvas.width = 16
+    lumaCanvas.height = 16
+    const lumaCtx = lumaCanvas.getContext('2d', { willReadFrequently: true })
+    const measureLuma = (v: HTMLVideoElement): number => {
+      if (!lumaCtx) return 1
+      lumaCtx.drawImage(v, 0, 0, 16, 16)
+      const px = lumaCtx.getImageData(0, 0, 16, 16).data
+      let sum = 0
+      for (let i = 0; i < px.length; i += 4) sum += px[i] + px[i + 1] + px[i + 2]
+      return sum / (px.length / 4) / (3 * 255)
+    }
 
     const loop = (): void => {
       raf = requestAnimationFrame(loop)
@@ -227,9 +239,12 @@ export function CameraCanvas({
       }
 
       // Feed the auto-director at ~7fps (enough to switch on, cheap to run).
+      // Include average brightness so it can spot a dead/black feed; a stream
+      // that isn't ready reports 0 (treated as dark).
       if (wantFraming && framingTick) {
         lastFramingMs = now
-        onFramingRef.current?.(lastFeat, faceFrame)
+        const luma = ready && video ? measureLuma(video) : 0
+        onFramingRef.current?.(lastFeat, faceFrame, luma)
       }
 
       const input: VisualInput = {

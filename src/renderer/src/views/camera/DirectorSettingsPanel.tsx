@@ -178,6 +178,15 @@ export function DirectorSettingsPanel({
                   <span>always</span>
                 </span>
               </label>
+
+              <label className="director-check">
+                <input
+                  type="checkbox"
+                  checked={settings.avoidDeadCameras}
+                  onChange={(e) => set({ avoidDeadCameras: e.target.checked })}
+                />
+                Skip dead cameras (black or frozen for a few seconds)
+              </label>
             </section>
 
             <section className="director-sec">
