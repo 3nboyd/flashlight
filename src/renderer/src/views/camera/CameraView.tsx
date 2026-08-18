@@ -56,6 +56,7 @@ const LOOK_KEY = 'djc.output.screenLook'
 const SOURCE_KEY = 'djc.output.screenSource'
 const OVERLAY_KEY = 'djc.output.overlay'
 const OVERLAY_OP_KEY = 'djc.output.overlayOpacity'
+const EFFECTS_ONLY_KEY = 'djc.output.effectsOnly'
 
 type FxParams = Record<string, Record<string, number>>
 type ScreenInfo = { patchId: string; label: string }
@@ -91,6 +92,7 @@ function CameraTile({
   detectFraming,
   recordCanvas,
   recordAspect,
+  recordClean,
   showSkeleton,
   showFaceMesh,
   beatRef,
@@ -115,6 +117,8 @@ function CameraTile({
   /** Full-res record canvas, non-null only for the program tile. */
   recordCanvas: HTMLCanvasElement | null
   recordAspect: number | null
+  /** Record the plain camera (no effect) even though the tile shows an effect. */
+  recordClean: boolean
   showSkeleton: boolean
   showFaceMesh: boolean
   beatRef: React.MutableRefObject<number>
@@ -139,6 +143,7 @@ function CameraTile({
         fit={fit}
         recordCanvas={recordCanvas}
         recordAspect={recordAspect}
+        recordClean={recordClean}
         showSkeleton={focused && showSkeleton}
         showFaceMesh={focused && showFaceMesh}
         detectFraming={detectFraming}
@@ -217,7 +222,11 @@ export function CameraView({ embedded = false }: { embedded?: boolean } = {}): J
   const [needsPermission, setNeedsPermission] = useState(true)
   const [showSkeleton, setShowSkeleton] = useState(false)
   const [showFaceMesh, setShowFaceMesh] = useState(false)
-  const [outputOpen, setOutputOpen] = useState(false)
+  const [outputCount, setOutputCount] = useState(0)
+  // When on, effects are for the projector/TV only - the recording stays clean.
+  const [effectsOnly, setEffectsOnly] = useState<boolean>(
+    () => localStorage.getItem(EFFECTS_ONLY_KEY) === '1'
+  )
   const [outMode, setOutMode] = useState<string>(() => localStorage.getItem(MODE_KEY) ?? 'camera')
   const [screenLook, setScreenLook] = useState<string>(() => localStorage.getItem(LOOK_KEY) ?? 'flat')
   const [screenSource, setScreenSource] = useState<string>(
@@ -356,12 +365,12 @@ export function CameraView({ embedded = false }: { embedded?: boolean } = {}): J
     return () => clearTimeout(t)
   }, [dropFx])
 
-  // Track whether the projector output window is open.
+  // Track how many projector output windows are open.
   useEffect(() => {
     let alive = true
     window.djCompanion.output
-      ?.isOpen()
-      .then((v) => alive && setOutputOpen(v))
+      ?.count?.()
+      .then((n) => alive && setOutputCount(n))
       .catch(() => undefined)
     return () => {
       alive = false
@@ -426,6 +435,7 @@ export function CameraView({ embedded = false }: { embedded?: boolean } = {}): J
   useEffect(() => localStorage.setItem(FX_KEY, JSON.stringify(fxParams)), [fxParams])
   useEffect(() => localStorage.setItem(AUTO_KEY, auto ? '1' : '0'), [auto])
   useEffect(() => localStorage.setItem(DISPLAY_KEY, JSON.stringify(display)), [display])
+  useEffect(() => localStorage.setItem(EFFECTS_ONLY_KEY, effectsOnly ? '1' : '0'), [effectsOnly])
 
   // Mirror the program camera to the projector's camera-mode + recording source.
   useEffect(() => {
@@ -553,15 +563,18 @@ export function CameraView({ embedded = false }: { embedded?: boolean } = {}): J
     }
   }
 
-  const toggleOutput = async (): Promise<void> => {
+  const openOutput = async (): Promise<void> => {
     try {
-      if (outputOpen) {
-        await window.djCompanion.output?.close()
-        setOutputOpen(false)
-      } else {
-        await window.djCompanion.output?.open()
-        setOutputOpen(true)
-      }
+      const n = await window.djCompanion.output?.open()
+      if (typeof n === 'number') setOutputCount(n)
+    } catch (err) {
+      setStatus(`Output window error: ${(err as Error)?.message ?? err}`)
+    }
+  }
+  const closeOutputs = async (): Promise<void> => {
+    try {
+      await window.djCompanion.output?.close()
+      setOutputCount(0)
     } catch (err) {
       setStatus(`Output window error: ${(err as Error)?.message ?? err}`)
     }
@@ -853,13 +866,29 @@ export function CameraView({ embedded = false }: { embedded?: boolean } = {}): J
           )}
 
           <h3 style={{ marginTop: 8 }}>Output (background)</h3>
-          <button className={`cam-output-btn${outputOpen ? ' active' : ''}`} onClick={toggleOutput}>
-            {outputOpen ? 'Close projector output' : 'Open projector output'}
-          </button>
+          <div className="cam-out-btnrow">
+            <button className="cam-output-btn" onClick={openOutput}>
+              {outputCount > 0 ? 'Open another output' : 'Open projector output'}
+            </button>
+            {outputCount > 0 && (
+              <button className="cam-output-btn cam-output-close" onClick={closeOutputs}>
+                Close all ({outputCount})
+              </button>
+            )}
+          </div>
           <p className="settings-hint">
-            Full-screen on a second display (projector / stage TV). This screen bus is separate
-            from what you record.
+            Full-screen on a second display (projector / stage TV); open one per screen. This screen
+            bus is separate from what you record.
           </p>
+
+          <label className="cam-out-row cam-out-check" title="Keep effects on the projector/TV and the tiles, but record the clean camera">
+            <input
+              type="checkbox"
+              checked={effectsOnly}
+              onChange={(e) => setEffectsOnly(e.target.checked)}
+            />
+            <span>Effects only for projector (record clean camera)</span>
+          </label>
 
           <label className="cam-out-row">
             <span>Show</span>
@@ -1041,6 +1070,7 @@ export function CameraView({ embedded = false }: { embedded?: boolean } = {}): J
                       detectFraming={auto}
                       recordCanvas={programId === id ? recCanvasEl : null}
                       recordAspect={ASPECTS.find((a) => a.id === display.aspect)?.ratio ?? null}
+                      recordClean={effectsOnly}
                       showSkeleton={showSkeleton}
                       showFaceMesh={showFaceMesh}
                       beatRef={beatRef}

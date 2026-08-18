@@ -47,6 +47,7 @@ export function CameraCanvas({
   framingNeedsFace = false,
   recordCanvas = null,
   recordAspect = null,
+  recordClean = false,
   className = 'cam-canvas',
   onFeatures,
   onFraming,
@@ -64,6 +65,9 @@ export function CameraCanvas({
   recordCanvas?: HTMLCanvasElement | null
   /** Aspect ratio to shape the record canvas to (null = the source's own). */
   recordAspect?: number | null
+  /** Record the plain camera feed even while the tile shows an effect (so the
+   *  file stays clean while the projector/TV keeps the effect). */
+  recordClean?: boolean
   beatRef: React.MutableRefObject<number>
   audioRef: React.MutableRefObject<AudioReact>
   /** Live dominant lighting color (0-255) for effects that match the rig. */
@@ -93,8 +97,10 @@ export function CameraCanvas({
   fitRef.current = fit
   const recordCanvasRef = useRef(recordCanvas)
   const recordAspectRef = useRef(recordAspect)
+  const recordCleanRef = useRef(recordClean)
   recordCanvasRef.current = recordCanvas
   recordAspectRef.current = recordAspect
+  recordCleanRef.current = recordClean
   const overlayIdRef = useRef(overlayId)
   const overlayParamsRef = useRef<Record<string, number>>(overlayParams ?? {})
   overlayIdRef.current = overlayId
@@ -282,8 +288,14 @@ export function CameraCanvas({
         const rctx = rec.getContext('2d')
         if (rctx) {
           const recInput: VisualInput = { ...input, w: rw, h: rh }
-          visual.render(rctx, recInput)
-          if (overlay) renderOverlayLayer(rctx, recInput, overlay, overlayParamsRef.current)
+          // "Effects only for projector" records the clean camera; otherwise the
+          // recording matches the tile's effect (+ combined overlay).
+          if (recordCleanRef.current) {
+            getVisual('camera').render(rctx, recInput)
+          } else {
+            visual.render(rctx, recInput)
+            if (overlay) renderOverlayLayer(rctx, recInput, overlay, overlayParamsRef.current)
+          }
         }
       }
 

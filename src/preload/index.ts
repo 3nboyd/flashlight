@@ -112,9 +112,12 @@ const api = {
       ipcRenderer.send('lighting:audioFeatures', features)
   },
   output: {
-    open: (): Promise<boolean> => ipcRenderer.invoke('output:open'),
-    close: (): Promise<boolean> => ipcRenderer.invoke('output:close'),
-    isOpen: (): Promise<boolean> => ipcRenderer.invoke('output:isOpen')
+    /** Opens ANOTHER projector/TV output window; resolves to the count now open. */
+    open: (): Promise<number> => ipcRenderer.invoke('output:open'),
+    /** Closes all output windows; resolves to 0. */
+    close: (): Promise<number> => ipcRenderer.invoke('output:close'),
+    isOpen: (): Promise<boolean> => ipcRenderer.invoke('output:isOpen'),
+    count: (): Promise<number> => ipcRenderer.invoke('output:count')
   },
   popout: {
     open: (name: string): Promise<boolean> => ipcRenderer.invoke('popout:open', name),

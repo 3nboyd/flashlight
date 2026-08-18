@@ -280,6 +280,28 @@
   border-color: transparent;
 }
 
+.cam-out-btnrow {
+  display: flex;
+  gap: 6px;
+  flex-wrap: wrap;
+}
+.cam-out-btnrow .cam-output-btn {
+  flex: 1 1 auto;
+  text-align: center;
+}
+.cam-output-close:hover {
+  border-color: #ef4444;
+  color: #ef4444;
+}
+
+.cam-out-check {
+  gap: 8px;
+  cursor: pointer;
+}
+.cam-out-check > span {
+  flex: 1;
+}
+
 .cam-out-row {
   display: flex;
   align-items: center;
