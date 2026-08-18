@@ -633,43 +633,11 @@
   grid-auto-rows: 1fr;
 }
 
-.cam-grid.count-1 {
-  grid-template-columns: 1fr;
-  grid-template-rows: 1fr;
-}
-.cam-grid.count-2 {
-  grid-template-columns: 1fr 1fr;
-  grid-template-rows: 1fr;
-}
-.cam-grid.count-3,
-.cam-grid.count-4 {
-  grid-template-columns: 1fr 1fr;
-  grid-template-rows: 1fr 1fr;
-}
-
-/* Stack cameras in their true aspect ratio, filling the width, so horizontal
-   cams sit one above another (big, no black bars) instead of being crammed
-   into squares. Overflows scroll rather than shrink below the aspect. */
-.cam-grid.cam-stack {
-  display: flex;
-  flex-direction: column;
-  gap: 6px;
-  padding: 4px;
-  overflow-y: auto;
-  justify-content: safe center;
-}
-
-.cam-stack .cam-tile {
-  width: 100%;
-  flex: 0 0 auto;
-  aspect-ratio: var(--cam-aspect, 16 / 9);
-}
-
-/* "Match camera": no fixed aspect - tiles share the height. */
-.cam-stack.aspect-source .cam-tile {
-  aspect-ratio: auto;
-  flex: 1 1 0;
-  min-height: 0;
+/* Collage: pack every camera into a grid that fits the stage at once. The tile
+   fills its cell; letterbox-vs-crop is handled inside the canvas by fit/fill, so
+   no camera scrolls off. Grid columns/rows are set inline from the count. */
+.cam-grid.cam-collage {
+  gap: 5px;
 }
 
 .cam-tile {
@@ -701,6 +669,22 @@
   color: #fff;
   background: rgba(239, 68, 68, 0.85);
   font-weight: 700;
+}
+
+/* The live final cut sitting in a spare collage cell. */
+.cam-program-cell {
+  padding: 0;
+  border: 2px solid rgba(239, 68, 68, 0.85);
+  background: #000;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+.cam-program-cell-canvas {
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
+  display: block;
 }
 
 .cam-program-hidden {

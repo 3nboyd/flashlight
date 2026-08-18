@@ -26,13 +26,26 @@ const CAM_MIDI_KEY = 'djc.camera.midi'
 const DISPLAY_KEY = 'djc.camera.display'
 
 /** Aspect-ratio options for the camera tiles (CSS aspect-ratio value). */
-const ASPECTS: { id: string; label: string; css: string }[] = [
-  { id: '16:9', label: 'Landscape 16:9', css: '16 / 9' },
-  { id: '4:3', label: 'Landscape 4:3', css: '4 / 3' },
-  { id: '1:1', label: 'Square 1:1', css: '1 / 1' },
-  { id: '9:16', label: 'Portrait 9:16', css: '9 / 16' },
-  { id: 'source', label: 'Match camera', css: 'auto' }
+const ASPECTS: { id: string; label: string; css: string; ratio: number | null }[] = [
+  { id: '16:9', label: 'Landscape 16:9', css: '16 / 9', ratio: 16 / 9 },
+  { id: '4:3', label: 'Landscape 4:3', css: '4 / 3', ratio: 4 / 3 },
+  { id: '1:1', label: 'Square 1:1', css: '1 / 1', ratio: 1 },
+  { id: '9:16', label: 'Portrait 9:16', css: '9 / 16', ratio: 9 / 16 },
+  // null ratio = keep the source camera's own shape.
+  { id: 'source', label: 'Match camera', css: 'auto', ratio: null }
 ]
+
+/** Columns/rows that pack N camera tiles into a tight collage. When the grid
+ *  has a spare trailing cell, the live "final cut" preview fills it. */
+function collageDims(n: number): { cols: number; rows: number } {
+  if (n <= 1) return { cols: 1, rows: 1 }
+  if (n === 2) return { cols: 2, rows: 1 }
+  if (n <= 4) return { cols: 2, rows: 2 }
+  if (n <= 6) return { cols: 3, rows: 2 }
+  if (n <= 9) return { cols: 3, rows: 3 }
+  if (n <= 12) return { cols: 4, rows: 3 }
+  return { cols: 4, rows: Math.ceil(n / 4) }
+}
 const MODE_KEY = 'djc.output.mode'
 const LOOK_KEY = 'djc.output.screenLook'
 const SOURCE_KEY = 'djc.output.screenSource'
@@ -228,6 +241,9 @@ export function CameraView({ embedded = false }: { embedded?: boolean } = {}): J
   // Transient beat-drop effect override: { effect, until } for the program cam.
   const [dropFx, setDropFx] = useState<{ effect: string; until: number } | null>(null)
   const dropFxRef = useRef(dropFx)
+  // Chosen recording aspect ratio (null = match source), read by the compositor.
+  const aspectRatioRef = useRef<number | null>(null)
+  aspectRatioRef.current = ASPECTS.find((a) => a.id === display.aspect)?.ratio ?? null
   programIdRef.current = programId
   autoRef.current = auto
   camMidiRef.current = camMidi
@@ -441,13 +457,23 @@ export function CameraView({ embedded = false }: { embedded?: boolean } = {}): J
     })
   }, [director])
 
-  // Program compositor: copy the active camera's canvas into one canvas so
-  // recording follows the auto-switch without restarting the recorder.
+  // Program compositor: render the active camera into one canvas so recording
+  // follows the auto-switch without restarting the recorder. The record canvas
+  // is reshaped to the chosen aspect ratio (cover-crop) so the final cut keeps a
+  // consistent shape no matter what grid cell the source tile occupies; the
+  // visible corner + popup mirrors then copy that record canvas 1:1.
   useEffect(() => {
     let raf = 0
-    // Copy src into a canvas, matching its backing store to the source dims so
-    // the intrinsic aspect ratio is preserved (CSS scales the element down).
-    const mirror = (dst: HTMLCanvasElement | null, src: HTMLCanvasElement): void => {
+    // Cover-draw src into dst at dst's own dimensions (crops overflow, centered).
+    const coverDraw = (dst: HTMLCanvasElement, src: HTMLCanvasElement): void => {
+      const ctx = dst.getContext('2d')
+      if (!ctx) return
+      const scale = Math.max(dst.width / src.width, dst.height / src.height)
+      const dw = src.width * scale
+      const dh = src.height * scale
+      ctx.drawImage(src, (dst.width - dw) / 2, (dst.height - dh) / 2, dw, dh)
+    }
+    const copy = (dst: HTMLCanvasElement | null, src: HTMLCanvasElement): void => {
       if (!dst) return
       if (dst.width !== src.width || dst.height !== src.height) {
         dst.width = src.width
@@ -459,11 +485,20 @@ export function CameraView({ embedded = false }: { embedded?: boolean } = {}): J
     const loop = (): void => {
       raf = requestAnimationFrame(loop)
       const src = programIdRef.current ? tileCanvases.current[programIdRef.current] : null
-      if (!src || src.width === 0) return
-      // Hidden recording source, plus the visible corner + popup mirrors.
-      mirror(programCanvasRef.current, src)
-      mirror(programPreviewRef.current, src)
-      mirror(programBigRef.current, src)
+      const rec = programCanvasRef.current
+      if (!src || src.width === 0 || !rec) return
+      // Size the record canvas to the chosen aspect (or the source's own shape).
+      const ar = aspectRatioRef.current
+      const targetH = src.height
+      const targetW = ar == null ? src.width : Math.round(targetH * ar)
+      if (rec.width !== targetW || rec.height !== targetH) {
+        rec.width = targetW
+        rec.height = targetH
+      }
+      coverDraw(rec, src)
+      // The visible mirrors copy the finished record canvas so they match it.
+      copy(programPreviewRef.current, rec)
+      copy(programBigRef.current, rec)
     }
     loop()
     return () => cancelAnimationFrame(raf)
@@ -674,6 +709,11 @@ export function CameraView({ embedded = false }: { embedded?: boolean } = {}): J
       </button>
     )
   }
+
+  // Collage grid dimensions; when a trailing cell is spare, the live final cut
+  // fills the bottom-right (e.g. 3 cameras -> 2x2 with the program in cell 4).
+  const { cols, rows } = collageDims(enabled.length)
+  const showProgramCell = enabled.length >= 2 && cols * rows > enabled.length
 
   return (
     <div className={`view camera-view${embedded ? ' camera-view--embedded' : ''}`}>
@@ -931,12 +971,11 @@ export function CameraView({ embedded = false }: { embedded?: boolean } = {}): J
               <div className="camera-empty">Enable a camera to preview it here.</div>
             ) : (
               <div
-                className={`cam-grid cam-stack count-${Math.min(enabled.length, 4)}${display.aspect === 'source' ? ' aspect-source' : ''}`}
-                style={
-                  {
-                    '--cam-aspect': ASPECTS.find((a) => a.id === display.aspect)?.css ?? '16 / 9'
-                  } as React.CSSProperties
-                }
+                className="cam-grid cam-collage"
+                style={{
+                  gridTemplateColumns: `repeat(${cols}, minmax(0, 1fr))`,
+                  gridTemplateRows: `repeat(${rows}, minmax(0, 1fr))`
+                }}
               >
                 {enabled.map((id) => {
                   const cfg = getConfig(id)
@@ -977,12 +1016,25 @@ export function CameraView({ embedded = false }: { embedded?: boolean } = {}): J
                     />
                   )
                 })}
+                {/* Spare bottom-right cell shows the live final cut. */}
+                {showProgramCell && (
+                  <button
+                    className="cam-tile cam-program-cell"
+                    style={{ gridColumn: cols, gridRow: rows }}
+                    title="Final cut (what's being recorded). Click to enlarge."
+                    onClick={() => setProgramBig(true)}
+                  >
+                    <canvas ref={programPreviewRef} className="cam-program-cell-canvas" />
+                    <span className="cam-badge program">● PROGRAM</span>
+                  </button>
+                )}
               </div>
             )}
             {/* Hidden program compositor - the recording source. */}
             <canvas ref={programCanvasRef} className="cam-program-hidden" />
-            {/* Small live preview of the final cut; click to enlarge. */}
-            {enabled.length > 0 && (
+            {/* Floating final-cut preview, only when the grid has no spare cell
+                for it (otherwise the program lives in the collage cell above). */}
+            {enabled.length >= 2 && !showProgramCell && (
               <button
                 className="cam-program-preview"
                 title="Final cut (what's being recorded). Click to enlarge."
