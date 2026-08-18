@@ -399,14 +399,20 @@
 }
 
 .rec-audio-select {
-  flex: 1 1 auto;
+  flex: 0 1 128px;
   min-width: 0;
+  max-width: 140px;
   font-size: 11px;
   padding: 4px 6px;
   border-radius: 6px;
   border: 1px solid var(--border-strong);
   background: var(--surface-2, #1a1a22);
   color: var(--text-primary);
+}
+
+/* Spare room in the record bar for a future small control. */
+.rec-bar-spacer {
+  flex: 1 1 auto;
 }
 
 .rec-settings {
@@ -679,6 +685,87 @@
   opacity: 0;
   pointer-events: none;
   left: -9999px;
+}
+
+/* Small live preview of the final cut, pinned to the stage bottom-right. */
+.cam-program-preview {
+  position: absolute;
+  right: 10px;
+  bottom: 10px;
+  z-index: 4;
+  padding: 0;
+  border: 1.5px solid rgba(255, 90, 90, 0.85);
+  border-radius: 8px;
+  background: #000;
+  overflow: hidden;
+  cursor: pointer;
+  line-height: 0;
+  box-shadow: 0 4px 14px rgba(0, 0, 0, 0.55);
+  transition: transform 0.12s ease, box-shadow 0.12s ease;
+}
+.cam-program-preview:hover {
+  transform: translateY(-1px);
+  box-shadow: 0 6px 18px rgba(0, 0, 0, 0.6);
+}
+.cam-program-preview-canvas {
+  display: block;
+  height: 92px;
+  width: auto;
+  max-width: 200px;
+}
+.cam-program-preview-tag {
+  position: absolute;
+  left: 5px;
+  top: 4px;
+  font-size: 9px;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  color: #ff6a6a;
+  background: rgba(0, 0, 0, 0.5);
+  padding: 1px 5px;
+  border-radius: 4px;
+  line-height: 1.3;
+}
+
+/* Enlarged program popup. */
+.cam-program-modal {
+  position: fixed;
+  inset: 0;
+  z-index: 50;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: rgba(0, 0, 0, 0.7);
+  padding: 32px;
+}
+.cam-program-modal-inner {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  max-width: min(90vw, 1280px);
+  max-height: 90vh;
+}
+.cam-program-modal-bar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+.cam-program-modal-title {
+  font-size: 12px;
+  font-weight: 600;
+  color: #ff6a6a;
+  letter-spacing: 0.02em;
+}
+.cam-program-modal-canvas {
+  display: block;
+  width: auto;
+  height: auto;
+  max-width: 100%;
+  max-height: calc(90vh - 40px);
+  border: 1px solid var(--border-strong);
+  border-radius: var(--radius-lg);
+  background: #000;
 }
 
 .cam-hud-target {

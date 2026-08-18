@@ -203,6 +203,9 @@ export function CameraView({ embedded = false }: { embedded?: boolean } = {}): J
   const framingsRef = useRef<Record<string, CameraSignal>>({})
   const tileCanvases = useRef<Record<string, HTMLCanvasElement | null>>({})
   const programCanvasRef = useRef<HTMLCanvasElement | null>(null)
+  // Visible mirrors of the program: a small corner preview and an enlarged popup.
+  const programPreviewRef = useRef<HTMLCanvasElement | null>(null)
+  const programBigRef = useRef<HTMLCanvasElement | null>(null)
   const programIdRef = useRef<string | null>(null)
   const enabledRef = useRef<string[]>([])
   const configsRef = useRef<Record<string, CameraConfig>>({})
@@ -212,6 +215,8 @@ export function CameraView({ embedded = false }: { embedded?: boolean } = {}): J
   const directorRefSettings = useRef<DirectorSettings>(director)
   const lastBeatPhaseRef = useRef(0)
   const surgeArmedRef = useRef(true)
+  // Whether the corner program preview is enlarged into a popup.
+  const [programBig, setProgramBig] = useState(false)
   // Transient beat-drop effect override: { effect, until } for the program cam.
   const [dropFx, setDropFx] = useState<{ effect: string; until: number } | null>(null)
   const dropFxRef = useRef(dropFx)
@@ -431,17 +436,25 @@ export function CameraView({ embedded = false }: { embedded?: boolean } = {}): J
   // recording follows the auto-switch without restarting the recorder.
   useEffect(() => {
     let raf = 0
-    const loop = (): void => {
-      raf = requestAnimationFrame(loop)
-      const dst = programCanvasRef.current
-      const src = programIdRef.current ? tileCanvases.current[programIdRef.current] : null
-      if (!dst || !src || src.width === 0) return
+    // Copy src into a canvas, matching its backing store to the source dims so
+    // the intrinsic aspect ratio is preserved (CSS scales the element down).
+    const mirror = (dst: HTMLCanvasElement | null, src: HTMLCanvasElement): void => {
+      if (!dst) return
       if (dst.width !== src.width || dst.height !== src.height) {
         dst.width = src.width
         dst.height = src.height
       }
       const ctx = dst.getContext('2d')
       if (ctx) ctx.drawImage(src, 0, 0)
+    }
+    const loop = (): void => {
+      raf = requestAnimationFrame(loop)
+      const src = programIdRef.current ? tileCanvases.current[programIdRef.current] : null
+      if (!src || src.width === 0) return
+      // Hidden recording source, plus the visible corner + popup mirrors.
+      mirror(programCanvasRef.current, src)
+      mirror(programPreviewRef.current, src)
+      mirror(programBigRef.current, src)
     }
     loop()
     return () => cancelAnimationFrame(raf)
@@ -926,6 +939,17 @@ export function CameraView({ embedded = false }: { embedded?: boolean } = {}): J
             )}
             {/* Hidden program compositor - the recording source. */}
             <canvas ref={programCanvasRef} className="cam-program-hidden" />
+            {/* Small live preview of the final cut; click to enlarge. */}
+            {enabled.length > 0 && (
+              <button
+                className="cam-program-preview"
+                title="Final cut (what's being recorded). Click to enlarge."
+                onClick={() => setProgramBig(true)}
+              >
+                <canvas ref={programPreviewRef} className="cam-program-preview-canvas" />
+                <span className="cam-program-preview-tag">● PGM</span>
+              </button>
+            )}
           </div>
 
           <div className="cam-hud">
@@ -1008,6 +1032,20 @@ export function CameraView({ embedded = false }: { embedded?: boolean } = {}): J
           aspects={ASPECTS.map((a) => ({ id: a.id, label: a.label }))}
           onClose={() => setDirectorOpen(false)}
         />
+      )}
+
+      {programBig && (
+        <div className="cam-program-modal" onClick={() => setProgramBig(false)}>
+          <div className="cam-program-modal-inner" onClick={(e) => e.stopPropagation()}>
+            <div className="cam-program-modal-bar">
+              <span className="cam-program-modal-title">● Final cut (recording source)</span>
+              <button className="cam-icon-btn" title="Close" onClick={() => setProgramBig(false)}>
+                ✕
+              </button>
+            </div>
+            <canvas ref={programBigRef} className="cam-program-modal-canvas" />
+          </div>
+        </div>
       )}
     </div>
   )

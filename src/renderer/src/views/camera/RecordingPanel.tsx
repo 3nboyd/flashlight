@@ -259,6 +259,7 @@ export function RecordingPanel({
             </option>
           ))}
         </select>
+        <span className="rec-bar-spacer" />
         <button
           className={`cam-icon-btn${settingsOpen ? ' active' : ''}`}
           title="Recording settings (folder, format, quality)"
