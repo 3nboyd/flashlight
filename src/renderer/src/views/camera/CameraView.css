@@ -507,6 +507,11 @@
   gap: 4px;
 }
 
+.cam-rec-saved-row {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
 .cam-rec-saved-link {
   text-align: left;
   font-size: 11px;
@@ -516,6 +521,29 @@
   padding: 0;
   cursor: pointer;
   text-decoration: underline;
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.cam-rec-mini {
+  flex: 0 0 auto;
+  font-size: 10px;
+  padding: 2px 7px;
+  border-radius: 5px;
+  border: 1px solid var(--border-strong);
+  background: transparent;
+  color: var(--text-secondary);
+  cursor: pointer;
+}
+.cam-rec-mini:hover:not(:disabled) {
+  border-color: var(--accent, #38bdf8);
+  color: var(--text-primary);
+}
+.cam-rec-mini:disabled {
+  opacity: 0.5;
+  cursor: default;
 }
 
 .cam-hud {

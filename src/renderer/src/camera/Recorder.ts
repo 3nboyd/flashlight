@@ -1,8 +1,10 @@
 /**
  * Records the live visual canvas (and optionally audio) to file(s) using the
- * browser MediaRecorder. Can mux audio+video into one file, or capture them as
- * two separate files. The encoded bytes are handed to the main process to write
- * to the user's chosen folder.
+ * browser MediaRecorder. Instead of buffering the whole take in memory, each
+ * ~1s chunk is STREAMED to the main process and appended straight to disk. This
+ * keeps renderer memory flat no matter how long the recording runs (hours), and
+ * means a crash only ever loses the last moment - essential for long sets. WebM
+ * chunks concatenate into one valid file; MP4 conversion is done afterwards.
  */
 
 export interface RecordFormat {
@@ -11,18 +13,20 @@ export interface RecordFormat {
   ext: string
 }
 
-/** Video container/codec options, filtered to what this build actually supports. */
+/** Video container/codec options, filtered to what this build actually supports.
+ *  WebM is listed first: it streams to disk as one valid, concatenable file, so
+ *  it's the safe choice for long recordings (MP4 is a post-set conversion). */
 const VIDEO_CANDIDATES: RecordFormat[] = [
-  { label: 'MP4 (H.264)', mimeType: 'video/mp4;codecs=h264,aac', ext: 'mp4' },
-  { label: 'MP4', mimeType: 'video/mp4', ext: 'mp4' },
-  { label: 'WebM (VP9)', mimeType: 'video/webm;codecs=vp9,opus', ext: 'webm' },
+  { label: 'WebM (VP9) — recommended for long sets', mimeType: 'video/webm;codecs=vp9,opus', ext: 'webm' },
   { label: 'WebM (VP8)', mimeType: 'video/webm;codecs=vp8,opus', ext: 'webm' },
-  { label: 'WebM', mimeType: 'video/webm', ext: 'webm' }
+  { label: 'WebM', mimeType: 'video/webm', ext: 'webm' },
+  { label: 'MP4 (H.264)', mimeType: 'video/mp4;codecs=h264,aac', ext: 'mp4' },
+  { label: 'MP4', mimeType: 'video/mp4', ext: 'mp4' }
 ]
 
 const AUDIO_CANDIDATES: RecordFormat[] = [
-  { label: 'M4A (AAC)', mimeType: 'audio/mp4', ext: 'm4a' },
   { label: 'WebM (Opus)', mimeType: 'audio/webm;codecs=opus', ext: 'webm' },
+  { label: 'M4A (AAC)', mimeType: 'audio/mp4', ext: 'm4a' },
   { label: 'WebM', mimeType: 'audio/webm', ext: 'webm' }
 ]
 
@@ -46,11 +50,8 @@ export interface RecordOptions {
   audioDeviceId: string | null
   /** Write audio + video as two separate files instead of one muxed file. */
   separate: boolean
-}
-
-export interface RecordedFile {
-  name: string
-  buffer: ArrayBuffer
+  /** Folder the file(s) stream into. */
+  folder: string
 }
 
 function timestamp(): string {
@@ -59,16 +60,22 @@ function timestamp(): string {
   return `${d.getFullYear()}${p(d.getMonth() + 1)}${p(d.getDate())}-${p(d.getHours())}${p(d.getMinutes())}${p(d.getSeconds())}`
 }
 
+interface Track {
+  rec: MediaRecorder
+  streamId: number
+  path: string
+  /** Serializes chunk writes so bytes land on disk in order. */
+  writeChain: Promise<void>
+}
+
 export class Recorder {
-  private recorders: MediaRecorder[] = []
-  private chunks: Blob[][] = []
-  private names: string[] = []
+  private tracks: Track[] = []
   private videoStream: MediaStream | null = null
   private audioStream: MediaStream | null = null
   private startedAt = 0
 
   get recording(): boolean {
-    return this.recorders.length > 0
+    return this.tracks.length > 0
   }
 
   get elapsedMs(): number {
@@ -89,57 +96,63 @@ export class Recorder {
     }
 
     const base = `dj-${timestamp()}`
-    this.recorders = []
-    this.chunks = []
-    this.names = []
+    this.tracks = []
 
-    const startOne = (stream: MediaStream, mimeType: string, name: string): void => {
-      const idx = this.recorders.length
+    const startOne = async (stream: MediaStream, mimeType: string, filename: string): Promise<void> => {
+      const { id, path } = await window.djCompanion.recording.openStream(opts.folder, filename)
       const rec = new MediaRecorder(stream, { mimeType })
-      this.chunks[idx] = []
+      const track: Track = { rec, streamId: id, path, writeChain: Promise.resolve() }
       rec.ondataavailable = (e): void => {
-        if (e.data && e.data.size > 0) this.chunks[idx].push(e.data)
+        if (!e.data || e.data.size === 0) return
+        // Chain each write so chunks reach disk in order; the Blob is held only
+        // until its bytes are flushed, so memory stays flat.
+        track.writeChain = track.writeChain
+          .then(() => e.data.arrayBuffer())
+          .then((buf) => {
+            void window.djCompanion.recording.writeChunk(id, buf)
+          })
+          .catch(() => undefined)
       }
-      rec.start(1000) // flush in ~1s slices so long takes don't balloon in memory
-      this.recorders.push(rec)
-      this.names.push(name)
+      rec.start(1000) // flush a chunk to disk about once per second
+      this.tracks.push(track)
     }
 
     if (opts.includeAudio && opts.separate && audioTracks.length > 0) {
-      startOne(new MediaStream(videoStream.getVideoTracks()), opts.format.mimeType, `${base}.${opts.format.ext}`)
+      await startOne(new MediaStream(videoStream.getVideoTracks()), opts.format.mimeType, `${base}.${opts.format.ext}`)
       const af = pickAudioFormat()
-      if (af) startOne(new MediaStream(audioTracks), af.mimeType, `${base}-audio.${af.ext}`)
+      if (af) await startOne(new MediaStream(audioTracks), af.mimeType, `${base}-audio.${af.ext}`)
     } else {
       const combined = new MediaStream([...videoStream.getVideoTracks(), ...audioTracks])
-      startOne(combined, opts.format.mimeType, `${base}.${opts.format.ext}`)
+      await startOne(combined, opts.format.mimeType, `${base}.${opts.format.ext}`)
     }
     this.startedAt = Date.now()
   }
 
-  async stop(): Promise<RecordedFile[]> {
+  /** Stop, flush every pending chunk to disk, close the files. Returns paths. */
+  async stop(): Promise<string[]> {
     if (!this.recording) return []
-    const recs = this.recorders
-    const names = this.names
-    const blobs = await Promise.all(
-      recs.map(
-        (rec, idx) =>
-          new Promise<Blob>((resolve) => {
-            rec.onstop = (): void => resolve(new Blob(this.chunks[idx], { type: rec.mimeType }))
-            rec.stop()
+    const tracks = this.tracks
+    await Promise.all(
+      tracks.map(
+        (t) =>
+          new Promise<void>((resolve) => {
+            t.rec.onstop = (): void => resolve()
+            t.rec.stop()
           })
       )
     )
     this.videoStream?.getTracks().forEach((t) => t.stop())
     this.audioStream?.getTracks().forEach((t) => t.stop())
-    const files: RecordedFile[] = []
-    for (let i = 0; i < blobs.length; i++) {
-      files.push({ name: names[i], buffer: await blobs[i].arrayBuffer() })
+
+    const paths: string[] = []
+    for (const t of tracks) {
+      await t.writeChain // ensure the final chunk is written before closing
+      const p = await window.djCompanion.recording.closeStream(t.streamId)
+      paths.push(p ?? t.path)
     }
-    this.recorders = []
-    this.chunks = []
-    this.names = []
+    this.tracks = []
     this.videoStream = null
     this.audioStream = null
-    return files
+    return paths
   }
 }

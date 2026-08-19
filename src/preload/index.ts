@@ -131,14 +131,23 @@ const api = {
     }
   },
   recording: {
-    save: (dir: string, filename: string, data: ArrayBuffer): Promise<string> =>
-      ipcRenderer.invoke('recording:save', dir, filename, data),
-    convert: (
-      dir: string,
+    /** Open a disk file for streaming; returns a stream id + the final path. */
+    openStream: (dir: string, filename: string): Promise<{ id: number; path: string }> =>
+      ipcRenderer.invoke('recording:openStream', dir, filename),
+    /** Append one recorded chunk to a stream (written straight to disk). */
+    writeChunk: (id: number, data: ArrayBuffer): Promise<boolean> =>
+      ipcRenderer.invoke('recording:writeChunk', id, data),
+    /** Flush + close a stream; returns its path. */
+    closeStream: (id: number): Promise<string | null> =>
+      ipcRenderer.invoke('recording:closeStream', id),
+    /** Transcode a finished recording file to MP4/MOV (also repairs a bad WebM). */
+    convertFile: (
+      inPath: string,
       outName: string,
-      data: ArrayBuffer,
       quality: 'high' | 'balanced' | 'small'
-    ): Promise<string> => ipcRenderer.invoke('recording:convert', dir, outName, data, quality),
+    ): Promise<string> => ipcRenderer.invoke('recording:convertFile', inPath, outName, quality),
+    /** Re-mux a WebM into a clean copy (fixes a file that wasn't closed). */
+    repair: (inPath: string): Promise<string> => ipcRenderer.invoke('recording:repair', inPath),
     reveal: (path: string): Promise<boolean> => ipcRenderer.invoke('recording:reveal', path)
   }
 }

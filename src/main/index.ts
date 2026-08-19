@@ -9,7 +9,7 @@ import { registerRenameHandlers } from './ipc/rename'
 import { registerLightingHandlers, disposeLighting } from './ipc/lighting'
 import { registerOutputHandlers, disposeOutput } from './ipc/output'
 import { registerPopoutHandlers, disposePopouts } from './ipc/popout'
-import { registerRecordingHandlers } from './ipc/recording'
+import { registerRecordingHandlers, disposeRecording } from './ipc/recording'
 
 const isMac = process.platform === 'darwin'
 
@@ -92,4 +92,5 @@ app.on('before-quit', () => {
   disposeLighting()
   disposeOutput()
   disposePopouts()
+  disposeRecording()
 })

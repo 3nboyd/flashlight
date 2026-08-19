@@ -9,12 +9,11 @@ const SEPARATE_KEY = 'djc.rec.separate'
 const OUTPUT_KEY = 'djc.rec.output'
 const QUALITY_KEY = 'djc.rec.quality'
 
-type OutputFormat = 'mp4' | 'mov' | 'webm'
+type OutputFormat = 'mp4' | 'mov'
 type Quality = 'high' | 'balanced' | 'small'
 const OUTPUT_LABELS: Record<OutputFormat, string> = {
-  mp4: 'MP4 (H.264) - recommended',
-  mov: 'MOV (H.264)',
-  webm: 'WebM (as recorded, no convert)'
+  mp4: 'MP4 (H.264)',
+  mov: 'MOV (H.264)'
 }
 const QUALITY_LABELS: Record<Quality, string> = {
   high: 'High',
@@ -22,20 +21,19 @@ const QUALITY_LABELS: Record<Quality, string> = {
   small: 'Small file'
 }
 
-/** The recorded WebM name -> the final output name for the chosen container. */
+/** The recorded file name -> the converted output name for the chosen container. */
 function outputName(recordedName: string, output: OutputFormat): string {
   const base = recordedName.replace(/\.[^.]+$/, '')
-  if (output === 'webm') return `${base}.webm`
-  // Audio-only sidecar files become .m4a; video (or muxed) become the container.
   if (/-audio$/.test(base)) return `${base}.m4a`
   return `${base}.${output}`
 }
 
 function fmtElapsed(ms: number): string {
   const s = Math.floor(ms / 1000)
-  const m = Math.floor(s / 60)
+  const h = Math.floor(s / 3600)
+  const m = Math.floor((s % 3600) / 60)
   const p = (n: number): string => String(n).padStart(2, '0')
-  return `${p(m)}:${p(s % 60)}`
+  return `${p(h)}:${p(m)}:${p(s % 60)}`
 }
 
 /** A tiny live level meter for the selected audio input (5 bars). */
@@ -91,9 +89,11 @@ function AudioMeter({ deviceId, active }: { deviceId: string | null; active: boo
 }
 
 /**
- * Records the live program to disk. A compact bar (Record + timer + input level
- * + input picker) keeps the common controls one row; everything else lives
- * behind the settings gear.
+ * Records the live program to disk by STREAMING chunks straight to a file (no
+ * in-memory buffering), so multi-hour sets are safe and a crash only loses the
+ * last moment. Capture is WebM; MP4/MOV is an optional conversion done after the
+ * set. A compact bar keeps Record + timer + input on one row; everything else
+ * (folder, convert, repair) lives behind the settings gear.
  */
 export function RecordingPanel({
   getCanvas
@@ -119,7 +119,7 @@ export function RecordingPanel({
 
   const [recording, setRecording] = useState(false)
   const [elapsed, setElapsed] = useState(0)
-  const [converting, setConverting] = useState(false)
+  const [busy, setBusy] = useState('')
   const [saved, setSaved] = useState<string[]>([])
   const [error, setError] = useState('')
   const [settingsOpen, setSettingsOpen] = useState(false)
@@ -169,7 +169,8 @@ export function RecordingPanel({
         fps: 30,
         includeAudio,
         audioDeviceId: audioDevice,
-        separate
+        separate,
+        folder
       })
       setSaved([])
       setRecording(true)
@@ -180,27 +181,58 @@ export function RecordingPanel({
 
   const stop = async (): Promise<void> => {
     try {
-      const files = await recorderRef.current.stop()
+      // Files are already on disk (streamed); stop just flushes + closes them.
+      const paths = await recorderRef.current.stop()
       setRecording(false)
-      if (output !== 'webm') setConverting(true)
-      const paths: string[] = []
-      for (const f of files) {
-        // Convert transcodes to MP4/MOV via FFmpeg in the main process; WebM is
-        // written straight through.
-        const path = await window.djCompanion.recording.convert(
-          folder!,
-          outputName(f.name, output),
-          f.buffer,
-          quality
-        )
-        paths.push(path)
-      }
-      setConverting(false)
       setSaved(paths)
     } catch (err) {
       setRecording(false)
-      setConverting(false)
-      setError(`Could not save recording: ${(err as Error)?.message ?? err}`)
+      setError(`Could not finish recording: ${(err as Error)?.message ?? err}`)
+    }
+  }
+
+  const convertSaved = async (path: string): Promise<void> => {
+    setError('')
+    setBusy('Converting…')
+    try {
+      const name = path.split('/').pop() ?? 'recording'
+      const out = await window.djCompanion.recording.convertFile(path, outputName(name, output), quality)
+      setSaved((s) => (s.includes(out) ? s : [...s, out]))
+    } catch (err) {
+      setError(`Convert failed: ${(err as Error)?.message ?? err}`)
+    } finally {
+      setBusy('')
+    }
+  }
+
+  const repairSaved = async (path: string): Promise<void> => {
+    setError('')
+    setBusy('Repairing…')
+    try {
+      const out = await window.djCompanion.recording.repair(path)
+      setSaved((s) => (s.includes(out) ? s : [...s, out]))
+    } catch (err) {
+      setError(`Repair failed: ${(err as Error)?.message ?? err}`)
+    } finally {
+      setBusy('')
+    }
+  }
+
+  // Recover/convert a recording file from a previous session (e.g. after a crash).
+  const recoverFile = async (): Promise<void> => {
+    const file = await window.djCompanion.dialog.selectFile([
+      { name: 'Recordings', extensions: ['webm', 'mp4', 'mov', 'mkv'] }
+    ])
+    if (!file) return
+    setError('')
+    setBusy('Repairing…')
+    try {
+      const out = await window.djCompanion.recording.repair(file)
+      setSaved((s) => (s.includes(out) ? s : [...s, out]))
+    } catch (err) {
+      setError(`Repair failed: ${(err as Error)?.message ?? err}`)
+    } finally {
+      setBusy('')
     }
   }
 
@@ -228,6 +260,8 @@ export function RecordingPanel({
     }
   }
 
+  const isWebm = (p: string): boolean => /\.webm$/i.test(p)
+
   if (formats.length === 0) {
     return <p className="settings-hint">Recording is not supported in this build.</p>
   }
@@ -238,9 +272,9 @@ export function RecordingPanel({
         <button
           className={`cam-rec-btn${recording ? ' recording' : ''}`}
           onClick={recording ? stop : start}
-          disabled={converting}
+          disabled={!!busy}
         >
-          {converting ? 'Converting…' : recording ? '■ Stop' : '● Record'}
+          {recording ? '■ Stop' : '● Record'}
         </button>
         <span className={`rec-timer${recording ? ' on' : ''}`}>{fmtElapsed(elapsed)}</span>
         <AudioMeter deviceId={audioDevice} active={includeAudio} />
@@ -260,9 +294,10 @@ export function RecordingPanel({
           ))}
         </select>
         <span className="rec-bar-spacer" />
+        {busy && <span className="rec-timer">{busy}</span>}
         <button
           className={`cam-icon-btn${settingsOpen ? ' active' : ''}`}
-          title="Recording settings (folder, format, quality)"
+          title="Recording settings (folder, convert, repair)"
           onClick={() => setSettingsOpen((v) => !v)}
         >
           ⚙
@@ -274,11 +309,24 @@ export function RecordingPanel({
           <button className="cam-output-btn" onClick={chooseFolder} title={folder ?? ''}>
             Folder: {folderLabel}
           </button>
+          <p className="settings-hint" style={{ margin: 0 }}>
+            Streams straight to disk as WebM (safe for long sets). Convert to MP4/MOV after.
+          </p>
           <label className="cam-rec-field">
-            <span>Output</span>
+            <span>Capture</span>
+            <select value={formatMime} onChange={(e) => setFormat(e.target.value)} disabled={recording}>
+              {formats.map((f: RecordFormat) => (
+                <option key={f.mimeType} value={f.mimeType}>
+                  {f.label}
+                </option>
+              ))}
+            </select>
+          </label>
+          <label className="cam-rec-field">
+            <span>Convert to</span>
             <select
               value={output}
-              disabled={recording || converting}
+              disabled={!!busy}
               onChange={(e) => {
                 const v = e.target.value as OutputFormat
                 setOutput(v)
@@ -292,32 +340,20 @@ export function RecordingPanel({
               ))}
             </select>
           </label>
-          {output !== 'webm' && (
-            <label className="cam-rec-field">
-              <span>Quality</span>
-              <select
-                value={quality}
-                disabled={recording || converting}
-                onChange={(e) => {
-                  const v = e.target.value as Quality
-                  setQuality(v)
-                  localStorage.setItem(QUALITY_KEY, v)
-                }}
-              >
-                {(Object.keys(QUALITY_LABELS) as Quality[]).map((q) => (
-                  <option key={q} value={q}>
-                    {QUALITY_LABELS[q]}
-                  </option>
-                ))}
-              </select>
-            </label>
-          )}
           <label className="cam-rec-field">
-            <span>Codec</span>
-            <select value={formatMime} onChange={(e) => setFormat(e.target.value)} disabled={recording || converting}>
-              {formats.map((f: RecordFormat) => (
-                <option key={f.mimeType} value={f.mimeType}>
-                  {f.label}
+            <span>Quality</span>
+            <select
+              value={quality}
+              disabled={!!busy}
+              onChange={(e) => {
+                const v = e.target.value as Quality
+                setQuality(v)
+                localStorage.setItem(QUALITY_KEY, v)
+              }}
+            >
+              {(Object.keys(QUALITY_LABELS) as Quality[]).map((q) => (
+                <option key={q} value={q}>
+                  {QUALITY_LABELS[q]}
                 </option>
               ))}
             </select>
@@ -336,15 +372,30 @@ export function RecordingPanel({
               Separate audio + video files
             </label>
           )}
+          <button className="cam-output-btn" onClick={recoverFile} disabled={!!busy}>
+            Recover / fix a recording file…
+          </button>
         </div>
       )}
 
       {saved.length > 0 && (
         <div className="cam-rec-saved">
           {saved.map((p) => (
-            <button key={p} className="cam-rec-saved-link" onClick={() => window.djCompanion.recording.reveal(p)}>
-              Saved: {p.split('/').pop()}
-            </button>
+            <div key={p} className="cam-rec-saved-row">
+              <button className="cam-rec-saved-link" onClick={() => window.djCompanion.recording.reveal(p)}>
+                Saved: {p.split('/').pop()}
+              </button>
+              {isWebm(p) && (
+                <>
+                  <button className="cam-rec-mini" disabled={!!busy} onClick={() => convertSaved(p)}>
+                    → {output.toUpperCase()}
+                  </button>
+                  <button className="cam-rec-mini" disabled={!!busy} title="Re-mux into a clean copy" onClick={() => repairSaved(p)}>
+                    Fix
+                  </button>
+                </>
+              )}
+            </div>
           ))}
         </div>
       )}
