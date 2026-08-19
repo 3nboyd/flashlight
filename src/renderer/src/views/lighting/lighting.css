@@ -1654,6 +1654,14 @@
   overflow: hidden;
   text-overflow: ellipsis;
   max-width: 180px;
+  background: transparent;
+  border: none;
+  padding: 0;
+  cursor: pointer;
+  font-family: inherit;
+}
+.midi-indicator:hover {
+  text-decoration: underline;
 }
 .bpm-block .midi-indicator.none {
   color: var(--text-tertiary, #6b7280);

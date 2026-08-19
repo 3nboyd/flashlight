@@ -352,16 +352,21 @@ export function PerformPanel(): JSX.Element {
               +
             </button>
           </div>
-          <div
+          <button
             className={`midi-indicator${midiDevices.length ? '' : ' none'}`}
             title={
               midiDevices.length
-                ? midiDevices.join(', ')
-                : 'No MIDI controller detected. Check it is plugged in; if it still shows none, unplug/replug or restart the app.'
+                ? `${midiDevices.join(', ')} — click to re-scan MIDI`
+                : 'No MIDI controller detected. Click to re-scan; if still none, unplug/replug the controller.'
             }
+            onClick={async () => {
+              const n = await midi.rescan()
+              setMidiDevices(midi.deviceNames())
+              if (n === 0) setMidiDevices([])
+            }}
           >
-            {midiDevices.length ? `● MIDI: ${midiDevices[0]}` : '○ No MIDI detected'}
-          </div>
+            {midiDevices.length ? `● MIDI: ${midiDevices[0]}` : '○ No MIDI — click to re-scan'}
+          </button>
 
           <div className="bpm-audio">
             <div className="bpm-audio-head">

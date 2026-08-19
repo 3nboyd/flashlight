@@ -41,6 +41,7 @@ export interface MidiEvents {
 
 export class MidiPads {
   private access: MIDIAccess | null = null
+  private reattachTimers: number[] = []
   private mapping: MidiMapping = loadMidiMapping()
   private learnArmed = false
   private learnCallback: ((note: number) => void) | null = null
@@ -80,10 +81,23 @@ export class MidiPads {
   private attachInputs(): void {
     if (!this.access) return
     for (const input of this.access.inputs.values()) {
+      // Setting onmidimessage implicitly opens the port; also call open() so a
+      // port that came up 'connected' but 'closed' actually delivers messages.
       input.onmidimessage = (msg) => this.handleMessage(msg)
+      input.open?.().catch(() => undefined)
     }
     this.events?.onDevicesChanged?.(
       [...this.access.inputs.values()].map((i) => i.name ?? 'MIDI device')
+    )
+  }
+
+  /** Re-attach a few times after acquiring: a controller already plugged in at
+   *  launch often reports zero inputs on the first tick and fires no
+   *  statechange, so a single attach misses it. */
+  private scheduleReattach(): void {
+    for (const t of this.reattachTimers) clearTimeout(t)
+    this.reattachTimers = [250, 800, 2000, 4000].map((d) =>
+      window.setTimeout(() => this.attachInputs(), d)
     )
   }
 
@@ -97,6 +111,7 @@ export class MidiPads {
     }
     this.access.onstatechange = () => this.attachInputs()
     this.attachInputs()
+    this.scheduleReattach()
     return true
   }
 
@@ -112,6 +127,21 @@ export class MidiPads {
    *  mounted. Never clears an existing `events`. */
   async ensureStarted(): Promise<boolean> {
     return this.acquire()
+  }
+
+  /** Force a fresh MIDI acquisition + re-attach (the "Rescan" button). Drops any
+   *  stale access so a controller connected after launch is picked up. Returns
+   *  the number of MIDI inputs now visible. */
+  async rescan(): Promise<number> {
+    this.access = null
+    await this.acquire()
+    this.attachInputs()
+    return this.inputCount()
+  }
+
+  /** How many MIDI inputs are currently visible (for status/diagnostics). */
+  inputCount(): number {
+    return this.access ? [...this.access.inputs.values()].length : 0
   }
 
   private handleMessage(msg: MIDIMessageEvent): void {

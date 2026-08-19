@@ -1261,10 +1261,20 @@ export function SetupPanel({ view }: { view: SetupView }): JSX.Element {
           <button className="secondary-button" onClick={() => setMidiModalOpen(true)}>
             Assign MIDI…
           </button>
+          <button
+            className="secondary-button"
+            title="Re-detect MIDI controllers (use this if your pad isn't recognized)"
+            onClick={async () => {
+              await midiPads.rescan()
+              setMidiMapVersion((v) => v + 1)
+            }}
+          >
+            Rescan
+          </button>
           <span className="settings-hint" style={{ margin: 0 }}>
             {midiPads.deviceNames().length > 0
               ? `Connected: ${midiPads.deviceNames().join(', ')}`
-              : 'No MIDI device detected - plug one in and it appears automatically.'}
+              : 'No MIDI device detected - plug it in, then hit Rescan.'}
           </span>
         </div>
 
