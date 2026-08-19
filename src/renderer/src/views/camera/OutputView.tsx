@@ -5,7 +5,6 @@ import { getVisual, defaultParams, type AudioReact } from '../../camera/VisualEn
 import './OutputView.css'
 
 const STORE_KEY = 'djc.camera.enabled'
-const VISUAL_KEY = 'djc.camera.visual'
 const PRIMARY_KEY = 'djc.camera.primary'
 const FX_KEY = 'djc.camera.fx'
 const MODE_KEY = 'djc.output.mode' // 'camera' | 'screen'
@@ -13,8 +12,11 @@ const LOOK_KEY = 'djc.output.screenLook' // 'flat' | 'radial'
 const SOURCE_KEY = 'djc.output.screenSource' // 'auto' | patchId
 const OVERLAY_KEY = 'djc.output.overlay' // 'none' | visual id
 const OVERLAY_OP_KEY = 'djc.output.overlayOpacity' // 0-1
+const CAM_SOURCE_KEY = 'djc.output.cameraSource' // 'program' | deviceId
+const CAM_EFFECT_KEY = 'djc.output.cameraEffect' // 'camera' | visual id
 
-function readPrimary(): string | null {
+/** The program camera (what the operator/director currently cut to). */
+function readProgram(): string | null {
   const explicit = localStorage.getItem(PRIMARY_KEY)
   if (explicit) return explicit
   try {
@@ -23,6 +25,14 @@ function readPrimary(): string | null {
   } catch {
     return null
   }
+}
+
+/** The camera the projector shows: a fixed device, or 'program' to follow. */
+function readCamSource(): string {
+  return localStorage.getItem(CAM_SOURCE_KEY) ?? 'program'
+}
+function resolveDevice(source: string): string | null {
+  return source && source !== 'program' ? source : readProgram()
 }
 
 function readParams(visual: string): Record<string, number> {
@@ -57,10 +67,10 @@ export function OutputView(): JSX.Element {
   const [overlayOp, setOverlayOp] = useState<number>(() =>
     Number(localStorage.getItem(OVERLAY_OP_KEY) ?? '0.6')
   )
-  const [visual, setVisual] = useState<string>(() => localStorage.getItem(VISUAL_KEY) ?? 'camera')
-  const [primary, setPrimary] = useState<string | null>(() => readPrimary())
+  const [visual, setVisual] = useState<string>(() => localStorage.getItem(CAM_EFFECT_KEY) ?? 'camera')
+  const [primary, setPrimary] = useState<string | null>(() => resolveDevice(readCamSource()))
   const [params, setParams] = useState<Record<string, number>>(() =>
-    readParams(localStorage.getItem(VISUAL_KEY) ?? 'camera')
+    readParams(localStorage.getItem(CAM_EFFECT_KEY) ?? 'camera')
   )
   const beatRef = useRef(0)
   const audioRef = useRef<AudioReact>({ ...ZERO_AUDIO })
@@ -73,13 +83,15 @@ export function OutputView(): JSX.Element {
   // Follow the operator's choices live.
   useEffect(() => {
     const onStorage = (e: StorageEvent): void => {
-      if (e.key === VISUAL_KEY) {
+      if (e.key === CAM_EFFECT_KEY) {
         const v = e.newValue ?? 'camera'
         setVisual(v)
         setParams(readParams(v))
       }
       if (e.key === FX_KEY) setParams((prev) => ({ ...prev, ...readParams(visual) }))
-      if (e.key === PRIMARY_KEY || e.key === STORE_KEY) setPrimary(readPrimary())
+      if (e.key === CAM_SOURCE_KEY) setPrimary(resolveDevice(e.newValue ?? 'program'))
+      // Program moved (director cut): only matters when we're following it.
+      if (e.key === PRIMARY_KEY || e.key === STORE_KEY) setPrimary(resolveDevice(readCamSource()))
       if (e.key === MODE_KEY) setMode(e.newValue ?? 'camera')
       if (e.key === LOOK_KEY) setLook((e.newValue as ScreenLook) ?? 'flat')
       if (e.key === SOURCE_KEY) setSource(e.newValue ?? 'auto')

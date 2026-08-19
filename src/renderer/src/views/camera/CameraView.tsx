@@ -17,7 +17,6 @@ import { midiPads } from '../lighting/runtime'
 import './CameraView.css'
 
 const STORE_KEY = 'djc.camera.enabled'
-const VISUAL_KEY = 'djc.camera.visual'
 const PRIMARY_KEY = 'djc.camera.primary'
 const FX_KEY = 'djc.camera.fx'
 const CONFIGS_KEY = 'djc.camera.configs'
@@ -57,6 +56,10 @@ const SOURCE_KEY = 'djc.output.screenSource'
 const OVERLAY_KEY = 'djc.output.overlay'
 const OVERLAY_OP_KEY = 'djc.output.overlayOpacity'
 const EFFECTS_ONLY_KEY = 'djc.output.effectsOnly'
+// Projector "camera effect" mode: its own source camera + effect, independent
+// of the tiles and the recording.
+const OUT_CAM_SOURCE_KEY = 'djc.output.cameraSource' // 'program' | deviceId
+const OUT_CAM_EFFECT_KEY = 'djc.output.cameraEffect' // 'camera' | visual id
 
 type FxParams = Record<string, Record<string, number>>
 type ScreenInfo = { patchId: string; label: string }
@@ -223,11 +226,18 @@ export function CameraView({ embedded = false }: { embedded?: boolean } = {}): J
   const [showSkeleton, setShowSkeleton] = useState(false)
   const [showFaceMesh, setShowFaceMesh] = useState(false)
   const [outputCount, setOutputCount] = useState(0)
-  // When on, effects are for the projector/TV only - the recording stays clean.
+  // When on (default), effects are for the projector/TV only - the recording
+  // stays clean. Effects live on the projector, not the camera tiles/recording.
   const [effectsOnly, setEffectsOnly] = useState<boolean>(
-    () => localStorage.getItem(EFFECTS_ONLY_KEY) === '1'
+    () => localStorage.getItem(EFFECTS_ONLY_KEY) !== '0'
   )
   const [outMode, setOutMode] = useState<string>(() => localStorage.getItem(MODE_KEY) ?? 'camera')
+  const [outCamSource, setOutCamSource] = useState<string>(
+    () => localStorage.getItem(OUT_CAM_SOURCE_KEY) ?? 'program'
+  )
+  const [outCamEffect, setOutCamEffect] = useState<string>(
+    () => localStorage.getItem(OUT_CAM_EFFECT_KEY) ?? 'camera'
+  )
   const [screenLook, setScreenLook] = useState<string>(() => localStorage.getItem(LOOK_KEY) ?? 'flat')
   const [screenSource, setScreenSource] = useState<string>(
     () => localStorage.getItem(SOURCE_KEY) ?? 'auto'
@@ -437,13 +447,14 @@ export function CameraView({ embedded = false }: { embedded?: boolean } = {}): J
   useEffect(() => localStorage.setItem(DISPLAY_KEY, JSON.stringify(display)), [display])
   useEffect(() => localStorage.setItem(EFFECTS_ONLY_KEY, effectsOnly ? '1' : '0'), [effectsOnly])
 
-  // Mirror the program camera to the projector's camera-mode + recording source.
+  // Publish the current program camera so the projector's "Follow program"
+  // source can track it. The projector's effect is set independently (below),
+  // so effects never bleed into the tiles or the recording.
   useEffect(() => {
-    if (programId) {
-      localStorage.setItem(PRIMARY_KEY, programId)
-      localStorage.setItem(VISUAL_KEY, configs[programId]?.effect ?? 'camera')
-    }
-  }, [programId, configs])
+    if (programId) localStorage.setItem(PRIMARY_KEY, programId)
+  }, [programId])
+  useEffect(() => localStorage.setItem(OUT_CAM_SOURCE_KEY, outCamSource), [outCamSource])
+  useEffect(() => localStorage.setItem(OUT_CAM_EFFECT_KEY, outCamEffect), [outCamEffect])
 
   // Auto-director: gather each camera's framing signal + music context and pick
   // the program camera. When auto is off, honor the manual pick.
@@ -897,6 +908,45 @@ export function CameraView({ embedded = false }: { embedded?: boolean } = {}): J
               <option value="screen">Stage screen (lighting)</option>
             </select>
           </label>
+
+          {outMode === 'camera' && (
+            <>
+              <label className="cam-out-row">
+                <span>Camera</span>
+                <select
+                  value={outCamSource}
+                  onChange={(e) => putOut(OUT_CAM_SOURCE_KEY, e.target.value, setOutCamSource)}
+                  title="Which camera the projector shows (stays fixed, ignores auto-switching)"
+                >
+                  <option value="program">Follow program (auto)</option>
+                  {enabled.map((id) => (
+                    <option key={id} value={id}>
+                      {devices.find((d) => d.deviceId === id)?.label || 'Camera'}
+                    </option>
+                  ))}
+                </select>
+              </label>
+              <label className="cam-out-row">
+                <span>Effect</span>
+                <select
+                  value={outCamEffect}
+                  onChange={(e) => putOut(OUT_CAM_EFFECT_KEY, e.target.value, setOutCamEffect)}
+                  title="Effect shown on the projector only"
+                >
+                  <option value="camera">None (plain camera)</option>
+                  {VISUALS.filter((v) => v.id !== 'camera').map((v) => (
+                    <option key={v.id} value={v.id}>
+                      {v.name}
+                    </option>
+                  ))}
+                </select>
+              </label>
+              <p className="settings-hint">
+                This camera + effect show on the projector only. They do not change your camera
+                tiles or the recording.
+              </p>
+            </>
+          )}
 
           {outMode === 'screen' && (
             <>
