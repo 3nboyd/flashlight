@@ -89,9 +89,18 @@ export class Recorder {
 
     let audioTracks: MediaStreamTrack[] = []
     if (opts.includeAudio) {
-      this.audioStream = await navigator.mediaDevices.getUserMedia({
-        audio: opts.audioDeviceId ? { deviceId: { exact: opts.audioDeviceId } } : true
-      })
+      // Capture music, not a phone call: disable echo cancellation / noise
+      // suppression / auto-gain (they mangle music into a dull, pumping, mono
+      // mess), and ask for full-quality stereo 48kHz.
+      const audio: MediaTrackConstraints = {
+        echoCancellation: false,
+        noiseSuppression: false,
+        autoGainControl: false,
+        channelCount: 2,
+        sampleRate: 48000
+      }
+      if (opts.audioDeviceId) audio.deviceId = { exact: opts.audioDeviceId }
+      this.audioStream = await navigator.mediaDevices.getUserMedia({ audio })
       audioTracks = this.audioStream.getAudioTracks()
     }
 
@@ -100,7 +109,12 @@ export class Recorder {
 
     const startOne = async (stream: MediaStream, mimeType: string, filename: string): Promise<void> => {
       const { id, path } = await window.djCompanion.recording.openStream(opts.folder, filename)
-      const rec = new MediaRecorder(stream, { mimeType })
+      // 256 kbps Opus is transparent for music; ~10 Mbps keeps the video crisp.
+      const rec = new MediaRecorder(stream, {
+        mimeType,
+        audioBitsPerSecond: 256000,
+        videoBitsPerSecond: 10_000_000
+      })
       const track: Track = { rec, streamId: id, path, writeChain: Promise.resolve() }
       rec.ondataavailable = (e): void => {
         if (!e.data || e.data.size === 0) return
