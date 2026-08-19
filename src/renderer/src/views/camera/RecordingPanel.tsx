@@ -36,37 +36,74 @@ function fmtElapsed(ms: number): string {
   return `${p(h)}:${p(m)}:${p(s % 60)}`
 }
 
-/** A tiny live level meter for the selected audio input (5 bars). */
+/**
+ * Live input meter for the selected audio input: a 5-bar spectrum plus a peak
+ * dBFS readout (0 dB = clipping) so you can ride the level to just under 0.
+ * Captures with the same no-processing constraints as the recorder, so the
+ * number reflects what actually gets recorded (no auto-gain masking it).
+ */
 function AudioMeter({ deviceId, active }: { deviceId: string | null; active: boolean }): JSX.Element {
   const barsRef = useRef<HTMLDivElement>(null)
+  const fillRef = useRef<HTMLDivElement>(null)
+  const valRef = useRef<HTMLSpanElement>(null)
   useEffect(() => {
     if (!active) return
     let stream: MediaStream | null = null
     let ctx: AudioContext | null = null
     let raf = 0
     let cancelled = false
+    const audio: MediaTrackConstraints = {
+      echoCancellation: false,
+      noiseSuppression: false,
+      autoGainControl: false
+    }
+    if (deviceId) audio.deviceId = { exact: deviceId }
     navigator.mediaDevices
-      .getUserMedia({ audio: deviceId ? { deviceId: { exact: deviceId } } : true })
+      .getUserMedia({ audio })
       .then((s) => {
         if (cancelled) return s.getTracks().forEach((t) => t.stop())
         stream = s
         ctx = new AudioContext()
         const analyser = ctx.createAnalyser()
-        analyser.fftSize = 128
+        analyser.fftSize = 1024
         ctx.createMediaStreamSource(s).connect(analyser)
-        const data = new Uint8Array(analyser.frequencyBinCount)
+        const freq = new Uint8Array(analyser.frequencyBinCount)
+        const time = new Float32Array(analyser.fftSize)
         const BANDS = 5
-        const band = Math.floor(data.length / BANDS)
+        const band = Math.floor(freq.length / BANDS)
+        let heldDb = -60 // peak-hold that decays slowly
         const tick = (): void => {
           raf = requestAnimationFrame(tick)
-          analyser.getByteFrequencyData(data)
+          // Spectrum bars.
+          analyser.getByteFrequencyData(freq)
           const bars = barsRef.current?.children
-          if (!bars) return
-          for (let i = 0; i < BANDS; i++) {
-            let sum = 0
-            for (let j = 0; j < band; j++) sum += data[i * band + j]
-            const v = Math.min(1, sum / band / 170)
-            ;(bars[i] as HTMLElement).style.height = `${12 + v * 88}%`
+          if (bars) {
+            for (let i = 0; i < BANDS; i++) {
+              let sum = 0
+              for (let j = 0; j < band; j++) sum += freq[i * band + j]
+              const v = Math.min(1, sum / band / 170)
+              ;(bars[i] as HTMLElement).style.height = `${12 + v * 88}%`
+            }
+          }
+          // Peak dBFS from the raw waveform.
+          analyser.getFloatTimeDomainData(time)
+          let peak = 0
+          for (let i = 0; i < time.length; i++) {
+            const a = Math.abs(time[i])
+            if (a > peak) peak = a
+          }
+          const db = peak > 0 ? 20 * Math.log10(peak) : -Infinity
+          heldDb = db > heldDb ? db : Math.max(-60, heldDb - 0.6) // fast attack, slow release
+          const fill = fillRef.current
+          const val = valRef.current
+          if (fill && val) {
+            const pct = Math.max(0, Math.min(100, ((heldDb + 48) / 48) * 100))
+            fill.style.width = `${pct}%`
+            const clip = heldDb >= -0.3
+            const hot = heldDb >= -6
+            fill.style.background = clip ? '#ef4444' : hot ? '#f59e0b' : '#22c55e'
+            val.textContent = clip ? 'CLIP' : heldDb <= -59 ? '-∞' : `${heldDb.toFixed(1)}`
+            val.style.color = clip ? '#ef4444' : hot ? '#f59e0b' : 'var(--text-secondary)'
           }
         }
         tick()
@@ -80,10 +117,22 @@ function AudioMeter({ deviceId, active }: { deviceId: string | null; active: boo
     }
   }, [deviceId, active])
   return (
-    <div className="rec-eq" ref={barsRef} title="Audio input level">
-      {Array.from({ length: 5 }).map((_, i) => (
-        <span key={i} className="rec-eq-bar" />
-      ))}
+    <div className="rec-meter">
+      <div className="rec-eq" ref={barsRef} title="Audio input spectrum">
+        {Array.from({ length: 5 }).map((_, i) => (
+          <span key={i} className="rec-eq-bar" />
+        ))}
+      </div>
+      <div className="rec-db" title="Peak input level (dBFS). Aim just under 0; CLIP = too hot.">
+        <div className="rec-db-track">
+          <div className="rec-db-fill" ref={fillRef} />
+          <span className="rec-db-zero" />
+        </div>
+        <span className="rec-db-val" ref={valRef}>
+          -∞
+        </span>
+        <span className="rec-db-unit">dB</span>
+      </div>
     </div>
   )
 }
