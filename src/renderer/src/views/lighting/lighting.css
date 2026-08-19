@@ -65,6 +65,74 @@
   margin-top: 10px;
 }
 
+/* Compact audio input meter + picker under the BPM. */
+.bpm-audio {
+  margin-top: 12px;
+  width: 100%;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+.bpm-audio-head {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+}
+.bpm-audio-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  flex: 0 0 auto;
+  background: var(--border-strong);
+}
+.bpm-audio-dot.live {
+  background: #22c55e;
+  box-shadow: 0 0 6px #22c55e;
+}
+.bpm-audio-dot.idle {
+  background: #eab308;
+}
+.bpm-audio-dot.off {
+  background: #6b7280;
+}
+.bpm-audio-label {
+  font-size: 11px;
+  color: var(--text-secondary);
+  flex: 1;
+}
+.bpm-audio-head button {
+  padding: 3px 10px;
+  font-size: 11px;
+}
+.bpm-eq {
+  display: flex;
+  align-items: flex-end;
+  gap: 3px;
+  height: 26px;
+}
+.bpm-eq-bar {
+  flex: 1;
+  height: 100%;
+  display: flex;
+  align-items: flex-end;
+  background: var(--bg-2, rgba(255, 255, 255, 0.05));
+  border-radius: 2px;
+  overflow: hidden;
+}
+.bpm-eq-fill {
+  width: 100%;
+  background: linear-gradient(to top, #22c55e, #38bdf8);
+  border-radius: 2px;
+  min-height: 1px;
+  transition: height 0.06s linear;
+}
+.bpm-audio-select {
+  width: 100%;
+  max-width: 190px;
+  font-size: 11px;
+  padding: 3px 6px;
+}
+
 .bpm-value {
   font-size: 40px;
   font-weight: 700;
@@ -1586,6 +1654,9 @@
   overflow: hidden;
   text-overflow: ellipsis;
   max-width: 180px;
+}
+.bpm-block .midi-indicator.none {
+  color: var(--text-tertiary, #6b7280);
 }
 
 .pad-grid-toolbar {

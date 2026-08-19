@@ -4,8 +4,12 @@ import type { ControlAction, PadAction } from '../../midi/MidiPads'
 import {
   audioAnalyzer,
   midiPads as midi,
-  onAudioStateChange
+  onAudioStateChange,
+  onAudioFrame,
+  startAudioListening,
+  stopAudioListening
 } from './runtime'
+import { AudioAnalyzer } from '../../audio/AudioAnalyzer'
 import { StageVisualizer } from './StageVisualizer'
 import { Knob } from './Knob'
 import { SceneBrowser } from './SceneBrowser'
@@ -33,6 +37,9 @@ export function PerformPanel(): JSX.Element {
   const [midiDevices, setMidiDevices] = useState<string[]>([])
   const [stageExpanded, setStageExpanded] = useState(false)
   const [audioRunning, setAudioRunning] = useState(audioAnalyzer.isRunning())
+  const [audioDevices, setAudioDevices] = useState<MediaDeviceInfo[]>([])
+  const [levels, setLevels] = useState({ rms: 0, bass: 0, mid: 0, high: 0 })
+  const lastMeterRef = useRef(0)
   /** Pad index whose reassign browser is open (null = none). */
   const [reassignPad, setReassignPad] = useState<number | null>(null)
   /** The pad whose corner (three-dot) menu is open, anchored at x/y. */
@@ -43,6 +50,35 @@ export function PerformPanel(): JSX.Element {
   const momentaryRestoreRef = useRef<string | null>(null)
 
   useEffect(() => onAudioStateChange(setAudioRunning), [])
+
+  // Live input meter + device list, so the operator can see the audio feed and
+  // change the input right here in the lighting panel (mirrors Settings).
+  useEffect(() => {
+    const offFrame = onAudioFrame((frame) => {
+      if (frame.timestampMs - lastMeterRef.current > 90) {
+        lastMeterRef.current = frame.timestampMs
+        setLevels({ rms: frame.rms, bass: frame.bass, mid: frame.mid, high: frame.high })
+      }
+    })
+    AudioAnalyzer.listInputDevices().then(setAudioDevices)
+    return offFrame
+  }, [])
+
+  const selectAudioDevice = useCallback(
+    async (deviceId: string): Promise<void> => {
+      const label = audioDevices.find((d) => d.deviceId === deviceId)?.label ?? null
+      await updateProject((p) => ({
+        ...p,
+        audio: { ...p.audio, deviceId: deviceId || null, deviceLabel: label }
+      }))
+      if (deviceId && audioAnalyzer.isRunning()) await startAudioListening(deviceId)
+    },
+    [audioDevices, updateProject]
+  )
+  const toggleAudio = useCallback(async (): Promise<void> => {
+    if (audioRunning) return stopAudioListening()
+    if (project.audio.deviceId) await startAudioListening(project.audio.deviceId)
+  }, [audioRunning, project.audio.deviceId])
 
   const assignPad = useCallback(
     (index: number, sceneId: string | null) => {
@@ -316,11 +352,58 @@ export function PerformPanel(): JSX.Element {
               +
             </button>
           </div>
-          {midiDevices.length > 0 && (
-            <div className="midi-indicator" title={midiDevices.join(', ')}>
-              ● MIDI: {midiDevices[0]}
+          <div
+            className={`midi-indicator${midiDevices.length ? '' : ' none'}`}
+            title={
+              midiDevices.length
+                ? midiDevices.join(', ')
+                : 'No MIDI controller detected. Check it is plugged in; if it still shows none, unplug/replug or restart the app.'
+            }
+          >
+            {midiDevices.length ? `● MIDI: ${midiDevices[0]}` : '○ No MIDI detected'}
+          </div>
+
+          <div className="bpm-audio">
+            <div className="bpm-audio-head">
+              <span
+                className={`bpm-audio-dot ${audioRunning ? (levels.rms > 0.008 ? 'live' : 'idle') : 'off'}`}
+              />
+              <span className="bpm-audio-label">
+                {audioRunning ? (levels.rms > 0.008 ? 'Audio in' : 'No signal') : 'Audio off'}
+              </span>
+              <button
+                className={audioRunning ? 'danger-button' : 'secondary-button'}
+                onClick={toggleAudio}
+                disabled={!audioRunning && !project.audio.deviceId}
+                title="Start/stop listening to the audio input"
+              >
+                {audioRunning ? 'Stop' : 'Listen'}
+              </button>
             </div>
-          )}
+            <div className="bpm-eq" title="Live input — bass / mid / high / volume">
+              {[levels.bass, levels.mid, levels.high, levels.rms].map((v, i) => (
+                <div key={i} className="bpm-eq-bar">
+                  <div
+                    className="bpm-eq-fill"
+                    style={{ height: `${Math.round(Math.min(1, v) * 100)}%` }}
+                  />
+                </div>
+              ))}
+            </div>
+            <select
+              className="bpm-audio-select"
+              value={project.audio.deviceId ?? ''}
+              onChange={(e) => selectAudioDevice(e.target.value)}
+              title="Audio input device for beat/energy detection"
+            >
+              <option value="">Audio input…</option>
+              {audioDevices.map((d) => (
+                <option key={d.deviceId} value={d.deviceId}>
+                  {d.label || `Input ${d.deviceId.slice(0, 6)}`}
+                </option>
+              ))}
+            </select>
+          </div>
         </div>
 
         <div className="stage-mini" title="Live stage preview - click to expand">
