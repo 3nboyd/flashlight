@@ -270,17 +270,20 @@ export function CameraCanvas({
       visual.render(ctx, input)
       if (overlay) renderOverlayLayer(ctx, input, overlay, overlayParamsRef.current)
 
-      // When this tile is the program, render the same effect a second time at
-      // full camera resolution into the shared record canvas, so the saved file
-      // is full-res no matter how small the preview tile is. Reuses the pose/face
-      // already detected this frame; skips the debug overlays.
+      // When this tile is the program, render the same effect a second time into
+      // the shared record canvas, capped at 720p tall. Recording at the camera's
+      // full (often 1080p) resolution roughly doubles the per-frame render + video
+      // encode cost, which is what made long recordings choppy and laggy; 720p is
+      // plenty for a set recording and keeps 30fps smooth. Reuses this frame's
+      // pose/face; skips the debug overlays.
+      const REC_MAX_H = 720
       const rec = recordCanvasRef.current
       if (rec && ready && video) {
         const vw = video.videoWidth || w
         const vh = video.videoHeight || h
         const ar = recordAspectRef.current
-        const rh = vh
-        const rw = ar == null ? vw : Math.max(1, Math.round(vh * ar))
+        const rh = Math.min(vh, REC_MAX_H)
+        const rw = ar == null ? Math.round(vw * (rh / vh)) : Math.max(1, Math.round(rh * ar))
         if (rec.width !== rw || rec.height !== rh) {
           rec.width = rw
           rec.height = rh

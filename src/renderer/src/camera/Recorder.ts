@@ -14,14 +14,18 @@ export interface RecordFormat {
 }
 
 /** Video container/codec options, filtered to what this build actually supports.
- *  WebM is listed first: it streams to disk as one valid, concatenable file, so
- *  it's the safe choice for long recordings (MP4 is a post-set conversion). */
+ *  H.264 is listed FIRST: on macOS the browser hardware-encodes it (VideoToolbox),
+ *  which is far lighter on the CPU than software VP9/VP8 - the difference between
+ *  a smooth multi-hour recording and a choppy, laggy one. It streams to disk as a
+ *  fragmented MP4 (one valid, concatenable file) just like WebM. VP8 is preferred
+ *  over VP9 as a fallback because VP9 software encoding is the heaviest. */
 const VIDEO_CANDIDATES: RecordFormat[] = [
-  { label: 'WebM (VP9) — recommended for long sets', mimeType: 'video/webm;codecs=vp9,opus', ext: 'webm' },
-  { label: 'WebM (VP8)', mimeType: 'video/webm;codecs=vp8,opus', ext: 'webm' },
-  { label: 'WebM', mimeType: 'video/webm', ext: 'webm' },
-  { label: 'MP4 (H.264)', mimeType: 'video/mp4;codecs=h264,aac', ext: 'mp4' },
-  { label: 'MP4', mimeType: 'video/mp4', ext: 'mp4' }
+  { label: 'MP4 (H.264, hardware) — recommended', mimeType: 'video/mp4;codecs=h264,aac', ext: 'mp4' },
+  { label: 'MP4 (H.264)', mimeType: 'video/mp4;codecs=avc1', ext: 'mp4' },
+  { label: 'MP4', mimeType: 'video/mp4', ext: 'mp4' },
+  { label: 'WebM (VP8) — lighter than VP9', mimeType: 'video/webm;codecs=vp8,opus', ext: 'webm' },
+  { label: 'WebM (VP9) — heavy CPU', mimeType: 'video/webm;codecs=vp9,opus', ext: 'webm' },
+  { label: 'WebM', mimeType: 'video/webm', ext: 'webm' }
 ]
 
 const AUDIO_CANDIDATES: RecordFormat[] = [
@@ -109,11 +113,12 @@ export class Recorder {
 
     const startOne = async (stream: MediaStream, mimeType: string, filename: string): Promise<void> => {
       const { id, path } = await window.djCompanion.recording.openStream(opts.folder, filename)
-      // 256 kbps Opus is transparent for music; ~10 Mbps keeps the video crisp.
+      // 256 kbps Opus is transparent for music; 8 Mbps H.264 is crisp at 720p
+      // and easy on a hardware encoder.
       const rec = new MediaRecorder(stream, {
         mimeType,
         audioBitsPerSecond: 256000,
-        videoBitsPerSecond: 10_000_000
+        videoBitsPerSecond: 8_000_000
       })
       const track: Track = { rec, streamId: id, path, writeChain: Promise.resolve() }
       rec.ondataavailable = (e): void => {

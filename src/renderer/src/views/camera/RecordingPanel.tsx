@@ -140,9 +140,10 @@ function AudioMeter({ deviceId, active }: { deviceId: string | null; active: boo
 /**
  * Records the live program to disk by STREAMING chunks straight to a file (no
  * in-memory buffering), so multi-hour sets are safe and a crash only loses the
- * last moment. Capture is WebM; MP4/MOV is an optional conversion done after the
- * set. A compact bar keeps Record + timer + input on one row; everything else
- * (folder, convert, repair) lives behind the settings gear.
+ * last moment. Capture defaults to hardware H.264 (MP4) at 720p - smooth and
+ * light for multi-hour sets; WebM/VP9 software encoding is much heavier. A
+ * compact bar keeps Record + timer + input on one row; everything else (folder,
+ * convert, repair) lives behind the settings gear.
  */
 export function RecordingPanel({
   getCanvas
@@ -151,9 +152,13 @@ export function RecordingPanel({
 }): JSX.Element {
   const formats = useMemo(() => supportedVideoFormats(), [])
   const [folder, setFolder] = useState<string | null>(() => localStorage.getItem(FOLDER_KEY))
-  const [formatMime, setFormatMime] = useState<string>(
-    () => localStorage.getItem(FORMAT_KEY) ?? formats[0]?.mimeType ?? ''
-  )
+  const [formatMime, setFormatMime] = useState<string>(() => {
+    const saved = localStorage.getItem(FORMAT_KEY)
+    // Keep a valid saved choice, but migrate off VP9 - its heavy software encode
+    // is what made long recordings choppy - to the new default (hardware H.264).
+    if (saved && !saved.includes('vp9') && formats.some((f) => f.mimeType === saved)) return saved
+    return formats[0]?.mimeType ?? ''
+  })
   const [includeAudio, setIncludeAudio] = useState(() => localStorage.getItem(AUDIO_KEY) === '1')
   const [separate, setSeparate] = useState(() => localStorage.getItem(SEPARATE_KEY) === '1')
   const [audioDevice, setAudioDevice] = useState<string | null>(() => localStorage.getItem(AUDIODEV_KEY))
@@ -359,7 +364,8 @@ export function RecordingPanel({
             Folder: {folderLabel}
           </button>
           <p className="settings-hint" style={{ margin: 0 }}>
-            Streams straight to disk as WebM (safe for long sets). Convert to MP4/MOV after.
+            Streams straight to disk at 720p. Use MP4 (H.264, hardware) for long sets — the
+            smoothest and lightest on the CPU. WebM/VP9 is heavy and can drop frames.
           </p>
           <label className="cam-rec-field">
             <span>Capture</span>

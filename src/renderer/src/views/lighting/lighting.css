@@ -3331,23 +3331,6 @@
   border-color: var(--border-strong);
 }
 
-.blackout-force {
-  font-size: 10px;
-  padding: 2px 6px;
-  background: transparent;
-  border: 1px solid rgba(239, 68, 68, 0.55);
-  border-radius: var(--radius-sm);
-  color: #ef4444;
-  cursor: pointer;
-  white-space: nowrap;
-}
-.blackout-force:hover {
-  background: rgba(239, 68, 68, 0.15);
-  border-color: #ef4444;
-}
-.blackout-force:active {
-  background: rgba(239, 68, 68, 0.3);
-}
 
 /* --- Custom fixture import --- */
 .fixture-import {

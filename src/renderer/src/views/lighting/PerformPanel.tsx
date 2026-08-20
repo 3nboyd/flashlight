@@ -718,13 +718,6 @@ export function PerformPanel(): JSX.Element {
             >
               {project.blackoutHolds === false ? 'clears on scene' : 'stays on'}
             </button>
-            <button
-              className="blackout-force"
-              title="Force reset: blast all DMX channels to 0 (broadcast + host) to clear fixtures stuck on a look when normal blackout won't."
-              onClick={() => window.djCompanion.lighting.forceBlackout()}
-            >
-              ⚡ Force
-            </button>
           </div>
         </div>
       </div>
