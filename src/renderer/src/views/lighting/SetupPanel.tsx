@@ -131,6 +131,7 @@ export function SetupPanel({ view }: { view: SetupView }): JSX.Element {
   const [learningControl, setLearningControl] = useState<ControlKind | null>(null)
   const [midiMapVersion, setMidiMapVersion] = useState(0)
   const [blackoutFlash, setBlackoutFlash] = useState(false)
+  const [midiInputs, setMidiInputs] = useState<{ name: string; enabled: boolean }[]>([])
   const [serialPorts, setSerialPorts] = useState<{ path: string; label: string }[]>([])
   const [audioDevices, setAudioDevices] = useState<MediaDeviceInfo[]>([])
   const [audioRunning, setAudioRunning] = useState(audioAnalyzer.isRunning())
@@ -157,6 +158,14 @@ export function SetupPanel({ view }: { view: SetupView }): JSX.Element {
       offFrame()
       offState()
     }
+  }, [])
+
+  // Keep the MIDI input list fresh (devices connect/disconnect at any time).
+  useEffect(() => {
+    const refresh = (): void => setMidiInputs(midiPads.listInputs())
+    refresh()
+    const id = setInterval(refresh, 1500)
+    return () => clearInterval(id)
   }, [])
 
   async function selectAudioDevice(deviceId: string): Promise<void> {
@@ -1291,11 +1300,31 @@ export function SetupPanel({ view }: { view: SetupView }): JSX.Element {
             Rescan
           </button>
           <span className="settings-hint" style={{ margin: 0 }}>
-            {midiPads.deviceNames().length > 0
-              ? `Connected: ${midiPads.deviceNames().join(', ')}`
-              : 'No MIDI device detected - plug it in, then hit Rescan.'}
+            {midiInputs.length === 0 && 'No MIDI device detected - plug it in, then hit Rescan.'}
           </span>
         </div>
+
+        {midiInputs.length > 0 && (
+          <div className="midi-devices">
+            <div className="midi-devices-title">Devices — uncheck one to ignore it</div>
+            {midiInputs.map((inp) => (
+              <label key={inp.name} className="midi-device-row">
+                <input
+                  type="checkbox"
+                  checked={inp.enabled}
+                  onChange={(e) => {
+                    midiPads.setInputEnabled(inp.name, e.target.checked)
+                    setMidiInputs(midiPads.listInputs())
+                  }}
+                />
+                <span className={inp.enabled ? '' : 'midi-device-off'}>{inp.name}</span>
+              </label>
+            ))}
+            <span className="settings-hint" style={{ margin: '2px 0 0' }}>
+              Uncheck a DJ controller (e.g. RANE Performer) so its buttons stop triggering lighting.
+            </span>
+          </div>
+        )}
 
         {midiModalOpen && (
           <div

@@ -30,6 +30,18 @@ export function saveMidiMapping(mapping: MidiMapping): void {
   localStorage.setItem(STORAGE_KEY, JSON.stringify(mapping))
 }
 
+const IGNORED_KEY = 'djc.midi.ignoredInputs'
+
+/** Names of MIDI inputs whose messages the app ignores (e.g. a DJ controller
+ *  whose buttons would otherwise collide with lighting mappings). */
+function loadIgnoredInputs(): Set<string> {
+  try {
+    return new Set(JSON.parse(localStorage.getItem(IGNORED_KEY) ?? '[]') as string[])
+  } catch {
+    return new Set()
+  }
+}
+
 export interface MidiEvents {
   onAction: (action: PadAction, velocity: number, isNoteOn: boolean) => void
   /** Fired for a mapped knob/fader (Control Change), value 0-127. */
@@ -42,6 +54,8 @@ export interface MidiEvents {
 export class MidiPads {
   private access: MIDIAccess | null = null
   private reattachTimers: number[] = []
+  /** Input names to ignore (checked live, so toggling takes effect at once). */
+  private ignored = loadIgnoredInputs()
   private mapping: MidiMapping = loadMidiMapping()
   private learnArmed = false
   private learnCallback: ((note: number) => void) | null = null
@@ -81,14 +95,41 @@ export class MidiPads {
   private attachInputs(): void {
     if (!this.access) return
     for (const input of this.access.inputs.values()) {
+      const name = input.name ?? 'MIDI device'
       // Setting onmidimessage implicitly opens the port; also call open() so a
       // port that came up 'connected' but 'closed' actually delivers messages.
-      input.onmidimessage = (msg) => this.handleMessage(msg)
+      // Ignored inputs (e.g. a DJ controller) are dropped here, checked live so
+      // enabling/disabling one takes effect without re-attaching.
+      input.onmidimessage = (msg): void => {
+        if (this.ignored.has(name)) return
+        this.handleMessage(msg)
+      }
       input.open?.().catch(() => undefined)
     }
     this.events?.onDevicesChanged?.(
       [...this.access.inputs.values()].map((i) => i.name ?? 'MIDI device')
     )
+  }
+
+  /** All connected MIDI inputs and whether each is currently listened to. */
+  listInputs(): { name: string; enabled: boolean }[] {
+    if (!this.access) return []
+    const seen = new Set<string>()
+    const out: { name: string; enabled: boolean }[] = []
+    for (const input of this.access.inputs.values()) {
+      const name = input.name ?? 'MIDI device'
+      if (seen.has(name)) continue
+      seen.add(name)
+      out.push({ name, enabled: !this.ignored.has(name) })
+    }
+    return out
+  }
+
+  /** Enable/disable a MIDI input by name (disabled = its messages are ignored). */
+  setInputEnabled(name: string, enabled: boolean): void {
+    if (enabled) this.ignored.delete(name)
+    else this.ignored.add(name)
+    localStorage.setItem(IGNORED_KEY, JSON.stringify([...this.ignored]))
   }
 
   /** Re-attach a few times after acquiring: a controller already plugged in at
