@@ -176,6 +176,54 @@ export class DmxSender {
   }
 
   /**
+   * Panic reset helper: send an all-zero (blackout) frame to each universe. For
+   * Art-Net this ALSO broadcasts to 255.255.255.255, so it reaches the node even
+   * when the configured host IP is wrong/stale - which is a common reason the
+   * normal blackout never arrives and fixtures stay stuck on a held look.
+   */
+  sendZeros(universes: number[]): void {
+    const zero = Buffer.alloc(512)
+    switch (this.config.protocol) {
+      case 'artnet': {
+        const hosts =
+          this.config.artnetHost === '255.255.255.255'
+            ? ['255.255.255.255']
+            : [this.config.artnetHost, '255.255.255.255']
+        for (const universe of universes) {
+          const packet = encodeArtDmx({ universe, sequence: this.nextSequence(universe), data: zero })
+          for (const host of hosts) this.ensureSocket().send(packet, ARTNET_PORT, host)
+          this.countSend()
+        }
+        return
+      }
+      case 'sacn': {
+        for (const universe of universes) {
+          const u = Math.max(1, universe)
+          const packet = encodeSacnData({
+            universe: u,
+            sequence: this.nextSequence(u),
+            cid: this.cid,
+            sourceName: 'DJ Companion',
+            data: zero
+          })
+          this.ensureSocket().send(packet, SACN_PORT, sacnMulticastAddress(u))
+          this.countSend()
+        }
+        return
+      }
+      case 'enttec': {
+        if (this.serial?.isOpen) {
+          this.serial.write(encodeEnttecProDmx(zero))
+          this.countSend()
+        } else {
+          void this.ensureSerial()
+        }
+        return
+      }
+    }
+  }
+
+  /**
    * Deferred close: dgram sends are queued asynchronously, so closing the
    * socket synchronously right after sendUniverse() can drop the final
    * datagram - which would leave fixtures frozen on the last look instead

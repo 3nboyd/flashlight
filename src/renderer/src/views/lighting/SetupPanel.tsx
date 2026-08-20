@@ -130,6 +130,7 @@ export function SetupPanel({ view }: { view: SetupView }): JSX.Element {
   const [learningAction, setLearningAction] = useState<PadAction | null>(null)
   const [learningControl, setLearningControl] = useState<ControlKind | null>(null)
   const [midiMapVersion, setMidiMapVersion] = useState(0)
+  const [blackoutFlash, setBlackoutFlash] = useState(false)
   const [serialPorts, setSerialPorts] = useState<{ path: string; label: string }[]>([])
   const [audioDevices, setAudioDevices] = useState<MediaDeviceInfo[]>([])
   const [audioRunning, setAudioRunning] = useState(audioAnalyzer.isRunning())
@@ -579,6 +580,24 @@ export function SetupPanel({ view }: { view: SetupView }): JSX.Element {
             ? 'Works with the Enttec DMX USB Pro and Pro-compatible clones (framed serial protocol). The original "Open DMX USB" (raw FTDI) is not supported - it can\'t be timed reliably from software.'
             : 'Works with any Art-Net/sACN node or interface. Note: sACN universes start at 1.'}
         </p>
+        <div className="setup-row">
+          <button
+            className="danger-button"
+            title="Emergency reset: blast all DMX channels to 0 across universes 0-15, broadcast AND your configured host, 40 times. Use when lights are stuck on a look and normal blackout won't clear them."
+            onClick={async () => {
+              await window.djCompanion.lighting.forceBlackout()
+              setBlackoutFlash(true)
+              setTimeout(() => setBlackoutFlash(false), 1800)
+            }}
+          >
+            ⚡ Force blackout (reset stuck lights)
+          </button>
+          <span className="settings-hint" style={{ margin: 0 }}>
+            {blackoutFlash
+              ? 'Sent all-zero DMX (broadcast + host) — lights should be dark now.'
+              : 'Hammers every channel to 0 and broadcasts, so it clears fixtures a node is holding on a stuck look — no reboot needed. Also engages blackout so nothing re-lights.'}
+          </span>
+        </div>
         <div className="diag-heading">Connection &amp; troubleshooting</div>
         <OutputDiagnostics />
       </SetupSection>

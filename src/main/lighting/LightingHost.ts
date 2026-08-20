@@ -428,6 +428,30 @@ export class LightingHost {
     }
   }
 
+  /**
+   * Panic reset for stuck lights: engage blackout so the running engine won't
+   * re-light, then hammer all-zero DMX to a wide range of universes (the patched
+   * ones plus 0-15 as a safety net) for ~1.5s, broadcast + unicast. This clears
+   * fixtures a node is holding on a stuck look even when the normal blackout
+   * never reaches them - no app restart or reboot needed.
+   */
+  forceBlackout(): void {
+    this.setOverrides({ blackout: true })
+    const patched = this.project.patches.map((p) => p.universe)
+    const usb = this.project.output.usbUniverse ?? 1
+    const universes = [
+      ...new Set([...Array.from({ length: 16 }, (_, i) => i), ...patched, usb])
+    ].filter((u) => u >= 0 && u <= 0x7fff)
+    // Also send zeros through the normal engine path once (patched fixtures).
+    this.sendBlackoutFrame()
+    let n = 0
+    const blast = (): void => {
+      this.sender.sendZeros(universes)
+      if (++n < 40) setTimeout(blast, 40)
+    }
+    blast()
+  }
+
   private resolveFixtures(): PatchedFixture[] {
     const defs = fixturesById(this.project.customFixtures)
     return this.project.patches

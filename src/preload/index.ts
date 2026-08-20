@@ -78,6 +78,8 @@ const api = {
       ipcRenderer.invoke('lighting:triggerScene', sceneId),
     setOverrides: (partial: Partial<LiveOverrides>): Promise<LiveOverrides> =>
       ipcRenderer.invoke('lighting:setOverrides', partial),
+    /** Panic reset: hammer all-zero DMX (broadcast + host) to clear stuck lights. */
+    forceBlackout: (): Promise<boolean> => ipcRenderer.invoke('lighting:forceBlackout'),
     tapTempo: (): Promise<number> => ipcRenderer.invoke('lighting:tapTempo'),
     setBpm: (bpm: number): Promise<number> => ipcRenderer.invoke('lighting:setBpm', bpm),
     resyncDownbeat: (): Promise<void> => ipcRenderer.invoke('lighting:resyncDownbeat'),

@@ -35,6 +35,10 @@ export function registerLightingHandlers(): void {
   ipcMain.handle('lighting:setOverrides', async (_e, partial: Partial<LiveOverrides>) =>
     lighting.setOverrides(partial)
   )
+  ipcMain.handle('lighting:forceBlackout', async () => {
+    lighting.forceBlackout()
+    return true
+  })
   ipcMain.handle('lighting:tapTempo', async () => lighting.tapTempo())
   ipcMain.handle('lighting:setBpm', async (_e, bpm: number) => lighting.setBpm(bpm))
   ipcMain.handle('lighting:resyncDownbeat', async () => lighting.resyncDownbeat())
