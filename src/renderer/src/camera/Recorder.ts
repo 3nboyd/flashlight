@@ -56,6 +56,8 @@ export interface RecordOptions {
   separate: boolean
   /** Folder the file(s) stream into. */
   folder: string
+  /** Delay the recorded audio by N ms (A/V sync). */
+  audioDelayMs: number
 }
 
 function timestamp(): string {
@@ -76,6 +78,7 @@ export class Recorder {
   private tracks: Track[] = []
   private videoStream: MediaStream | null = null
   private audioStream: MediaStream | null = null
+  private audioCtx: AudioContext | null = null
   private startedAt = 0
   /** Recent chunk sizes (last ~3s) to report the real encoded output rate. */
   private byteSamples: { t: number; size: number }[] = []
@@ -119,7 +122,19 @@ export class Recorder {
       }
       if (opts.audioDeviceId) audio.deviceId = { exact: opts.audioDeviceId }
       this.audioStream = await navigator.mediaDevices.getUserMedia({ audio })
-      audioTracks = this.audioStream.getAudioTracks()
+      if (opts.audioDelayMs > 0) {
+        // Route the mic through a Web Audio delay so the recorded audio lines up
+        // with the (possibly delayed) cameras.
+        this.audioCtx = new AudioContext()
+        const src = this.audioCtx.createMediaStreamSource(this.audioStream)
+        const delayNode = this.audioCtx.createDelay(5)
+        delayNode.delayTime.value = Math.min(5, opts.audioDelayMs / 1000)
+        const dest = this.audioCtx.createMediaStreamDestination()
+        src.connect(delayNode).connect(dest)
+        audioTracks = dest.stream.getAudioTracks()
+      } else {
+        audioTracks = this.audioStream.getAudioTracks()
+      }
     }
 
     const base = `dj-${timestamp()}`
@@ -181,6 +196,8 @@ export class Recorder {
     )
     this.videoStream?.getTracks().forEach((t) => t.stop())
     this.audioStream?.getTracks().forEach((t) => t.stop())
+    this.audioCtx?.close().catch(() => undefined)
+    this.audioCtx = null
 
     const paths: string[] = []
     for (const t of tracks) {

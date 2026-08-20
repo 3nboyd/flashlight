@@ -42,6 +42,7 @@ export function CameraCanvas({
   params,
   fit = 'fill',
   captureHeight = 720,
+  cameraDelayMs = 0,
   showSkeleton = false,
   showFaceMesh = false,
   detectFraming = false,
@@ -88,6 +89,8 @@ export function CameraCanvas({
   fit?: 'fit' | 'fill'
   /** Preferred capture height to request from the camera (e.g. 720 or 1080). */
   captureHeight?: number
+  /** Delay this camera's frames by N ms (A/V sync for laggy wireless feeds). */
+  cameraDelayMs?: number
   showSkeleton?: boolean
   showFaceMesh?: boolean
   /** Run body (and optionally face) detection to feed the auto-director, even
@@ -113,6 +116,8 @@ export function CameraCanvas({
   const recordMaxHeightRef = useRef(recordMaxHeight)
   const onFpsRef = useRef(onFps)
   const onResolutionRef = useRef(onResolution)
+  const cameraDelayRef = useRef(cameraDelayMs)
+  cameraDelayRef.current = cameraDelayMs
   recordCanvasRef.current = recordCanvas
   recordAspectRef.current = recordAspect
   recordCleanRef.current = recordClean
@@ -197,6 +202,11 @@ export function CameraCanvas({
     // Render frame-rate counter, reported ~once per second for the monitors.
     let fpsCount = 0
     let fpsSince = performance.now()
+    // Frame-delay ring buffer for A/V sync (only allocated while a delay is set).
+    const DELAY_MAX_MS = 400
+    const DELAY_RING_H = 720
+    const delayPool: HTMLCanvasElement[] = []
+    let delayRing: { c: HTMLCanvasElement; t: number }[] = []
     // Tiny offscreen buffer to measure average brightness (dead/black feed).
     const lumaCanvas = document.createElement('canvas')
     lumaCanvas.width = 16
@@ -286,8 +296,48 @@ export function CameraCanvas({
         onFramingRef.current?.(lastFeat, faceFrame, luma)
       }
 
+      // A/V-sync delay: buffer recent frames and paint the one from N ms ago.
+      const delay = Math.max(0, Math.min(DELAY_MAX_MS, cameraDelayRef.current))
+      let frame: CanvasImageSource | null = null
+      let frameW = 0
+      let frameH = 0
+      if (delay > 0 && ready && video) {
+        const vw = video.videoWidth || w
+        const vh = video.videoHeight || h
+        const rh = Math.min(vh, DELAY_RING_H)
+        const rw = Math.max(1, Math.round((vw * rh) / vh))
+        const c = delayPool.pop() ?? document.createElement('canvas')
+        if (c.width !== rw || c.height !== rh) {
+          c.width = rw
+          c.height = rh
+        }
+        c.getContext('2d')?.drawImage(video, 0, 0, rw, rh)
+        delayRing.push({ c, t: now })
+        // Drop (and recycle) frames older than we could ever need.
+        while (delayRing.length > 1 && delayRing[0].t < now - delay - 250) {
+          delayPool.push(delayRing.shift()!.c)
+        }
+        // Newest frame at or before (now - delay); fall back to the oldest.
+        let pick = delayRing[0]
+        for (let i = delayRing.length - 1; i >= 0; i--) {
+          if (delayRing[i].t <= now - delay) {
+            pick = delayRing[i]
+            break
+          }
+        }
+        frame = pick.c
+        frameW = rw
+        frameH = rh
+      } else if (delayRing.length) {
+        delayRing = [] // delay turned off - free the buffer
+      }
+
       const input: VisualInput = {
         video,
+        frame,
+        frameW,
+        frameH,
+        frameReady: frame != null,
         pose: poseFrame,
         face: faceFrame,
         features: lastFeat,

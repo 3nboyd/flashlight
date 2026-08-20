@@ -10,6 +10,7 @@ const OUTPUT_KEY = 'djc.rec.output'
 const QUALITY_KEY = 'djc.rec.quality'
 const MAXH_KEY = 'djc.rec.maxHeight' // record height cap: 0 = source, 720, 1080
 const FPS_KEY = 'djc.rec.fps'
+const AUDIO_DELAY_KEY = 'djc.rec.audioDelay'
 
 type OutputFormat = 'mp4' | 'mov'
 type Quality = 'high' | 'balanced' | 'small'
@@ -174,6 +175,7 @@ export function RecordingPanel({
   )
   const [maxHeight, setMaxHeight] = useState<number>(() => Number(localStorage.getItem(MAXH_KEY) ?? '720'))
   const [fps, setFps] = useState<number>(() => Number(localStorage.getItem(FPS_KEY) ?? '30'))
+  const [audioDelay, setAudioDelay] = useState<number>(() => Number(localStorage.getItem(AUDIO_DELAY_KEY) ?? '0'))
   const [showFps, setShowFps] = useState<boolean>(() => localStorage.getItem('djc.camera.showFps') !== '0')
 
   const [recording, setRecording] = useState(false)
@@ -233,7 +235,8 @@ export function RecordingPanel({
         includeAudio,
         audioDeviceId: audioDevice,
         separate,
-        folder
+        folder,
+        audioDelayMs: audioDelay
       })
       setSaved([])
       setRecording(true)
@@ -479,6 +482,23 @@ export function RecordingPanel({
               Separate audio + video files
             </label>
           )}
+          <label className="cam-rec-field" title="Delay the recorded audio to line it up with the cameras (for wireless/latency).">
+            <span>Audio delay</span>
+            <input
+              type="range"
+              min={0}
+              max={1000}
+              step={10}
+              disabled={recording}
+              value={audioDelay}
+              onChange={(e) => {
+                const v = Number(e.target.value)
+                setAudioDelay(v)
+                localStorage.setItem(AUDIO_DELAY_KEY, String(v))
+              }}
+            />
+            <span className="cam-delay-val">{audioDelay} ms</span>
+          </label>
           <label className="cam-rec-check">
             <input
               type="checkbox"

@@ -57,7 +57,28 @@
 
 .cam-device-cfg {
   display: flex;
+  flex-wrap: wrap;
   gap: 6px;
+}
+
+/* Per-camera A/V-sync delay slider. */
+.cam-delay {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex: 1 1 100%;
+  font-size: 11px;
+  color: var(--text-secondary);
+}
+.cam-delay > input[type='range'] {
+  flex: 1;
+  min-width: 0;
+}
+.cam-delay-val {
+  font-variant-numeric: tabular-nums;
+  min-width: 42px;
+  text-align: right;
+  color: var(--text-tertiary, #6b7280);
 }
 
 .cam-device-cfg > select {

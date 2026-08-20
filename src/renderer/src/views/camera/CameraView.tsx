@@ -81,6 +81,8 @@ type CameraConfig = {
   lookSwitch?: boolean
   /** Director usage weight (1 = equal). */
   priority?: number
+  /** A/V-sync delay for this camera in ms (0 = none). */
+  delayMs?: number
 }
 /** A MIDI note bound to a camera action: cut the program to a camera, or toggle
  *  the auto-director. */
@@ -101,6 +103,7 @@ function CameraTile({
   overlayParams,
   fit,
   captureHeight,
+  cameraDelayMs,
   program,
   focused,
   detectFraming,
@@ -129,6 +132,8 @@ function CameraTile({
   fit: 'fit' | 'fill'
   /** Preferred camera capture height (720 or 1080). */
   captureHeight: number
+  /** A/V-sync delay for this camera in ms. */
+  cameraDelayMs: number
   program: boolean
   focused: boolean
   /** Run detection for the auto-director (only worth it when Director Mode is on). */
@@ -167,6 +172,7 @@ function CameraTile({
         overlayParams={overlayParams}
         fit={fit}
         captureHeight={captureHeight}
+        cameraDelayMs={cameraDelayMs}
         recordCanvas={recordCanvas}
         recordAspect={recordAspect}
         recordClean={recordClean}
@@ -353,7 +359,8 @@ export function CameraView({ embedded = false }: { embedded?: boolean } = {}): J
         effect: c.effect,
         overlay: c.overlay && c.overlay !== c.effect ? c.overlay : '',
         lookSwitch: c.lookSwitch ?? defaultLookSwitch(c.role),
-        priority: c.priority ?? 1
+        priority: c.priority ?? 1,
+        delayMs: c.delayMs ?? 0
       }
     },
     [configs]
@@ -699,6 +706,12 @@ export function CameraView({ embedded = false }: { embedded?: boolean } = {}): J
       return { ...prev, [id]: { ...base, priority } }
     })
   }, [])
+  const setDelay = useCallback((id: string, delayMs: number) => {
+    setConfigs((prev) => {
+      const base = prev[id] ?? { role: DEFAULT_CAMERA_ROLE, effect: 'camera' }
+      return { ...prev, [id]: { ...base, delayMs } }
+    })
+  }, [])
   const onTileClick = useCallback((id: string) => {
     setFocused(id)
     if (!autoRef.current) {
@@ -923,6 +936,18 @@ export function CameraView({ embedded = false }: { embedded?: boolean } = {}): J
                             </option>
                           ))}
                         </select>
+                        <label className="cam-delay" title="Delay this camera to line it up (for laggy wireless feeds). Max 400ms.">
+                          <span>Delay</span>
+                          <input
+                            type="range"
+                            min={0}
+                            max={400}
+                            step={10}
+                            value={cfg.delayMs}
+                            onChange={(e) => setDelay(d.deviceId, Number(e.target.value))}
+                          />
+                          <span className="cam-delay-val">{cfg.delayMs} ms</span>
+                        </label>
                       </div>
                     )}
                   </div>
@@ -1197,6 +1222,7 @@ export function CameraView({ embedded = false }: { embedded?: boolean } = {}): J
                       }
                       fit={display.fit}
                       captureHeight={captureHeight}
+                      cameraDelayMs={cfg.delayMs}
                       program={programId === id}
                       focused={focused === id}
                       detectFraming={auto}

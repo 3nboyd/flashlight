@@ -20,6 +20,12 @@ export interface AudioReact {
 
 export interface VisualInput {
   video: HTMLVideoElement | null
+  /** The drawable camera frame the effect should paint - usually the live video,
+   *  but a delayed buffer canvas when the camera has an A/V-sync delay set. */
+  frame?: CanvasImageSource | null
+  frameW?: number
+  frameH?: number
+  frameReady?: boolean
   pose: PoseFrame | null
   face: FaceFrame | null
   features: PoseFeatureState
@@ -102,24 +108,43 @@ function containRect(vw: number, vh: number, w: number, h: number): Rect {
   return { dx: (w - dw) / 2, dy: (h - dh) / 2, dw, dh }
 }
 
+/** The frame an effect should paint: the delayed buffer when a camera delay is
+ *  set, else the live video. Falls back to the video's own dimensions. */
+export function sourceFrame(input: VisualInput): {
+  src: CanvasImageSource | null
+  w: number
+  h: number
+  ready: boolean
+} {
+  if (input.frame && input.frameReady) {
+    return { src: input.frame, w: input.frameW || input.w, h: input.frameH || input.h, ready: true }
+  }
+  const v = input.video
+  return {
+    src: v,
+    w: v?.videoWidth || input.w,
+    h: v?.videoHeight || input.h,
+    ready: !!v && v.readyState >= 2
+  }
+}
+
 /**
  * Where the frame is drawn inside the tile - honoring the fit setting. Every
  * effect and overlay maps through this, so the plain feed, effects, and the
  * skeleton/face overlays all use the same box (no more "effect is zoomed in").
  */
 function inputRect(input: VisualInput): Rect {
-  const vw = input.video?.videoWidth ?? input.w
-  const vh = input.video?.videoHeight ?? input.h
+  const f = sourceFrame(input)
   return input.fit === 'fit'
-    ? containRect(vw, vh, input.w, input.h)
-    : coverRect(vw, vh, input.w, input.h)
+    ? containRect(f.w, f.h, input.w, input.h)
+    : coverRect(f.w, f.h, input.w, input.h)
 }
 
 function drawVideoRaw(ctx: CanvasRenderingContext2D, input: VisualInput): boolean {
-  const v = input.video
-  if (!v || v.readyState < 2) return false
+  const f = sourceFrame(input)
+  if (!f.src || !f.ready) return false
   const r = inputRect(input)
-  ctx.drawImage(v, r.dx, r.dy, r.dw, r.dh)
+  ctx.drawImage(f.src, r.dx, r.dy, r.dw, r.dh)
   return true
 }
 
@@ -128,7 +153,7 @@ function drawVideoCover(ctx: CanvasRenderingContext2D, input: VisualInput): Rect
   const r = inputRect(input)
   // Fill mode covers the tile, so a clear is only needed to paint the bars in
   // fit mode (or when there's no frame yet).
-  if (input.fit === 'fit' || !input.video || input.video.readyState < 2) {
+  if (input.fit === 'fit' || !sourceFrame(input).ready) {
     ctx.fillStyle = '#000'
     ctx.fillRect(0, 0, input.w, input.h)
   }
@@ -338,17 +363,17 @@ const sketch: VisualModule = {
   render: (ctx, input) => {
     ctx.fillStyle = '#000'
     ctx.fillRect(0, 0, input.w, input.h)
-    const v = input.video
-    if (!v || v.readyState < 2) return
+    const f = sourceFrame(input)
+    if (!f.src || !f.ready) return
 
     const sw = 320
-    const sh = Math.max(1, Math.round((sw * v.videoHeight) / Math.max(1, v.videoWidth)))
+    const sh = Math.max(1, Math.round((sw * f.h) / Math.max(1, f.w)))
     const srcC = getScratch('edgeSrc', sw, sh)
     const outC = getScratch('edgeOut', sw, sh)
     const sctx = srcC.getContext('2d', { willReadFrequently: true })
     const octx = outC.getContext('2d')
     if (!sctx || !octx) return
-    sctx.drawImage(v, 0, 0, sw, sh)
+    sctx.drawImage(f.src, 0, 0, sw, sh)
     const s = sctx.getImageData(0, 0, sw, sh).data
     const g = new Float32Array(sw * sh)
     for (let i = 0, p = 0; i < g.length; i++, p += 4) {
@@ -428,7 +453,7 @@ const echo: VisualModule = {
     ctx.restore()
     ctx.globalAlpha = 1
 
-    if (input.video && input.video.readyState >= 2) {
+    if (sourceFrame(input).ready) {
       const hue = (input.timeMs / 22) % 360
       ctx.globalCompositeOperation = 'lighter'
       ctx.globalAlpha = 0.4 + 0.45 * energy
