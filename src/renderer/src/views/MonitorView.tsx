@@ -8,7 +8,6 @@ const PRIMARY_KEY = 'djc.camera.primary'
 const VISUAL_KEY = 'djc.camera.visual'
 const FX_KEY = 'djc.camera.fx'
 const EFFECTS_ONLY_KEY = 'djc.output.effectsOnly'
-const REC_STATUS_KEY = 'djc.rec.status'
 
 function readPrimary(): string | null {
   const explicit = localStorage.getItem(PRIMARY_KEY)
@@ -37,14 +36,6 @@ function readParams(visual: string): Record<string, number> {
   return { ...defaultParams(getVisual(visual)), ...stored }
 }
 
-function readRec(): { recording: boolean; startedAt: number } {
-  try {
-    return JSON.parse(localStorage.getItem(REC_STATUS_KEY) ?? '{}')
-  } catch {
-    return { recording: false, startedAt: 0 }
-  }
-}
-
 function fmt(ms: number): string {
   const s = Math.floor(ms / 1000)
   const p = (n: number): string => String(n).padStart(2, '0')
@@ -61,20 +52,25 @@ function fmt(ms: number): string {
 export function MonitorView(): JSX.Element {
   const [device, setDevice] = useState<string | null>(() => readPrimary())
   const [effect, setEffect] = useState<string>(() => readEffect())
-  const [rec, setRec] = useState(() => readRec())
+  const [rec, setRec] = useState({ recording: false, startedAt: 0 })
   const [elapsed, setElapsed] = useState(0)
   const beatRef = useRef(0)
   const audioRef = useRef<AudioReact>({ ...ZERO_AUDIO })
   const lightRef = useRef<{ r: number; g: number; b: number }>({ r: 0, g: 0, b: 0 })
 
-  // Follow the program + recording state (localStorage the main window writes).
+  // Recording status comes over IPC (reliable across windows); program device +
+  // effect are read from localStorage (set once before the monitor opens).
   useEffect(() => {
+    window.djCompanion.monitor.getStatus().then(setRec).catch(() => undefined)
+    const off = window.djCompanion.monitor.onStatus(setRec)
     const id = setInterval(() => {
       setDevice(readPrimary())
       setEffect(readEffect())
-      setRec(readRec())
     }, 500)
-    return () => clearInterval(id)
+    return () => {
+      off()
+      clearInterval(id)
+    }
   }, [])
 
   // Keep the elapsed clock ticking from the recording start time.

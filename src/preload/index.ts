@@ -125,7 +125,18 @@ const api = {
     /** Open/close the floating always-on-top recording monitor window. */
     open: (): Promise<boolean> => ipcRenderer.invoke('monitor:open'),
     close: (): Promise<boolean> => ipcRenderer.invoke('monitor:close'),
-    isOpen: (): Promise<boolean> => ipcRenderer.invoke('monitor:isOpen')
+    isOpen: (): Promise<boolean> => ipcRenderer.invoke('monitor:isOpen'),
+    /** Publish recording status (main window) so the monitor can show it. */
+    setStatus: (status: { recording: boolean; startedAt: number }): Promise<boolean> =>
+      ipcRenderer.invoke('monitor:setStatus', status),
+    getStatus: (): Promise<{ recording: boolean; startedAt: number }> =>
+      ipcRenderer.invoke('monitor:getStatus'),
+    /** Subscribe to recording-status changes (monitor window). */
+    onStatus: (cb: (status: { recording: boolean; startedAt: number }) => void): (() => void) => {
+      const handler = (_e: unknown, s: { recording: boolean; startedAt: number }): void => cb(s)
+      ipcRenderer.on('monitor:status', handler)
+      return () => ipcRenderer.removeListener('monitor:status', handler)
+    }
   },
   popout: {
     open: (name: string): Promise<boolean> => ipcRenderer.invoke('popout:open', name),

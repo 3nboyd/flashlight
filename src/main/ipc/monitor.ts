@@ -11,6 +11,10 @@ import { join } from 'path'
 
 let monitorWindow: BrowserWindow | null = null
 
+// Recording status is shared to the monitor window over IPC (not localStorage,
+// which a separate renderer process doesn't reliably see updates to).
+let recStatus: { recording: boolean; startedAt: number } = { recording: false, startedAt: 0 }
+
 function createMonitorWindow(): BrowserWindow {
   const primary = screen.getPrimaryDisplay()
   const w = 340
@@ -69,6 +73,17 @@ export function registerMonitorHandlers(): void {
     return true
   })
   ipcMain.handle('monitor:isOpen', () => monitorWindow != null && !monitorWindow.isDestroyed())
+
+  // The main window publishes recording status; we cache it (for a monitor that
+  // opens mid-recording) and broadcast to every window.
+  ipcMain.handle('monitor:setStatus', (_e, status: { recording: boolean; startedAt: number }) => {
+    recStatus = status
+    for (const w of BrowserWindow.getAllWindows()) {
+      if (!w.isDestroyed()) w.webContents.send('monitor:status', status)
+    }
+    return true
+  })
+  ipcMain.handle('monitor:getStatus', () => recStatus)
 }
 
 export function disposeMonitor(): void {
