@@ -190,8 +190,15 @@ export function CameraCanvas({
   }, [deviceId, onStatus, captureHeight])
 
   // Render loop: draw the active visual; lazily load detection when needed.
+  // Driven by a self-scheduling timer (not requestAnimationFrame): macOS pauses
+  // rAF for a window that's occluded behind another app - which made recordings
+  // laggy for the whole set while the DJ software was in front. A timer keeps
+  // firing in the background (webPreferences.backgroundThrottling is off), so the
+  // record canvas - and the captured video - stay smooth no matter what's on top.
   useEffect(() => {
-    let raf = 0
+    const FRAME_MS = 1000 / 60
+    let timer = 0
+    let stopped = false
     const features = new PoseFeatures(30)
     let pose: PoseEngine | null = null
     let face: FaceEngine | null = null
@@ -221,8 +228,7 @@ export function CameraCanvas({
       return sum / (px.length / 4) / (3 * 255)
     }
 
-    const loop = (): void => {
-      raf = requestAnimationFrame(loop)
+    const tick = (): void => {
       const video = videoRef.current
       const canvas = canvasRef.current
       if (!canvas) return
@@ -350,8 +356,14 @@ export function CameraCanvas({
         w,
         h
       }
-      visual.render(ctx, input)
-      if (overlay) renderOverlayLayer(ctx, input, overlay, overlayParamsRef.current)
+      // The visible preview is pointless when the window is hidden (minimized or
+      // behind a full-screen app); skip it to save CPU, but keep the record
+      // canvas below updating so the recording stays live and smooth.
+      const drawVisible = !document.hidden
+      if (drawVisible) {
+        visual.render(ctx, input)
+        if (overlay) renderOverlayLayer(ctx, input, overlay, overlayParamsRef.current)
+      }
 
       // When this tile is the program, render the same effect a second time into
       // the shared record canvas. Its height is capped by recordMaxHeight (0 =
@@ -385,8 +397,8 @@ export function CameraCanvas({
         }
       }
 
-      if (skelRef.current) drawSkeletonOverlay(ctx, input)
-      if (faceOverlayRef.current) drawFaceMeshOverlay(ctx, input)
+      if (drawVisible && skelRef.current) drawSkeletonOverlay(ctx, input)
+      if (drawVisible && faceOverlayRef.current) drawFaceMeshOverlay(ctx, input)
 
       // Report the render frame rate roughly once a second.
       fpsCount++
@@ -397,9 +409,18 @@ export function CameraCanvas({
         fpsSince = now
       }
     }
-    loop()
+    // Schedule so the period stays ~FRAME_MS regardless of how long a tick takes,
+    // and so it never piles up under load.
+    const schedule = (): void => {
+      if (stopped) return
+      const t0 = performance.now()
+      tick()
+      timer = window.setTimeout(schedule, Math.max(0, FRAME_MS - (performance.now() - t0)))
+    }
+    schedule()
     return () => {
-      cancelAnimationFrame(raf)
+      stopped = true
+      clearTimeout(timer)
       pose?.close()
       face?.close()
     }

@@ -79,6 +79,7 @@ export class Recorder {
   private videoStream: MediaStream | null = null
   private audioStream: MediaStream | null = null
   private audioCtx: AudioContext | null = null
+  private frameTimer = 0
   private startedAt = 0
   /** Recent chunk sizes (last ~3s) to report the real encoded output rate. */
   private byteSamples: { t: number; size: number }[] = []
@@ -105,8 +106,24 @@ export class Recorder {
 
   async start(canvas: HTMLCanvasElement, opts: RecordOptions): Promise<void> {
     if (this.recording) return
-    const videoStream = canvas.captureStream(opts.fps)
+    // Manual-frame capture (0 = no automatic frames): we push each frame from a
+    // timer below. Automatic captureStream(fps) samples on the compositor's
+    // clock, which macOS stalls when the window is behind another app - that was
+    // making long recordings laggy the whole set. A timer + requestFrame keeps a
+    // steady rate in the background (backgroundThrottling is off).
+    const videoStream = canvas.captureStream(0)
     this.videoStream = videoStream
+    const canvasTrack = videoStream.getVideoTracks()[0] as CanvasCaptureMediaStreamTrack | undefined
+    if (canvasTrack?.requestFrame) {
+      const period = 1000 / Math.max(1, Math.min(60, opts.fps))
+      this.frameTimer = window.setInterval(() => {
+        try {
+          canvasTrack.requestFrame()
+        } catch {
+          /* track ended */
+        }
+      }, period)
+    }
 
     let audioTracks: MediaStreamTrack[] = []
     if (opts.includeAudio) {
@@ -184,6 +201,10 @@ export class Recorder {
   /** Stop, flush every pending chunk to disk, close the files. Returns paths. */
   async stop(): Promise<string[]> {
     if (!this.recording) return []
+    if (this.frameTimer) {
+      clearInterval(this.frameTimer)
+      this.frameTimer = 0
+    }
     const tracks = this.tracks
     await Promise.all(
       tracks.map(

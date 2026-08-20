@@ -102,11 +102,16 @@ export function registerRecordingHandlers(): void {
     }
   )
 
-  // Re-mux a WebM into a clean copy (fixes a file that wasn't closed properly).
+  // Re-mux a recording into a clean copy in the same container (fixes a file
+  // that wasn't closed properly, e.g. after a crash - WebM or MP4).
   ipcMain.handle('recording:repair', async (_e, inPath: string): Promise<string> => {
     const stem = basename(inPath).replace(/\.[^.]+$/, '')
-    const out = await uniquePath(dirname(inPath), `${stem}-fixed.webm`)
-    await runFfmpeg(['-y', '-fflags', '+genpts', '-i', inPath, '-c', 'copy', out])
+    const ext = (inPath.match(/\.[^.]+$/)?.[0] ?? '.webm').toLowerCase()
+    const out = await uniquePath(dirname(inPath), `${stem}-fixed${ext}`)
+    const args = ['-y', '-fflags', '+genpts', '-i', inPath, '-c', 'copy']
+    if (ext === '.mp4' || ext === '.mov') args.push('-movflags', '+faststart')
+    args.push(out)
+    await runFfmpeg(args)
     return out
   })
 
