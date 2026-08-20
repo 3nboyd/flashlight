@@ -96,6 +96,8 @@ function CameraTile({
   recordCanvas,
   recordAspect,
   recordClean,
+  recordMaxHeight,
+  showFps,
   showSkeleton,
   showFaceMesh,
   beatRef,
@@ -122,6 +124,10 @@ function CameraTile({
   recordAspect: number | null
   /** Record the plain camera (no effect) even though the tile shows an effect. */
   recordClean: boolean
+  /** Record height cap (0 = source); only used by the program tile. */
+  recordMaxHeight: number
+  /** Show the live FPS monitor badge on the tile. */
+  showFps: boolean
   showSkeleton: boolean
   showFaceMesh: boolean
   beatRef: React.MutableRefObject<number>
@@ -132,6 +138,7 @@ function CameraTile({
   onStatus?: (s: string) => void
   onClick: () => void
 }): JSX.Element {
+  const [fps, setFps] = useState(0)
   return (
     <div
       className={`cam-tile${program ? ' program' : ''}${focused ? ' focused' : ''}`}
@@ -147,6 +154,7 @@ function CameraTile({
         recordCanvas={recordCanvas}
         recordAspect={recordAspect}
         recordClean={recordClean}
+        recordMaxHeight={recordMaxHeight}
         showSkeleton={focused && showSkeleton}
         showFaceMesh={focused && showFaceMesh}
         detectFraming={detectFraming}
@@ -157,9 +165,18 @@ function CameraTile({
         onFraming={onFraming}
         onFeatures={focused ? onFeatures : undefined}
         onStatus={onStatus}
+        onFps={showFps ? setFps : undefined}
       />
       <span className="cam-badge role">{ROLE_LABEL[role]}</span>
       {program && <span className="cam-badge program">● PROGRAM</span>}
+      {showFps && (
+        <span
+          className={`cam-fps ${fps >= 25 ? 'good' : fps >= 15 ? 'warn' : 'bad'}`}
+          title="Render frame rate for this camera"
+        >
+          {fps} fps
+        </span>
+      )}
     </div>
   )
 }
@@ -220,6 +237,21 @@ export function CameraView({ embedded = false }: { embedded?: boolean } = {}): J
       return {}
     }
   })
+  // Recording resolution cap (0 = source), kept in sync with the RecordingPanel
+  // via a same-window custom event; and the per-camera FPS monitor toggle.
+  const [recMaxHeight, setRecMaxHeight] = useState<number>(
+    () => Number(localStorage.getItem('djc.rec.maxHeight') ?? '720')
+  )
+  const [showFps, setShowFps] = useState<boolean>(
+    () => localStorage.getItem('djc.camera.showFps') !== '0'
+  )
+  useEffect(() => localStorage.setItem('djc.camera.showFps', showFps ? '1' : '0'), [showFps])
+  useEffect(() => {
+    const onRec = (): void =>
+      setRecMaxHeight(Number(localStorage.getItem('djc.rec.maxHeight') ?? '720'))
+    window.addEventListener('djc-rec-settings', onRec)
+    return () => window.removeEventListener('djc-rec-settings', onRec)
+  }, [])
   const [feat, setFeat] = useState<PoseFeatureState>(ZERO_FEAT)
   const [status, setStatus] = useState('')
   const [needsPermission, setNeedsPermission] = useState(true)
@@ -1021,6 +1053,10 @@ export function CameraView({ embedded = false }: { embedded?: boolean } = {}): J
 
           <h3 style={{ marginTop: 8 }}>Testing Purposes / Beta Features</h3>
           <label className="cam-device-head">
+            <input type="checkbox" checked={showFps} onChange={(e) => setShowFps(e.target.checked)} />
+            <span>Show FPS monitor on each camera</span>
+          </label>
+          <label className="cam-device-head">
             <input
               type="checkbox"
               checked={showSkeleton}
@@ -1121,6 +1157,8 @@ export function CameraView({ embedded = false }: { embedded?: boolean } = {}): J
                       recordCanvas={programId === id ? recCanvasEl : null}
                       recordAspect={ASPECTS.find((a) => a.id === display.aspect)?.ratio ?? null}
                       recordClean={effectsOnly}
+                      recordMaxHeight={recMaxHeight}
+                      showFps={showFps}
                       showSkeleton={showSkeleton}
                       showFaceMesh={showFaceMesh}
                       beatRef={beatRef}

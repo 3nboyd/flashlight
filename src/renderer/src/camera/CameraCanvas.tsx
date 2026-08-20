@@ -48,10 +48,12 @@ export function CameraCanvas({
   recordCanvas = null,
   recordAspect = null,
   recordClean = false,
+  recordMaxHeight = 720,
   className = 'cam-canvas',
   onFeatures,
   onFraming,
   onStatus,
+  onFps,
   onCanvasReady
 }: {
   deviceId: string
@@ -68,6 +70,10 @@ export function CameraCanvas({
   /** Record the plain camera feed even while the tile shows an effect (so the
    *  file stays clean while the projector/TV keeps the effect). */
   recordClean?: boolean
+  /** Max height of the record canvas (0 = the camera's full resolution). */
+  recordMaxHeight?: number
+  /** Reports the tile's render frame rate (~once per second) for the monitors. */
+  onFps?: (fps: number) => void
   beatRef: React.MutableRefObject<number>
   audioRef: React.MutableRefObject<AudioReact>
   /** Live dominant lighting color (0-255) for effects that match the rig. */
@@ -98,9 +104,13 @@ export function CameraCanvas({
   const recordCanvasRef = useRef(recordCanvas)
   const recordAspectRef = useRef(recordAspect)
   const recordCleanRef = useRef(recordClean)
+  const recordMaxHeightRef = useRef(recordMaxHeight)
+  const onFpsRef = useRef(onFps)
   recordCanvasRef.current = recordCanvas
   recordAspectRef.current = recordAspect
   recordCleanRef.current = recordClean
+  recordMaxHeightRef.current = recordMaxHeight
+  onFpsRef.current = onFps
   const overlayIdRef = useRef(overlayId)
   const overlayParamsRef = useRef<Record<string, number>>(overlayParams ?? {})
   overlayIdRef.current = overlayId
@@ -164,6 +174,9 @@ export function CameraCanvas({
     let faceLoading = false
     let lastFeat = ZERO_FEAT
     let lastFramingMs = 0
+    // Render frame-rate counter, reported ~once per second for the monitors.
+    let fpsCount = 0
+    let fpsSince = performance.now()
     // Tiny offscreen buffer to measure average brightness (dead/black feed).
     const lumaCanvas = document.createElement('canvas')
     lumaCanvas.width = 16
@@ -271,18 +284,18 @@ export function CameraCanvas({
       if (overlay) renderOverlayLayer(ctx, input, overlay, overlayParamsRef.current)
 
       // When this tile is the program, render the same effect a second time into
-      // the shared record canvas, capped at 720p tall. Recording at the camera's
-      // full (often 1080p) resolution roughly doubles the per-frame render + video
-      // encode cost, which is what made long recordings choppy and laggy; 720p is
-      // plenty for a set recording and keeps 30fps smooth. Reuses this frame's
-      // pose/face; skips the debug overlays.
-      const REC_MAX_H = 720
+      // the shared record canvas. Its height is capped by recordMaxHeight (0 =
+      // the camera's full resolution): higher = sharper but ~quadratically more
+      // render + encode cost, so 720p keeps long recordings smooth while 1080p /
+      // source is available when the CPU/hardware encoder can take it. Reuses this
+      // frame's pose/face; skips the debug overlays.
       const rec = recordCanvasRef.current
       if (rec && ready && video) {
         const vw = video.videoWidth || w
         const vh = video.videoHeight || h
         const ar = recordAspectRef.current
-        const rh = Math.min(vh, REC_MAX_H)
+        const cap = recordMaxHeightRef.current
+        const rh = cap > 0 ? Math.min(vh, cap) : vh
         const rw = ar == null ? Math.round(vw * (rh / vh)) : Math.max(1, Math.round(rh * ar))
         if (rec.width !== rw || rec.height !== rh) {
           rec.width = rw
@@ -304,6 +317,15 @@ export function CameraCanvas({
 
       if (skelRef.current) drawSkeletonOverlay(ctx, input)
       if (faceOverlayRef.current) drawFaceMeshOverlay(ctx, input)
+
+      // Report the render frame rate roughly once a second.
+      fpsCount++
+      const dt = now - fpsSince
+      if (dt >= 1000) {
+        onFpsRef.current?.(Math.round((fpsCount * 1000) / dt))
+        fpsCount = 0
+        fpsSince = now
+      }
     }
     loop()
     return () => {

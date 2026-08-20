@@ -8,6 +8,8 @@ const AUDIODEV_KEY = 'djc.rec.audioDevice'
 const SEPARATE_KEY = 'djc.rec.separate'
 const OUTPUT_KEY = 'djc.rec.output'
 const QUALITY_KEY = 'djc.rec.quality'
+const MAXH_KEY = 'djc.rec.maxHeight' // record height cap: 0 = source, 720, 1080
+const FPS_KEY = 'djc.rec.fps'
 
 type OutputFormat = 'mp4' | 'mov'
 type Quality = 'high' | 'balanced' | 'small'
@@ -170,6 +172,8 @@ export function RecordingPanel({
   const [quality, setQuality] = useState<Quality>(
     () => (localStorage.getItem(QUALITY_KEY) as Quality) ?? 'balanced'
   )
+  const [maxHeight, setMaxHeight] = useState<number>(() => Number(localStorage.getItem(MAXH_KEY) ?? '720'))
+  const [fps, setFps] = useState<number>(() => Number(localStorage.getItem(FPS_KEY) ?? '30'))
 
   const [recording, setRecording] = useState(false)
   const [elapsed, setElapsed] = useState(0)
@@ -220,7 +224,7 @@ export function RecordingPanel({
     try {
       await recorderRef.current.start(canvas, {
         format,
-        fps: 30,
+        fps,
         includeAudio,
         audioDeviceId: audioDevice,
         separate,
@@ -364,9 +368,43 @@ export function RecordingPanel({
             Folder: {folderLabel}
           </button>
           <p className="settings-hint" style={{ margin: 0 }}>
-            Streams straight to disk at 720p. Use MP4 (H.264, hardware) for long sets — the
-            smoothest and lightest on the CPU. WebM/VP9 is heavy and can drop frames.
+            Streams straight to disk. Use MP4 (H.264, hardware) for long sets — the smoothest and
+            lightest on the CPU. Higher resolution / fps look better but cost more CPU; watch the
+            per-camera FPS monitor to make sure it holds.
           </p>
+          <label className="cam-rec-field">
+            <span>Resolution</span>
+            <select
+              value={maxHeight}
+              disabled={recording}
+              onChange={(e) => {
+                const v = Number(e.target.value)
+                setMaxHeight(v)
+                localStorage.setItem(MAXH_KEY, String(v))
+                window.dispatchEvent(new Event('djc-rec-settings'))
+              }}
+            >
+              <option value={720}>720p (smoothest)</option>
+              <option value={1080}>1080p</option>
+              <option value={0}>Source (camera max)</option>
+            </select>
+          </label>
+          <label className="cam-rec-field">
+            <span>Frame rate</span>
+            <select
+              value={fps}
+              disabled={recording}
+              onChange={(e) => {
+                const v = Number(e.target.value)
+                setFps(v)
+                localStorage.setItem(FPS_KEY, String(v))
+              }}
+            >
+              <option value={24}>24 fps (cinematic)</option>
+              <option value={30}>30 fps</option>
+              <option value={60}>60 fps (heavy)</option>
+            </select>
+          </label>
           <label className="cam-rec-field">
             <span>Capture</span>
             <select value={formatMime} onChange={(e) => setFormat(e.target.value)} disabled={recording}>
