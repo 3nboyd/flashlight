@@ -78,6 +78,13 @@
   white-space: nowrap;
 }
 
+.cam-device-quality {
+  font-size: 10px;
+  color: var(--text-tertiary, #6b7280);
+  font-variant-numeric: tabular-nums;
+  padding: 1px 0 3px 24px;
+}
+
 .cam-primary-btn {
   font-size: 10px;
   padding: 2px 7px;
@@ -400,6 +407,13 @@
 .rec-timer.on {
   color: #ff5b5b;
   font-weight: 700;
+}
+
+.rec-rate {
+  font-variant-numeric: tabular-nums;
+  font-size: 11px;
+  color: var(--text-tertiary, #6b7280);
+  white-space: nowrap;
 }
 
 .rec-eq {

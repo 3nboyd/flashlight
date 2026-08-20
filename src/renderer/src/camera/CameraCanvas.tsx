@@ -54,6 +54,7 @@ export function CameraCanvas({
   onFraming,
   onStatus,
   onFps,
+  onResolution,
   onCanvasReady
 }: {
   deviceId: string
@@ -74,6 +75,8 @@ export function CameraCanvas({
   recordMaxHeight?: number
   /** Reports the tile's render frame rate (~once per second) for the monitors. */
   onFps?: (fps: number) => void
+  /** Reports the camera's actual capture resolution + fps once the stream opens. */
+  onResolution?: (info: { w: number; h: number; fps: number }) => void
   beatRef: React.MutableRefObject<number>
   audioRef: React.MutableRefObject<AudioReact>
   /** Live dominant lighting color (0-255) for effects that match the rig. */
@@ -106,11 +109,13 @@ export function CameraCanvas({
   const recordCleanRef = useRef(recordClean)
   const recordMaxHeightRef = useRef(recordMaxHeight)
   const onFpsRef = useRef(onFps)
+  const onResolutionRef = useRef(onResolution)
   recordCanvasRef.current = recordCanvas
   recordAspectRef.current = recordAspect
   recordCleanRef.current = recordClean
   recordMaxHeightRef.current = recordMaxHeight
   onFpsRef.current = onFps
+  onResolutionRef.current = onResolution
   const overlayIdRef = useRef(overlayId)
   const overlayParamsRef = useRef<Record<string, number>>(overlayParams ?? {})
   overlayIdRef.current = overlayId
@@ -146,6 +151,14 @@ export function CameraCanvas({
       if (videoRef.current) {
         videoRef.current.srcObject = s
         void videoRef.current.play()
+        // Report the actual capture resolution + fps for the per-camera readout.
+        const report = (): void => {
+          const st = s.getVideoTracks()[0]?.getSettings()
+          const w = videoRef.current?.videoWidth || st?.width || 0
+          const h = videoRef.current?.videoHeight || st?.height || 0
+          if (w && h) onResolutionRef.current?.({ w, h, fps: Math.round(st?.frameRate ?? 0) })
+        }
+        videoRef.current.addEventListener('loadedmetadata', report, { once: true })
       }
     }
     navigator.mediaDevices

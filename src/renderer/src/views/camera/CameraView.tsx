@@ -39,6 +39,16 @@ const ASPECTS: { id: string; label: string; css: string; ratio: number | null }[
   { id: 'source', label: 'Match camera', css: 'auto', ratio: null }
 ]
 
+/** Friendly name for a capture height (what quality a camera is delivering). */
+function qualityTier(h: number): string {
+  if (h >= 2160) return '4K'
+  if (h >= 1440) return '1440p'
+  if (h >= 1080) return '1080p'
+  if (h >= 720) return '720p HD'
+  if (h >= 480) return '480p'
+  return `${h}p`
+}
+
 /** Columns/rows that pack N camera tiles into a tight collage. When the grid
  *  has a spare trailing cell, the live "final cut" preview fills it. */
 function collageDims(n: number): { cols: number; rows: number } {
@@ -106,6 +116,7 @@ function CameraTile({
   onFraming,
   onFeatures,
   onStatus,
+  onResolution,
   onClick
 }: {
   deviceId: string
@@ -136,6 +147,7 @@ function CameraTile({
   onFraming: (feat: PoseFeatureState, face: FaceFrame | null, luma: number) => void
   onFeatures?: (f: PoseFeatureState) => void
   onStatus?: (s: string) => void
+  onResolution?: (info: { w: number; h: number; fps: number }) => void
   onClick: () => void
 }): JSX.Element {
   const [fps, setFps] = useState(0)
@@ -166,6 +178,7 @@ function CameraTile({
         onFeatures={focused ? onFeatures : undefined}
         onStatus={onStatus}
         onFps={showFps ? setFps : undefined}
+        onResolution={onResolution}
       />
       <span className="cam-badge role">{ROLE_LABEL[role]}</span>
       {program && <span className="cam-badge program">● PROGRAM</span>}
@@ -245,10 +258,15 @@ export function CameraView({ embedded = false }: { embedded?: boolean } = {}): J
   const [showFps, setShowFps] = useState<boolean>(
     () => localStorage.getItem('djc.camera.showFps') !== '0'
   )
-  useEffect(() => localStorage.setItem('djc.camera.showFps', showFps ? '1' : '0'), [showFps])
+  // Actual capture resolution/fps per enabled camera (reported by each tile).
+  const [resolutions, setResolutions] = useState<Record<string, { w: number; h: number; fps: number }>>({})
+  // The FPS-monitor toggle + record resolution live in the RecordingPanel now;
+  // it writes localStorage and fires this event so we re-read them here.
   useEffect(() => {
-    const onRec = (): void =>
+    const onRec = (): void => {
       setRecMaxHeight(Number(localStorage.getItem('djc.rec.maxHeight') ?? '720'))
+      setShowFps(localStorage.getItem('djc.camera.showFps') !== '0')
+    }
     window.addEventListener('djc-rec-settings', onRec)
     return () => window.removeEventListener('djc-rec-settings', onRec)
   }, [])
@@ -848,6 +866,15 @@ export function CameraView({ embedded = false }: { embedded?: boolean } = {}): J
                       <span className="cam-device-name">{d.label || `Camera ${i + 1}`}</span>
                     </label>
                     {on && (
+                      <div className="cam-device-quality" title="This camera's actual capture resolution and frame rate">
+                        {resolutions[d.deviceId]
+                          ? `${resolutions[d.deviceId].w}×${resolutions[d.deviceId].h}${
+                              resolutions[d.deviceId].fps ? ` @ ${resolutions[d.deviceId].fps}fps` : ''
+                            } · ${qualityTier(resolutions[d.deviceId].h)}`
+                          : 'reading quality…'}
+                      </div>
+                    )}
+                    {on && (
                       <div className="cam-device-cfg">
                         <select
                           className="cam-role-select"
@@ -1053,10 +1080,6 @@ export function CameraView({ embedded = false }: { embedded?: boolean } = {}): J
 
           <h3 style={{ marginTop: 8 }}>Testing Purposes / Beta Features</h3>
           <label className="cam-device-head">
-            <input type="checkbox" checked={showFps} onChange={(e) => setShowFps(e.target.checked)} />
-            <span>Show FPS monitor on each camera</span>
-          </label>
-          <label className="cam-device-head">
             <input
               type="checkbox"
               checked={showSkeleton}
@@ -1167,6 +1190,7 @@ export function CameraView({ embedded = false }: { embedded?: boolean } = {}): J
                       onFraming={(f, face, luma) => onFraming(id, f, face, luma)}
                       onFeatures={onFeatures}
                       onStatus={setStatus}
+                      onResolution={(info) => setResolutions((prev) => ({ ...prev, [id]: info }))}
                       onClick={() => onTileClick(id)}
                     />
                   )

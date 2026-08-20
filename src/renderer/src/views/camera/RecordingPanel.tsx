@@ -174,9 +174,11 @@ export function RecordingPanel({
   )
   const [maxHeight, setMaxHeight] = useState<number>(() => Number(localStorage.getItem(MAXH_KEY) ?? '720'))
   const [fps, setFps] = useState<number>(() => Number(localStorage.getItem(FPS_KEY) ?? '30'))
+  const [showFps, setShowFps] = useState<boolean>(() => localStorage.getItem('djc.camera.showFps') !== '0')
 
   const [recording, setRecording] = useState(false)
   const [elapsed, setElapsed] = useState(0)
+  const [mbps, setMbps] = useState(0)
   const [busy, setBusy] = useState('')
   const [saved, setSaved] = useState<string[]>([])
   const [error, setError] = useState('')
@@ -190,10 +192,13 @@ export function RecordingPanel({
       .catch(() => undefined)
   }, [includeAudio])
 
-  // Tick the elapsed clock while recording.
+  // Tick the elapsed clock + encoder output rate while recording.
   useEffect(() => {
     if (!recording) return
-    const id = setInterval(() => setElapsed(recorderRef.current.elapsedMs), 250)
+    const id = setInterval(() => {
+      setElapsed(recorderRef.current.elapsedMs)
+      setMbps(recorderRef.current.mbps)
+    }, 250)
     return () => clearInterval(id)
   }, [recording])
 
@@ -335,6 +340,11 @@ export function RecordingPanel({
           {recording ? '■ Stop' : '● Record'}
         </button>
         <span className={`rec-timer${recording ? ' on' : ''}`}>{fmtElapsed(elapsed)}</span>
+        {recording && (
+          <span className="rec-rate" title="Actual encoder output rate. Near your target bitrate = the encoder is keeping up.">
+            {mbps.toFixed(1)} Mbps
+          </span>
+        )}
         <AudioMeter deviceId={audioDevice} active={includeAudio} />
         <select
           className="rec-audio-select"
@@ -465,6 +475,18 @@ export function RecordingPanel({
               Separate audio + video files
             </label>
           )}
+          <label className="cam-rec-check">
+            <input
+              type="checkbox"
+              checked={showFps}
+              onChange={(e) => {
+                setShowFps(e.target.checked)
+                localStorage.setItem('djc.camera.showFps', e.target.checked ? '1' : '0')
+                window.dispatchEvent(new Event('djc-rec-settings'))
+              }}
+            />
+            Show FPS monitor on cameras
+          </label>
           <button className="cam-output-btn" onClick={recoverFile} disabled={!!busy}>
             Recover / fix a recording file…
           </button>

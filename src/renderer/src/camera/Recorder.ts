@@ -77,6 +77,8 @@ export class Recorder {
   private videoStream: MediaStream | null = null
   private audioStream: MediaStream | null = null
   private startedAt = 0
+  /** Recent chunk sizes (last ~3s) to report the real encoded output rate. */
+  private byteSamples: { t: number; size: number }[] = []
 
   get recording(): boolean {
     return this.tracks.length > 0
@@ -84,6 +86,18 @@ export class Recorder {
 
   get elapsedMs(): number {
     return this.recording ? Date.now() - this.startedAt : 0
+  }
+
+  /** Actual encoded output rate in Mbps (what the encoder is really writing). A
+   *  value far below the target bitrate on a busy scene hints the encoder is
+   *  struggling; near-target means it is keeping up. */
+  get mbps(): number {
+    const s = this.byteSamples
+    if (s.length < 2) return 0
+    const span = (s[s.length - 1].t - s[0].t) / 1000
+    if (span <= 0) return 0
+    const bytes = s.reduce((sum, x) => sum + x.size, 0)
+    return (bytes * 8) / span / 1e6
   }
 
   async start(canvas: HTMLCanvasElement, opts: RecordOptions): Promise<void> {
@@ -110,6 +124,7 @@ export class Recorder {
 
     const base = `dj-${timestamp()}`
     this.tracks = []
+    this.byteSamples = []
 
     const startOne = async (stream: MediaStream, mimeType: string, filename: string): Promise<void> => {
       const { id, path } = await window.djCompanion.recording.openStream(opts.folder, filename)
@@ -123,6 +138,10 @@ export class Recorder {
       const track: Track = { rec, streamId: id, path, writeChain: Promise.resolve() }
       rec.ondataavailable = (e): void => {
         if (!e.data || e.data.size === 0) return
+        // Track output rate over a ~3s window for the encoder monitor.
+        const t = performance.now()
+        this.byteSamples.push({ t, size: e.data.size })
+        while (this.byteSamples.length && this.byteSamples[0].t < t - 3000) this.byteSamples.shift()
         // Chain each write so chunks reach disk in order; the Blob is held only
         // until its bytes are flushed, so memory stays flat.
         track.writeChain = track.writeChain
