@@ -41,6 +41,7 @@ export function CameraCanvas({
   lightRef,
   params,
   fit = 'fill',
+  captureHeight = 720,
   showSkeleton = false,
   showFaceMesh = false,
   detectFraming = false,
@@ -85,6 +86,8 @@ export function CameraCanvas({
   params?: Record<string, number>
   /** How the frame maps into the tile: 'fill' (crop) or 'fit' (letterbox). */
   fit?: 'fit' | 'fill'
+  /** Preferred capture height to request from the camera (e.g. 720 or 1080). */
+  captureHeight?: number
   showSkeleton?: boolean
   showFaceMesh?: boolean
   /** Run body (and optionally face) detection to feed the auto-director, even
@@ -163,7 +166,11 @@ export function CameraCanvas({
     }
     navigator.mediaDevices
       .getUserMedia({
-        video: { deviceId: { exact: deviceId }, width: { ideal: 1280 }, height: { ideal: 720 } },
+        video: {
+          deviceId: { exact: deviceId },
+          width: { ideal: captureHeight >= 1080 ? 1920 : 1280 },
+          height: { ideal: captureHeight }
+        },
         audio: false
       })
       .then(attach)
@@ -175,7 +182,7 @@ export function CameraCanvas({
       cancelled = true
       stream?.getTracks().forEach((t) => t.stop())
     }
-  }, [deviceId, onStatus])
+  }, [deviceId, onStatus, captureHeight])
 
   // Render loop: draw the active visual; lazily load detection when needed.
   useEffect(() => {

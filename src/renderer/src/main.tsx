@@ -3,6 +3,7 @@ import ReactDOM from 'react-dom/client'
 import App from './App'
 import { OutputView } from './views/camera/OutputView'
 import { PopoutView } from './views/PopoutView'
+import { MonitorView } from './views/MonitorView'
 import './styles/theme.css'
 import './styles/global.css'
 
@@ -17,6 +18,7 @@ function Root(): React.JSX.Element {
   if (route === 'output') return <OutputView />
   if (route === 'popout-camera') return <PopoutView kind="camera" />
   if (route === 'popout-lighting') return <PopoutView kind="lighting" />
+  if (route === 'monitor') return <MonitorView />
   return <App />
 }
 

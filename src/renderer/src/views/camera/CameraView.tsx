@@ -100,6 +100,7 @@ function CameraTile({
   params,
   overlayParams,
   fit,
+  captureHeight,
   program,
   focused,
   detectFraming,
@@ -126,6 +127,8 @@ function CameraTile({
   params: Record<string, number>
   overlayParams: Record<string, number>
   fit: 'fit' | 'fill'
+  /** Preferred camera capture height (720 or 1080). */
+  captureHeight: number
   program: boolean
   focused: boolean
   /** Run detection for the auto-director (only worth it when Director Mode is on). */
@@ -163,6 +166,7 @@ function CameraTile({
         params={params}
         overlayParams={overlayParams}
         fit={fit}
+        captureHeight={captureHeight}
         recordCanvas={recordCanvas}
         recordAspect={recordAspect}
         recordClean={recordClean}
@@ -260,6 +264,10 @@ export function CameraView({ embedded = false }: { embedded?: boolean } = {}): J
   )
   // Actual capture resolution/fps per enabled camera (reported by each tile).
   const [resolutions, setResolutions] = useState<Record<string, { w: number; h: number; fps: number }>>({})
+  // Preferred capture height requested from the cameras (720 = safe default).
+  const [captureHeight, setCaptureHeight] = useState<number>(
+    () => Number(localStorage.getItem('djc.camera.captureHeight') ?? '720')
+  )
   // The FPS-monitor toggle + record resolution live in the RecordingPanel now;
   // it writes localStorage and fires this event so we re-read them here.
   useEffect(() => {
@@ -848,6 +856,20 @@ export function CameraView({ embedded = false }: { embedded?: boolean } = {}): J
               </button>
             )}
           </div>
+          <label className="cam-out-row" title="Resolution to ask each camera for. 1080p is sharper but heavier — watch the FPS monitor.">
+            <span>Request quality</span>
+            <select
+              value={captureHeight}
+              onChange={(e) => {
+                const v = Number(e.target.value)
+                setCaptureHeight(v)
+                localStorage.setItem('djc.camera.captureHeight', String(v))
+              }}
+            >
+              <option value={720}>720p (smoothest)</option>
+              <option value={1080}>1080p (if the camera supports it)</option>
+            </select>
+          </label>
           {needsPermission ? (
             <button className="primary-button" onClick={requestPermission}>
               Allow camera access
@@ -1174,6 +1196,7 @@ export function CameraView({ embedded = false }: { embedded?: boolean } = {}): J
                           : {}
                       }
                       fit={display.fit}
+                      captureHeight={captureHeight}
                       program={programId === id}
                       focused={focused === id}
                       detectFraming={auto}

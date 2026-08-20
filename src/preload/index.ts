@@ -121,6 +121,12 @@ const api = {
     isOpen: (): Promise<boolean> => ipcRenderer.invoke('output:isOpen'),
     count: (): Promise<number> => ipcRenderer.invoke('output:count')
   },
+  monitor: {
+    /** Open/close the floating always-on-top recording monitor window. */
+    open: (): Promise<boolean> => ipcRenderer.invoke('monitor:open'),
+    close: (): Promise<boolean> => ipcRenderer.invoke('monitor:close'),
+    isOpen: (): Promise<boolean> => ipcRenderer.invoke('monitor:isOpen')
+  },
   popout: {
     open: (name: string): Promise<boolean> => ipcRenderer.invoke('popout:open', name),
     close: (name: string): Promise<boolean> => ipcRenderer.invoke('popout:close', name),

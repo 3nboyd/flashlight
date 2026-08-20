@@ -237,6 +237,8 @@ export function RecordingPanel({
       })
       setSaved([])
       setRecording(true)
+      // Publish status for the floating monitor window.
+      localStorage.setItem('djc.rec.status', JSON.stringify({ recording: true, startedAt: Date.now() }))
     } catch (err) {
       setError(`Could not start recording: ${(err as Error)?.message ?? err}`)
     }
@@ -248,8 +250,10 @@ export function RecordingPanel({
       const paths = await recorderRef.current.stop()
       setRecording(false)
       setSaved(paths)
+      localStorage.setItem('djc.rec.status', JSON.stringify({ recording: false, startedAt: 0 }))
     } catch (err) {
       setRecording(false)
+      localStorage.setItem('djc.rec.status', JSON.stringify({ recording: false, startedAt: 0 }))
       setError(`Could not finish recording: ${(err as Error)?.message ?? err}`)
     }
   }
@@ -487,6 +491,13 @@ export function RecordingPanel({
             />
             Show FPS monitor on cameras
           </label>
+          <button
+            className="cam-output-btn"
+            title="Floating always-on-top window showing the live program + REC status, so you can watch it while using other apps"
+            onClick={() => window.djCompanion.monitor.open()}
+          >
+            ⧉ Pop-out floating monitor (always on top)
+          </button>
           <button className="cam-output-btn" onClick={recoverFile} disabled={!!busy}>
             Recover / fix a recording file…
           </button>

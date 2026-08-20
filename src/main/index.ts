@@ -9,6 +9,7 @@ import { registerRenameHandlers } from './ipc/rename'
 import { registerLightingHandlers, disposeLighting } from './ipc/lighting'
 import { registerOutputHandlers, disposeOutput } from './ipc/output'
 import { registerPopoutHandlers, disposePopouts } from './ipc/popout'
+import { registerMonitorHandlers, disposeMonitor } from './ipc/monitor'
 import { registerRecordingHandlers, disposeRecording } from './ipc/recording'
 
 const isMac = process.platform === 'darwin'
@@ -74,6 +75,7 @@ app.whenReady().then(() => {
   registerLightingHandlers()
   registerOutputHandlers()
   registerPopoutHandlers()
+  registerMonitorHandlers()
   registerRecordingHandlers()
 
   createWindow()
@@ -92,5 +94,6 @@ app.on('before-quit', () => {
   disposeLighting()
   disposeOutput()
   disposePopouts()
+  disposeMonitor()
   disposeRecording()
 })
