@@ -83,6 +83,9 @@ type CameraConfig = {
   priority?: number
   /** A/V-sync delay for this camera in ms (0 = none). */
   delayMs?: number
+  /** "Push forward": delay every OTHER camera + the audio by this much, to line
+   *  them up behind a laggy (e.g. wireless) camera. */
+  pushForwardMs?: number
 }
 /** A MIDI note bound to a camera action: cut the program to a camera, or toggle
  *  the auto-director. */
@@ -360,7 +363,8 @@ export function CameraView({ embedded = false }: { embedded?: boolean } = {}): J
         overlay: c.overlay && c.overlay !== c.effect ? c.overlay : '',
         lookSwitch: c.lookSwitch ?? defaultLookSwitch(c.role),
         priority: c.priority ?? 1,
-        delayMs: c.delayMs ?? 0
+        delayMs: c.delayMs ?? 0,
+        pushForwardMs: c.pushForwardMs ?? 0
       }
     },
     [configs]
@@ -712,6 +716,12 @@ export function CameraView({ embedded = false }: { embedded?: boolean } = {}): J
       return { ...prev, [id]: { ...base, delayMs } }
     })
   }, [])
+  const setPushForward = useCallback((id: string, pushForwardMs: number) => {
+    setConfigs((prev) => {
+      const base = prev[id] ?? { role: DEFAULT_CAMERA_ROLE, effect: 'camera' }
+      return { ...prev, [id]: { ...base, pushForwardMs } }
+    })
+  }, [])
   const onTileClick = useCallback((id: string) => {
     setFocused(id)
     if (!autoRef.current) {
@@ -829,6 +839,12 @@ export function CameraView({ embedded = false }: { embedded?: boolean } = {}): J
   // fills the bottom-right (e.g. 3 cameras -> 2x2 with the program in cell 4).
   const { cols, rows } = collageDims(enabled.length)
   const showProgramCell = enabled.length >= 2 && cols * rows > enabled.length
+  // "Push forward" aligns everything to the most-pushed (laggiest) camera: that
+  // camera runs live, every other camera + the audio get delayed by the gap.
+  const globalPush = Math.max(0, ...enabled.map((id) => getConfig(id).pushForwardMs))
+  useEffect(() => {
+    localStorage.setItem('djc.camera.globalPush', String(globalPush))
+  }, [globalPush])
 
   return (
     <div className={`view camera-view${embedded ? ' camera-view--embedded' : ''}`}>
@@ -936,7 +952,7 @@ export function CameraView({ embedded = false }: { embedded?: boolean } = {}): J
                             </option>
                           ))}
                         </select>
-                        <label className="cam-delay" title="Delay this camera to line it up (for laggy wireless feeds). Max 400ms.">
+                        <label className="cam-delay" title="Hold this camera back (show an older frame) to line it up. Max 400ms.">
                           <span>Delay</span>
                           <input
                             type="range"
@@ -947,6 +963,18 @@ export function CameraView({ embedded = false }: { embedded?: boolean } = {}): J
                             onChange={(e) => setDelay(d.deviceId, Number(e.target.value))}
                           />
                           <span className="cam-delay-val">{cfg.delayMs} ms</span>
+                        </label>
+                        <label className="cam-delay" title="Push this camera forward: delays every OTHER camera + the audio to line up behind it (for a laggy wireless feed). Max 300ms.">
+                          <span>Push fwd</span>
+                          <input
+                            type="range"
+                            min={0}
+                            max={300}
+                            step={10}
+                            value={cfg.pushForwardMs}
+                            onChange={(e) => setPushForward(d.deviceId, Number(e.target.value))}
+                          />
+                          <span className="cam-delay-val">{cfg.pushForwardMs} ms</span>
                         </label>
                       </div>
                     )}
@@ -1222,7 +1250,7 @@ export function CameraView({ embedded = false }: { embedded?: boolean } = {}): J
                       }
                       fit={display.fit}
                       captureHeight={captureHeight}
-                      cameraDelayMs={cfg.delayMs}
+                      cameraDelayMs={cfg.delayMs + (globalPush - cfg.pushForwardMs)}
                       program={programId === id}
                       focused={focused === id}
                       detectFraming={auto}

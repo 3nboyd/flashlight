@@ -210,7 +210,9 @@ export function CameraCanvas({
     let fpsCount = 0
     let fpsSince = performance.now()
     // Frame-delay ring buffer for A/V sync (only allocated while a delay is set).
-    const DELAY_MAX_MS = 400
+    // Ceiling covers a per-camera delay (<=400) plus a "push forward" from another
+    // camera (<=300).
+    const DELAY_MAX_MS = 700
     const DELAY_RING_H = 720
     const delayPool: HTMLCanvasElement[] = []
     let delayRing: { c: HTMLCanvasElement; t: number }[] = []

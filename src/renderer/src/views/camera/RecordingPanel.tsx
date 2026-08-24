@@ -236,7 +236,9 @@ export function RecordingPanel({
         audioDeviceId: audioDevice,
         separate,
         folder,
-        audioDelayMs: audioDelay
+        // Add any "push forward" amount so the audio lines up behind the pushed
+        // (laggy wireless) camera, on top of the manual audio delay.
+        audioDelayMs: audioDelay + Number(localStorage.getItem('djc.camera.globalPush') ?? '0')
       })
       setSaved([])
       setRecording(true)
