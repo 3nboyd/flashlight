@@ -928,7 +928,7 @@ export class LightingHost {
 
   /** One-shot Art-Net node discovery: broadcast a poll, gather the replies. */
   scanArtNet(): Promise<DiscoveredNode[]> {
-    return this.discovery.scan('255.255.255.255')
+    return this.discovery.scan('255.255.255.255', 1500, this.project.output.artnetHost)
   }
 
   /** Force one fixture full-on (or clear with null) to trace the signal chain. */

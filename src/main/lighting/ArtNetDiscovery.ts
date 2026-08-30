@@ -1,5 +1,6 @@
 import { createSocket, type Socket } from 'dgram'
 import { encodeArtPoll, parseArtPollReply, ARTNET_PORT, type ArtNetNodeInfo } from '@core/lighting/dmx/artnet'
+import { bindAddressFor } from './netiface'
 
 export interface DiscoveredNode extends ArtNetNodeInfo {
   /** Source address of the UDP datagram (what actually answered us). */
@@ -33,7 +34,7 @@ export class ArtNetDiscovery {
    * even if the port cannot be bound (lastError is set), so the UI can show a
    * helpful message instead of hanging.
    */
-  scan(broadcastAddress = '255.255.255.255', windowMs = 1500): Promise<DiscoveredNode[]> {
+  scan(broadcastAddress = '255.255.255.255', windowMs = 1500, host?: string): Promise<DiscoveredNode[]> {
     return new Promise((resolve) => {
       this.close()
       this.nodes.clear()
@@ -60,20 +61,30 @@ export class ArtNetDiscovery {
         this.nodes.set(rinfo.address, { ...info, from: rinfo.address, lastSeenMs: Date.now() })
       })
 
-      socket.bind(ARTNET_PORT, () => {
+      const onBound = (): void => {
         try {
           socket.setBroadcast(true)
         } catch {
           // Non-fatal; unicast replies still arrive.
         }
         const poll = encodeArtPoll()
-        socket.send(poll, ARTNET_PORT, broadcastAddress)
+        const send = (): void => {
+          socket.send(poll, ARTNET_PORT, broadcastAddress)
+          // Also poll the configured node directly - some only answer unicast.
+          if (host && host !== broadcastAddress) socket.send(poll, ARTNET_PORT, host)
+        }
+        send()
         // Poll twice: some nodes miss or rate-limit the first request.
         setTimeout(() => {
-          if (this.socket === socket) socket.send(poll, ARTNET_PORT, broadcastAddress)
+          if (this.socket === socket) send()
         }, 250)
         setTimeout(finish, windowMs)
-      })
+      }
+      // Bind to the rig's NIC so the poll doesn't go out an unrelated interface
+      // (e.g. an iPhone hotspot) - the usual reason a scan finds nothing.
+      const bindAddr = host ? bindAddressFor(host) : undefined
+      if (bindAddr) socket.bind(ARTNET_PORT, bindAddr, onBound)
+      else socket.bind(ARTNET_PORT, onBound)
     })
   }
 

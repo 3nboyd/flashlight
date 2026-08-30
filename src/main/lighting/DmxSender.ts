@@ -3,6 +3,7 @@ import { randomBytes } from 'crypto'
 import { encodeArtDmx, ARTNET_PORT } from '@core/lighting/dmx/artnet'
 import { encodeSacnData, sacnMulticastAddress, SACN_PORT } from '@core/lighting/dmx/sacn'
 import { encodeEnttecProDmx } from '@core/lighting/dmx/enttec'
+import { bindAddressFor } from './netiface'
 
 export interface DmxSenderConfig {
   protocol: 'artnet' | 'sacn' | 'enttec'
@@ -64,14 +65,19 @@ export class DmxSender {
     socket.on('error', (err) => {
       this.lastError = err.message
     })
-    socket.bind(() => {
+    const onBound = (): void => {
       try {
         socket.setBroadcast(true)
         socket.setMulticastTTL(1)
       } catch {
         // Socket may already be closing; error listener captures real failures.
       }
-    })
+    }
+    // Bind to the NIC on the rig's subnet so broadcasts don't leak out an
+    // unrelated interface (e.g. an iPhone hotspot). undefined = OS default.
+    const bindAddr = this.config.protocol === 'artnet' ? bindAddressFor(this.config.artnetHost) : undefined
+    if (bindAddr) socket.bind(0, bindAddr, onBound)
+    else socket.bind(onBound)
     this.socket = socket
     return socket
   }
@@ -114,7 +120,19 @@ export class DmxSender {
   reconfigure(config: DmxSenderConfig): void {
     const serialChanged =
       config.protocol !== this.config.protocol || config.serialPath !== this.config.serialPath
+    // The bound NIC depends on protocol + host, so drop the socket when those
+    // change; the next send rebinds to the correct interface.
+    const netChanged = config.protocol !== this.config.protocol || config.artnetHost !== this.config.artnetHost
     this.config = config
+    if (netChanged && this.socket) {
+      const sock = this.socket
+      this.socket = null
+      try {
+        sock.close()
+      } catch {
+        // Already closed.
+      }
+    }
     if (serialChanged && this.serial) {
       const serial = this.serial
       this.serial = null
