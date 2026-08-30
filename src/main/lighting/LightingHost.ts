@@ -24,6 +24,17 @@ import { BpmEstimator } from '@core/lighting/audio/BeatDetector'
 import { DmxSender } from './DmxSender'
 import { Os2lServer, type DiscoveryMode } from './Os2lServer'
 import { ArtNetDiscovery, type DiscoveredNode } from './ArtNetDiscovery'
+import { listCandidates, pickArtnetInterface, type NetIface } from './netiface'
+
+export interface AutoConnectResult {
+  ok: boolean
+  message: string
+  interfaceName?: string
+  address?: string
+  broadcast?: string
+  /** Every candidate interface, so the UI can offer a manual pick if needed. */
+  interfaces: NetIface[]
+}
 
 export type BeatSource = 'os2l' | 'audio' | 'manual'
 
@@ -929,6 +940,39 @@ export class LightingHost {
   /** One-shot Art-Net node discovery: broadcast a poll, gather the replies. */
   scanArtNet(): Promise<DiscoveredNode[]> {
     return this.discovery.scan('255.255.255.255', 1500, this.project.output.artnetHost)
+  }
+
+  /**
+   * One-button auto-connect: detect the rig's network adapter, switch output to
+   * Art-Net broadcasting on that subnet's directed broadcast, and bind to it.
+   * Works even for nodes that never answer discovery - it configures the path
+   * rather than waiting for the node to introduce itself. Persists the change.
+   */
+  async autoConnectArtnet(): Promise<AutoConnectResult> {
+    const interfaces = listCandidates()
+    const iface = pickArtnetInterface()
+    if (!iface) {
+      return {
+        ok: false,
+        message: 'No Ethernet adapter found. Plug in your DMX/Art-Net adapter, then try again.',
+        interfaces
+      }
+    }
+    // Directed broadcast for that NIC's subnet reaches any node on it and routes
+    // out that exact adapter (see netiface). saveProject reconfigures the sender.
+    const host = iface.broadcast
+    await this.saveProject({
+      ...this.project,
+      output: { ...this.project.output, protocol: 'artnet', artnetHost: host }
+    })
+    return {
+      ok: true,
+      message: `Connected on ${iface.name} (${iface.address}) — broadcasting DMX to ${host}. Start Output and pick a scene.`,
+      interfaceName: iface.name,
+      address: iface.address,
+      broadcast: host,
+      interfaces
+    }
   }
 
   /** Force one fixture full-on (or clear with null) to trace the signal chain. */

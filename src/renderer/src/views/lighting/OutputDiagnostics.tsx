@@ -1,6 +1,9 @@
 import { useCallback, useEffect, useRef, useState, type JSX } from 'react'
 import { useLightingStore } from '../../state/lightingStore'
-import type { OutputDiagnostics as Diagnostics } from '../../../../main/lighting/LightingHost'
+import type {
+  OutputDiagnostics as Diagnostics,
+  AutoConnectResult
+} from '../../../../main/lighting/LightingHost'
 import type { DiscoveredNode } from '../../../../main/lighting/ArtNetDiscovery'
 
 /**
@@ -17,6 +20,8 @@ export function OutputDiagnostics(): JSX.Element {
   const [nodes, setNodes] = useState<DiscoveredNode[] | null>(null)
   const [identifyId, setIdentifyId] = useState<string | null>(null)
   const [probeError, setProbeError] = useState<string | null>(null)
+  const [autoBusy, setAutoBusy] = useState(false)
+  const [autoResult, setAutoResult] = useState<AutoConnectResult | null>(null)
   const lastSample = useRef<{ packets: number; ms: number } | null>(null)
 
   useEffect(() => {
@@ -58,6 +63,27 @@ export function OutputDiagnostics(): JSX.Element {
     }
   }, [])
 
+  const autoConnect = useCallback(async () => {
+    setAutoBusy(true)
+    try {
+      const res = await window.djCompanion.lighting.autoConnectArtnet()
+      setAutoResult(res)
+      // Keep the renderer's project store in sync with what main just saved.
+      if (res.ok && res.broadcast) {
+        const bcast = res.broadcast
+        updateProject((p) => ({ ...p, output: { ...p.output, protocol: 'artnet', artnetHost: bcast } }))
+      }
+    } catch (err) {
+      setAutoResult({
+        ok: false,
+        message: err instanceof Error ? err.message : String(err),
+        interfaces: []
+      })
+    } finally {
+      setAutoBusy(false)
+    }
+  }, [updateProject])
+
   const toggleIdentify = useCallback(
     async (patchId: string) => {
       const next = identifyId === patchId ? null : patchId
@@ -83,6 +109,25 @@ export function OutputDiagnostics(): JSX.Element {
           latest build.
         </div>
       )}
+
+      <div className="diag-block diag-autoconnect">
+        <button className="primary-button" onClick={autoConnect} disabled={autoBusy}>
+          {autoBusy ? 'Detecting…' : '⚡ Auto-detect & Connect'}
+        </button>
+        <p className="settings-hint" style={{ margin: '6px 0 0' }}>
+          Finds your lighting network adapter, sets the correct broadcast target, and locks output to
+          that adapter — works even if your node never answers a scan. Then press Start Output.
+        </p>
+        {autoResult && (
+          <p
+            className="settings-hint"
+            style={{ margin: '6px 0 0', color: autoResult.ok ? '#4ade80' : '#fbbf24', fontWeight: 600 }}
+          >
+            {autoResult.message}
+          </p>
+        )}
+      </div>
+
       <div className="diag-row">
         <span className={`diag-dot ${sending ? 'ok' : diag?.running ? 'warn' : 'off'}`} />
         <div className="diag-status">

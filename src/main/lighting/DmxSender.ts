@@ -36,6 +36,10 @@ export class DmxSender {
   /** Monotonic count of universe frames handed to the transport. */
   private packetsSent = 0
   private lastSendMs = 0
+  /** The local NIC the current socket is bound to, + when we last checked, for
+   *  auto-reconnect when the rig's adapter IP changes or comes back. */
+  private boundAddress: string | undefined = undefined
+  private lastBindCheck = 0
 
   constructor(config: DmxSenderConfig) {
     this.config = config
@@ -76,10 +80,35 @@ export class DmxSender {
     // Bind to the NIC on the rig's subnet so broadcasts don't leak out an
     // unrelated interface (e.g. an iPhone hotspot). undefined = OS default.
     const bindAddr = this.config.protocol === 'artnet' ? bindAddressFor(this.config.artnetHost) : undefined
+    this.boundAddress = bindAddr
     if (bindAddr) socket.bind(0, bindAddr, onBound)
     else socket.bind(onBound)
     this.socket = socket
     return socket
+  }
+
+  /**
+   * Auto-reconnect: a few times a second is wasteful, so at most every 2s check
+   * whether the correct NIC to bind to has changed (adapter unplugged/replugged,
+   * IP fixed, network swapped). If so, drop the socket - the next send rebinds to
+   * the right interface. Keeps output flowing across network changes without a
+   * restart.
+   */
+  private maybeRebind(): void {
+    if (this.config.protocol !== 'artnet') return
+    const now = Date.now()
+    if (now - this.lastBindCheck < 2000) return
+    this.lastBindCheck = now
+    const desired = bindAddressFor(this.config.artnetHost)
+    if (this.socket && desired !== this.boundAddress) {
+      const sock = this.socket
+      this.socket = null
+      try {
+        sock.close()
+      } catch {
+        // already closing
+      }
+    }
   }
 
   private async ensureSerial(): Promise<SerialPortLike | null> {
@@ -163,6 +192,7 @@ export class DmxSender {
   sendUniverse(universe: number, data: Buffer): void {
     switch (this.config.protocol) {
       case 'artnet': {
+        this.maybeRebind()
         const packet = encodeArtDmx({ universe, sequence: this.nextSequence(universe), data })
         this.ensureSocket().send(packet, ARTNET_PORT, this.config.artnetHost)
         this.countSend()

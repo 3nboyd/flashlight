@@ -73,6 +73,7 @@ export function registerLightingHandlers(): void {
   })
   ipcMain.handle('lighting:getOutputDiagnostics', async () => lighting.getOutputDiagnostics())
   ipcMain.handle('lighting:scanArtNet', async () => lighting.scanArtNet())
+  ipcMain.handle('lighting:autoConnectArtnet', async () => lighting.autoConnectArtnet())
   ipcMain.handle('lighting:identifyFixture', async (_e, patchId: string | null) => {
     lighting.identifyFixture(patchId)
     return lighting.getIdentifyId()

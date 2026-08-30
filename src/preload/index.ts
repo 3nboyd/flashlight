@@ -8,7 +8,7 @@ import type { RenameCandidateInput, RenamePreview } from '@core/rename/RenameEng
 import type { RenameApplyItem } from '../main/ipc/rename'
 import type { LightingProject, LiveOverrides } from '@core/lighting/engine/types'
 import type { AudioFeatures } from '@core/lighting/audio/features'
-import type { LightingStatus, OutputDiagnostics } from '../main/lighting/LightingHost'
+import type { LightingStatus, OutputDiagnostics, AutoConnectResult } from '../main/lighting/LightingHost'
 import type { DiscoveredNode } from '../main/lighting/ArtNetDiscovery'
 
 interface MoveOrRenameResponse {
@@ -99,6 +99,8 @@ const api = {
     getOutputDiagnostics: (): Promise<OutputDiagnostics> =>
       ipcRenderer.invoke('lighting:getOutputDiagnostics'),
     scanArtNet: (): Promise<DiscoveredNode[]> => ipcRenderer.invoke('lighting:scanArtNet'),
+    autoConnectArtnet: (): Promise<AutoConnectResult> =>
+      ipcRenderer.invoke('lighting:autoConnectArtnet'),
     identifyFixture: (patchId: string | null): Promise<string | null> =>
       ipcRenderer.invoke('lighting:identifyFixture', patchId),
     listStages: (): Promise<{ id: string; name: string; active: boolean }[]> =>
