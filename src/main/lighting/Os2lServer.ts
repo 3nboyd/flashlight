@@ -134,7 +134,7 @@ export class Os2lServer {
   private startDiscovery(): void {
     if (platform() === 'darwin') {
       try {
-        const child = spawn('dns-sd', ['-R', 'DJ Companion', '_os2l._tcp', '.', String(this.port)], {
+        const child = spawn('dns-sd', ['-R', 'Flashlight', '_os2l._tcp', '.', String(this.port)], {
           stdio: 'ignore'
         })
         child.on('error', () => {
@@ -207,7 +207,7 @@ export class Os2lServer {
     const ip = localIpv4()
     if (!ip) return null
     const host = `${hostname().split('.')[0]}.local`
-    const instance = `DJ Companion.${SERVICE}`
+    const instance = `Flashlight.${SERVICE}`
 
     const header = Buffer.alloc(12)
     header.writeUInt16BE(0x8400, 2) // authoritative response

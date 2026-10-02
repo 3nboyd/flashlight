@@ -1,0 +1,40 @@
+name: Feature request
+description: Propose a focused improvement or new workflow.
+title: '[Feature]: '
+labels: [enhancement]
+body:
+  - type: dropdown
+    id: area
+    attributes:
+      label: Area
+      options:
+        - Lighting / DMX
+        - Camera / visuals
+        - Recording / conversion
+        - Music library / file formats
+        - MIDI / OS2L / audio input
+        - Developer experience / packaging
+        - Other
+    validations:
+      required: true
+  - type: textarea
+    id: problem
+    attributes:
+      label: Problem to solve
+      description: Describe the real DJ workflow and limitation, not only the preferred implementation.
+    validations:
+      required: true
+  - type: textarea
+    id: proposal
+    attributes:
+      label: Proposed behavior
+    validations:
+      required: true
+  - type: textarea
+    id: alternatives
+    attributes:
+      label: Alternatives and tradeoffs
+  - type: textarea
+    id: compatibility
+    attributes:
+      label: Hardware, format, or compatibility details

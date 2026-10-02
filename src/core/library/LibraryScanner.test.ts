@@ -15,7 +15,7 @@ describe('LibraryScanner', () => {
   let dir: string
 
   beforeEach(async () => {
-    dir = await mkdtemp(join(tmpdir(), 'djapp-scan-'))
+    dir = await mkdtemp(join(tmpdir(), 'flashlight-scan-'))
   })
 
   afterEach(async () => {

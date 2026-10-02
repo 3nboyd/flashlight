@@ -45,7 +45,7 @@ describe('LibrarySync', () => {
   const newSeratoRelPath = 'Users/dj/Music/Renamed/track1.mp3'
 
   beforeEach(async () => {
-    root = await mkdtemp(join(tmpdir(), 'djapp-sync-'))
+    root = await mkdtemp(join(tmpdir(), 'flashlight-sync-'))
     seratoDir = join(root, '_Serato_')
     subcratesDir = join(seratoDir, 'Subcrates')
     await mkdir(subcratesDir, { recursive: true })

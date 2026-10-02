@@ -70,6 +70,14 @@ export async function scanTrack(filePath: string): Promise<LibraryTrack> {
   const musicMetadata = await loadMusicMetadata()
   const parsed = await musicMetadata.parseFile(filePath, { duration: true })
 
+  // music-metadata 11 deliberately tolerates some malformed inputs and can
+  // return a nominal `hasAudio` result without identifying any real container
+  // or codec. Treat that empty probe as unreadable so the Library view reports
+  // the file instead of presenting arbitrary bytes as a valid track.
+  if (!parsed.format.container && !parsed.format.codec) {
+    throw new Error('No recognizable audio stream found')
+  }
+
   const track: LibraryTrack = {
     filePath,
     sizeBytes: stat.size,

@@ -93,7 +93,7 @@ export function BackupsView(): JSX.Element {
       {backups.length === 0 ? (
         <div className="placeholder-panel">
           <h2>No backups yet</h2>
-          <p>Backups appear here the first time DJ Companion writes to a database or track tag.</p>
+          <p>Backups appear here the first time Flashlight writes to a database or track tag.</p>
         </div>
       ) : (
         <div className="library-table-wrap">

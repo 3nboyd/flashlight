@@ -1,28 +1,57 @@
 {
-  "name": "dj-companion",
+  "name": "flashlight",
   "version": "0.1.0",
-  "description": "All-in-one open-source DJ library companion — cross-platform cue/crate sync for Serato, VirtualDJ and CDJ/rekordbox, plus file management and track renaming.",
+  "description": "Open-source desktop production companion for DJs: beat-synced DMX lighting, multi-camera visuals and recording, plus safe music-library tools.",
   "main": "./out/main/index.js",
-  "author": "DJ Companion Contributors",
+  "author": "Flashlight Contributors",
   "license": "MIT",
   "private": true,
+  "homepage": "https://github.com/3nboyd/flashlight#readme",
+  "bugs": {
+    "url": "https://github.com/3nboyd/flashlight/issues"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/3nboyd/flashlight.git"
+  },
+  "keywords": [
+    "dj",
+    "dmx",
+    "artnet",
+    "sacn",
+    "os2l",
+    "lighting",
+    "camera",
+    "recording",
+    "serato",
+    "virtualdj",
+    "rekordbox",
+    "electron"
+  ],
+  "engines": {
+    "node": ">=22.12.0"
+  },
+  "packageManager": "npm@11.6.2",
   "scripts": {
     "dev": "electron-vite dev",
     "build": "npm run typecheck && electron-vite build",
+    "verify": "npm run format:check && npm run lint && npm run typecheck && npm test && npm run build",
     "typecheck": "tsc --noEmit -p tsconfig.node.json --composite false && tsc --noEmit -p tsconfig.web.json --composite false",
     "test": "vitest run",
     "test:watch": "vitest",
     "lint": "eslint . --ext .ts,.tsx",
     "format": "prettier --write .",
+    "format:check": "prettier --check README.md CHANGELOG.md CONTRIBUTING.md SECURITY.md CODE_OF_CONDUCT.md PRIVACY.md THIRD_PARTY_NOTICES.md docs .github scripts package.json electron-builder.yml build/*.md resources/licenses/*.md",
     "build:mac": "npm run build && electron-builder --mac",
     "build:win": "npm run build && electron-builder --win",
-    "postinstall": "electron-builder install-app-deps"
+    "build:linux": "npm run build && electron-builder --linux",
+    "postinstall": "install-electron --no && electron-builder install-app-deps"
   },
   "dependencies": {
     "@mediapipe/tasks-vision": "^1.0.1",
-    "fast-xml-parser": "^4.5.0",
+    "fast-xml-parser": "^5.11.2",
     "ffmpeg-static": "^5.3.0",
-    "music-metadata": "^10.6.4",
+    "music-metadata": "^11.16.1",
     "node-id3": "^0.2.6",
     "serialport": "^13.0.0",
     "uuid": "^11.0.3",
@@ -35,18 +64,19 @@
     "@types/uuid": "^10.0.0",
     "@typescript-eslint/eslint-plugin": "^8.17.0",
     "@typescript-eslint/parser": "^8.17.0",
-    "@vitejs/plugin-react": "^4.3.4",
-    "electron": "^33.2.1",
-    "electron-builder": "^25.1.8",
-    "electron-vite": "^2.3.0",
+    "@vitejs/plugin-react": "^5.2.0",
+    "electron": "^44.5.1",
+    "electron-builder": "^26.15.3",
+    "electron-vite": "^5.0.0",
     "eslint": "^8.57.1",
     "eslint-plugin-react": "^7.37.2",
     "eslint-plugin-react-hooks": "^5.0.0",
+    "plist": "^3.1.1",
     "prettier": "^3.4.1",
     "react": "^18.3.1",
     "react-dom": "^18.3.1",
     "typescript": "^5.7.2",
-    "vite": "^5.4.11",
-    "vitest": "^2.1.8"
+    "vite": "^7.3.6",
+    "vitest": "^5.0.3"
   }
 }

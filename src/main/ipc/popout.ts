@@ -31,7 +31,7 @@ function createPopout(name: string): BrowserWindow {
     width: name === 'camera' ? 1120 : 900,
     height: name === 'camera' ? 720 : 780,
     backgroundColor: '#0a0d14',
-    title: name === 'camera' ? 'DJ Companion - Camera' : 'DJ Companion - Lighting',
+    title: name === 'camera' ? 'Flashlight - Camera' : 'Flashlight - Lighting',
     webPreferences: {
       preload: join(__dirname, '../preload/index.js'),
       sandbox: false,

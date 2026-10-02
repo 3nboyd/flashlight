@@ -1,18 +1,32 @@
-appId: com.djcompanion.app
-productName: DJ Companion
+appId: com.threeboyd.flashlight
+productName: Flashlight
+artifactName: '${productName}-${version}-${os}-${arch}.${ext}'
+afterPack: scripts/afterPack.cjs
 directories:
   buildResources: build
+extraResources:
+  - from: LICENSE
+    to: LICENSE.txt
+  - from: THIRD_PARTY_NOTICES.md
+    to: THIRD_PARTY_NOTICES.md
+  - from: PRIVACY.md
+    to: PRIVACY.md
+  - from: resources/licenses
+    to: licenses
 files:
   - out/**/*
   - '!**/.vscode/*'
   - '!src/*'
   - '!electron.vite.config.{js,ts,mjs,cjs}'
 asarUnpack:
-  - resources/**
   # The bundled FFmpeg binary must live on disk (executable), not inside asar.
   - node_modules/ffmpeg-static/**
+  # SerialPort loads native Node-API binaries at runtime.
+  - node_modules/@serialport/**
 mac:
   category: public.app-category.music
+  minimumSystemVersion: '13.0'
+  darkModeSupport: true
   target:
     - target: dmg
       arch: [x64, arm64]
@@ -20,6 +34,13 @@ mac:
       arch: [x64, arm64]
   hardenedRuntime: true
   gatekeeperAssess: false
+  extendInfo:
+    NSCameraUsageDescription: Flashlight uses connected cameras for live previews, projection visuals, automatic camera direction, and recordings.
+    NSCameraUseContinuityCameraDeviceType: true
+    NSMicrophoneUsageDescription: Flashlight uses the selected audio input for music-reactive lighting and optional recording audio.
+    NSLocalNetworkUsageDescription: Flashlight uses the local network to discover and control Art-Net lighting nodes and receive OS2L beat data.
+    NSBonjourServices:
+      - _os2l._tcp
 win:
   target:
     - target: nsis
@@ -29,5 +50,6 @@ nsis:
   allowToChangeInstallationDirectory: true
 linux:
   target:
-    - AppImage
+    - target: AppImage
+      arch: [x64]
   category: Audio

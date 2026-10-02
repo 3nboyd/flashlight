@@ -142,7 +142,7 @@ export function parseFixtureImport(text: string): FixtureImportResult {
 }
 
 /** Copyable prompt: paste into an AI chat with the fixture's DMX manual/photos. */
-export const FIXTURE_AI_PROMPT = `You are converting a DMX lighting fixture's manual into a JSON profile for the DJ Companion lighting app. I will give you the fixture's DMX chart (and maybe photos of the manual). Output ONLY a single JSON object, no prose, no markdown fences.
+export const FIXTURE_AI_PROMPT = `You are converting a DMX lighting fixture's manual into a JSON profile for the Flashlight lighting app. I will give you the fixture's DMX chart (and maybe photos of the manual). Output ONLY a single JSON object, no prose, no markdown fences.
 
 Schema:
 {

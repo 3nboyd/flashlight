@@ -1,0 +1,71 @@
+name: Bug report
+description: Report a reproducible problem with the app.
+title: '[Bug]: '
+labels: [bug]
+body:
+  - type: markdown
+    attributes:
+      value: Remove private paths, device IDs, library data, and identifiable recordings before posting.
+  - type: input
+    id: version
+    attributes:
+      label: Version or commit
+      placeholder: v0.1.0 or 67d566f
+    validations:
+      required: true
+  - type: dropdown
+    id: area
+    attributes:
+      label: Area
+      options:
+        - Lighting / DMX
+        - Camera / visuals
+        - Recording / conversion
+        - Music library / file operations
+        - MIDI / OS2L / audio input
+        - Installation / packaging
+        - Other
+    validations:
+      required: true
+  - type: input
+    id: environment
+    attributes:
+      label: Operating system and architecture
+      placeholder: macOS 15 arm64, Windows 11 x64, Ubuntu 24.04 x64
+    validations:
+      required: true
+  - type: textarea
+    id: hardware
+    attributes:
+      label: Relevant hardware and software
+      description: Include exact node, fixture, interface, camera, MIDI device, DJ software, and driver versions when relevant.
+  - type: textarea
+    id: steps
+    attributes:
+      label: Steps to reproduce
+      placeholder: |
+        1. Open ...
+        2. Configure ...
+        3. Click ...
+    validations:
+      required: true
+  - type: textarea
+    id: expected
+    attributes:
+      label: Expected behavior
+    validations:
+      required: true
+  - type: textarea
+    id: actual
+    attributes:
+      label: Actual behavior and logs
+    validations:
+      required: true
+  - type: checkboxes
+    id: safety
+    attributes:
+      label: Safety checks
+      options:
+        - label: I reproduced library issues on copied data, not my only library.
+        - label: I tested lighting issues at a safe intensity and can physically stop the rig.
+        - label: I removed private or identifying information from attachments.

@@ -36,7 +36,7 @@ function createOutputWindow(): BrowserWindow {
     width: 960,
     height: 540,
     backgroundColor: '#000000',
-    title: `DJ Companion Output ${index + 1}`,
+    title: `Flashlight Output ${index + 1}`,
     // On a real second display (projector) go borderless full-screen; with only
     // one screen, use a normal framed window so the operator can move/close it.
     fullscreen: Boolean(external),

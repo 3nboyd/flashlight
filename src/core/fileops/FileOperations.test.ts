@@ -17,7 +17,7 @@ describe('FileOperations', () => {
   let dir: string
 
   beforeEach(async () => {
-    dir = await mkdtemp(join(tmpdir(), 'djapp-fileops-'))
+    dir = await mkdtemp(join(tmpdir(), 'flashlight-fileops-'))
   })
 
   afterEach(async () => {

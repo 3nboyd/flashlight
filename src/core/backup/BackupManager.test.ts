@@ -10,7 +10,7 @@ describe('BackupManager', () => {
   let manager: BackupManager
 
   beforeEach(async () => {
-    root = await mkdtemp(join(tmpdir(), 'djapp-backup-'))
+    root = await mkdtemp(join(tmpdir(), 'flashlight-backup-'))
     target = join(root, 'database.xml')
     await writeFile(target, 'original-content')
     manager = new BackupManager(join(root, 'appdata'))

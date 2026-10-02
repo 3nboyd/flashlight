@@ -147,7 +147,7 @@ export function buildRekordboxXml(
     '<?xml version="1.0" encoding="UTF-8"?>',
     '',
     '<DJ_PLAYLISTS Version="1.0.0">',
-    '  <PRODUCT Name="DJ Companion" Version="0.1.0" Company="DJ Companion"/>',
+    '  <PRODUCT Name="Flashlight" Version="0.1.0" Company="Flashlight"/>',
     `  <COLLECTION Entries="${tracks.length}">`,
     trackElements,
     '  </COLLECTION>',

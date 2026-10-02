@@ -1,0 +1,56 @@
+name: Hardware compatibility report
+description: Report a working or non-working lighting, camera, audio, or MIDI device.
+title: '[Hardware]: '
+labels: [hardware]
+body:
+  - type: input
+    id: device
+    attributes:
+      label: Manufacturer and exact model
+    validations:
+      required: true
+  - type: dropdown
+    id: device-type
+    attributes:
+      label: Device type
+      options:
+        - Art-Net node
+        - sACN node
+        - USB DMX interface
+        - Fixture
+        - Camera
+        - Audio interface / virtual cable
+        - MIDI controller
+        - Display / projector
+        - Other
+    validations:
+      required: true
+  - type: input
+    id: environment
+    attributes:
+      label: OS, architecture, and app version
+    validations:
+      required: true
+  - type: textarea
+    id: configuration
+    attributes:
+      label: Connection and configuration
+      description: Include firmware, driver, fixture mode/channel count, protocol, and network topology when relevant.
+    validations:
+      required: true
+  - type: dropdown
+    id: result
+    attributes:
+      label: Result
+      options:
+        - Works fully
+        - Works with limitations
+        - Does not work
+    validations:
+      required: true
+  - type: textarea
+    id: notes
+    attributes:
+      label: Verification and notes
+    validations:
+      required: true

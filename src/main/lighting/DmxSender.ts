@@ -204,7 +204,7 @@ export class DmxSender {
           universe: u,
           sequence: this.nextSequence(u),
           cid: this.cid,
-          sourceName: 'DJ Companion',
+          sourceName: 'Flashlight',
           data
         })
         this.ensureSocket().send(packet, SACN_PORT, sacnMulticastAddress(u))
@@ -251,7 +251,7 @@ export class DmxSender {
             universe: u,
             sequence: this.nextSequence(u),
             cid: this.cid,
-            sourceName: 'DJ Companion',
+            sourceName: 'Flashlight',
             data: zero
           })
           this.ensureSocket().send(packet, SACN_PORT, sacnMulticastAddress(u))

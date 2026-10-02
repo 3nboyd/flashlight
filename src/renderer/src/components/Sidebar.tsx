@@ -66,7 +66,7 @@ export function Sidebar({ nav, onChange }: SidebarProps): JSX.Element {
   return (
     <div className="nav-shell">
       <nav className="nav-rail">
-        <div className="nav-rail-brand" title="DJ Companion" />
+        <div className="nav-rail-brand" title="Flashlight" />
         {RAIL_ITEMS.map((item) => (
           <button
             key={item.id}

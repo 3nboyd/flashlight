@@ -126,7 +126,7 @@ describe('sACN E1.31 encoder', () => {
       sequence: 7,
       priority: 100,
       cid,
-      sourceName: 'DJ Companion',
+      sourceName: 'Flashlight',
       data
     })
 
@@ -145,7 +145,7 @@ describe('sACN E1.31 encoder', () => {
     // Framing layer
     expect(packet.readUInt16BE(38)).toBe(0x7000 | (638 - 38))
     expect(packet.readUInt32BE(40)).toBe(0x00000002)
-    expect(packet.subarray(44, 44 + 12).toString('utf8')).toBe('DJ Companion')
+    expect(packet.subarray(44, 44 + 10).toString('utf8')).toBe('Flashlight')
     expect(packet[44 + 63]).toBe(0) // source name null-padded to 64 bytes
     expect(packet[108]).toBe(100) // priority
     expect(packet.readUInt16BE(109)).toBe(0) // sync address

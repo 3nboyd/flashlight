@@ -23,7 +23,7 @@ export function SettingsView(): JSX.Element {
     <div className="view settings-view">
       <header className="view-header">
         <h1>Settings</h1>
-        <p className="view-subtitle">Appearance and backup behavior for DJ Companion.</p>
+        <p className="view-subtitle">Appearance and backup behavior for Flashlight.</p>
       </header>
 
       <section className="settings-section">
