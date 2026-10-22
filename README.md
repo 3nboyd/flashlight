@@ -4,7 +4,7 @@
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
 
 Flashlight is an open-source desktop production toolkit for DJs. It combines live, beat-synced
-DMX lighting, multi-camera visuals and recording, and safety-conscious music-library utilities in
+DMX lighting (digital control of stage fixtures), multi-camera visuals and recording, and music-library utilities in
 one Electron application for macOS, Windows, and Linux.
 
 > [!IMPORTANT]
@@ -17,8 +17,8 @@ one Electron application for macOS, Windows, and Linux.
   each one to a separate display.
 - **Beat-synced DMX**: output Art-Net, sACN/E1.31, or Enttec DMX USB Pro-compatible data at a
   configurable frame rate.
-- **Three beat sources**: VirtualDJ OS2L is preferred, live audio analysis is the fallback, and
-  manual BPM/tap tempo is always available.
+- **Three beat sources**: use VirtualDJ beat messages (OS2L), live audio analysis, or
+  a manually entered or tapped tempo.
 - **Performance lighting**: scenes, animated effects, fixture groups, position-aware movement,
   performance pads, MIDI learn, Smart Mode, Autopilot, blackout, strobe, blinder, and emergency
   force-blackout.
