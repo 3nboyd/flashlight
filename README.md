@@ -154,17 +154,11 @@ Recordings are written to the folder selected by the user.
 
 See [PRIVACY.md](PRIVACY.md) for the complete data and permission summary.
 
-## Project status and safety
+## Before a show
 
-- Version: `0.1.0` (pre-1.0)
-- Tests focus on framework-free core behavior. Hardware, Electron window, and camera workflows
-  still require manual release testing.
-- The repository contains no telemetry or automatic updater.
-- Direct rekordbox USB database writing is not supported.
-- Binary DJ formats are community reverse-engineered rather than vendor-supported.
+Flashlight is at version `0.1.0`. The feature-status table above lists hardware compatibility and beta features; core tests cover parsers and other shared logic. Check the complete setup with the exact computer, adapters, network, fixtures, cameras, MIDI devices, and recording destination you will use.
 
-Before a show, test the complete chain with the exact computer, adapters, network, fixtures,
-cameras, MIDI devices, and recording destination you will use.
+Direct rekordbox USB database writing is not supported. Binary DJ formats use community-developed mappings rather than vendor-supported interfaces. The app contains no telemetry or automatic updater.
 
 ## Contributing
 
