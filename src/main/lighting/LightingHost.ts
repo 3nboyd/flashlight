@@ -12,11 +12,18 @@ import {
   type LiveOverrides,
   type Scene
 } from '@core/lighting/engine/types'
-import { PRESET_SCENES, PRESET_CATEGORY_BY_ID, defaultSmartPools } from '@core/lighting/engine/presetScenes'
+import {
+  PRESET_SCENES,
+  PRESET_CATEGORY_BY_ID,
+  defaultSmartPools
+} from '@core/lighting/engine/presetScenes'
 import { SmartModeEngine, type SmartPhase } from '@core/lighting/engine/SmartMode'
 import { MusicPulse } from '@core/lighting/engine/MusicPulse'
 import { fixturesById } from '@core/lighting/fixtures/library'
-import { resolveStagePositions, readFixtureVisualState } from '@core/lighting/visualizer/fixtureVisualState'
+import {
+  resolveStagePositions,
+  readFixtureVisualState
+} from '@core/lighting/visualizer/fixtureVisualState'
 import type { PatchedFixture } from '@core/lighting/fixtures/types'
 import type { AudioFeatures } from '@core/lighting/audio/features'
 import { SILENT_FEATURES } from '@core/lighting/audio/features'
@@ -219,7 +226,11 @@ export class LightingHost {
 
   private async writeStageIndex(): Promise<void> {
     await mkdir(this.stagesDir, { recursive: true })
-    await writeFile(join(this.stagesDir, 'index.json'), JSON.stringify(this.stageIndex, null, 2), 'utf-8')
+    await writeFile(
+      join(this.stagesDir, 'index.json'),
+      JSON.stringify(this.stageIndex, null, 2),
+      'utf-8'
+    )
   }
 
   listStages(): { id: string; name: string; active: boolean }[] {
@@ -295,7 +306,11 @@ export class LightingHost {
     this.project = project
     this.applyIntegrationConfig()
     await mkdir(this.stagesDir, { recursive: true })
-    await writeFile(this.stagePath(this.stageIndex.activeId), JSON.stringify(project, null, 2), 'utf-8')
+    await writeFile(
+      this.stagePath(this.stageIndex.activeId),
+      JSON.stringify(project, null, 2),
+      'utf-8'
+    )
     return project
   }
 
@@ -515,7 +530,16 @@ export class LightingHost {
   /** Song state this tick: forced to a lit, no-kick "flow" state during a demo. */
   private songFor(audioFresh: boolean): SongState {
     if (this.flowPreview) {
-      return { phase: 'steady', buildProgress: 0, kick: 0, level: 1, fast: 1, surge: 0, section: 0, rhythm: 1 }
+      return {
+        phase: 'steady',
+        buildProgress: 0,
+        kick: 0,
+        level: 1,
+        fast: 1,
+        surge: 0,
+        section: 0,
+        rhythm: 1
+      }
     }
     return audioFresh
       ? {
@@ -613,7 +637,8 @@ export class LightingHost {
     const master = overrides.blackout ? 0 : overrides.masterDimmer
     if (master > 0.002) this.darkSinceMs = null
     else if (this.darkSinceMs === null) this.darkSinceMs = nowMs
-    const darkFrozen = master <= 0.002 && this.darkSinceMs !== null && nowMs - this.darkSinceMs > 2000
+    const darkFrozen =
+      master <= 0.002 && this.darkSinceMs !== null && nowMs - this.darkSinceMs > 2000
 
     // Silence freeze: only when audio is actually being streamed (so OS2L- or
     // manual-only rigs are unaffected), and its smoothed level has gone quiet.
@@ -660,7 +685,10 @@ export class LightingHost {
     this.updateLightColor(universes)
     for (const [universe, data] of universes) {
       // A USB interface is a single DMX line: emit only its configured universe.
-      if (this.project.output.protocol === 'enttec' && universe !== this.project.output.usbUniverse) {
+      if (
+        this.project.output.protocol === 'enttec' &&
+        universe !== this.project.output.usbUniverse
+      ) {
         continue
       }
       this.sender.sendUniverse(universe, data.toBuffer())
@@ -967,7 +995,7 @@ export class LightingHost {
     })
     return {
       ok: true,
-      message: `Connected on ${iface.name} (${iface.address}) — broadcasting DMX to ${host}. Start Output and pick a scene.`,
+      message: `Connected on ${iface.name} (${iface.address}): broadcasting DMX to ${host}. Start Output and pick a scene.`,
       interfaceName: iface.name,
       address: iface.address,
       broadcast: host,

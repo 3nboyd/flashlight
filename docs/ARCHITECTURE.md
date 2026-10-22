@@ -24,16 +24,16 @@ registers IPC handlers, prevents background throttling, and disposes output serv
 
 Main-process services:
 
-- `ipc/settings.ts` — disk-backed application settings
-- `ipc/backup.ts` — snapshot listing, pruning, and restore
-- `ipc/library.ts` — recursive audio scanning
-- `ipc/fileops.ts` — file operations followed by DJ database path synchronization
-- `ipc/rename.ts` — previewed/batched filename cleanup
-- `ipc/lighting.ts` — lighting project and live engine control
-- `ipc/output.ts` — up to six projector windows
-- `ipc/popout.ts` — detachable Live camera and lighting windows
-- `ipc/monitor.ts` — always-on-top recording monitor and shared recording status
-- `ipc/recording.ts` — disk streams, FFmpeg conversion/repair, and file reveal
+- `ipc/settings.ts`: disk-backed application settings
+- `ipc/backup.ts`: snapshot listing, pruning, and restore
+- `ipc/library.ts`: recursive audio scanning
+- `ipc/fileops.ts`: file operations followed by DJ database path synchronization
+- `ipc/rename.ts`: previewed/batched filename cleanup
+- `ipc/lighting.ts`: lighting project and live engine control
+- `ipc/output.ts`: up to six projector windows
+- `ipc/popout.ts`: detachable Live camera and lighting windows
+- `ipc/monitor.ts`: always-on-top recording monitor and shared recording status
+- `ipc/recording.ts`: disk streams, FFmpeg conversion/repair, and file reveal
 
 ### Preload
 
@@ -45,11 +45,11 @@ the main process and the preload API together. `contextIsolation` remains enable
 
 `src/renderer/src/main.tsx` selects one of five surfaces by URL hash:
 
-- normal route — complete application
-- `#output` — projector/stage-screen output
-- `#popout-camera` — detached camera pane
-- `#popout-lighting` — detached lighting pane
-- `#monitor` — floating recording monitor
+- normal route: complete application
+- `#output`: projector/stage-screen output
+- `#popout-camera`: detached camera pane
+- `#popout-lighting`: detached lighting pane
+- `#monitor`: floating recording monitor
 
 The primary application uses React 18 and two Zustand stores: application settings and lighting
 project/status. Camera and recording state is mostly local component state plus `localStorage`.

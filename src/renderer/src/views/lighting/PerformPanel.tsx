@@ -304,10 +304,17 @@ export function PerformPanel(): JSX.Element {
                   : 'Manual tempo (tap or type a BPM)'
             }
           >
-            {status?.beatSource === 'os2l' ? '● OS2L' : status?.beatSource === 'audio' ? '● Audio' : '○ Manual'}
+            {status?.beatSource === 'os2l'
+              ? '● OS2L'
+              : status?.beatSource === 'audio'
+                ? '● Audio'
+                : '○ Manual'}
           </div>
           <div className="bpm-controls">
-            <button className="secondary-button" onClick={() => window.djCompanion.lighting.tapTempo()}>
+            <button
+              className="secondary-button"
+              onClick={() => window.djCompanion.lighting.tapTempo()}
+            >
               Tap
             </button>
             <button
@@ -322,7 +329,9 @@ export function PerformPanel(): JSX.Element {
             <button
               className="secondary-button"
               title="Nudge BPM down (takes manual control)"
-              onClick={() => status && window.djCompanion.lighting.setBpm(Math.round((status.bpm - 1) * 10) / 10)}
+              onClick={() =>
+                status && window.djCompanion.lighting.setBpm(Math.round((status.bpm - 1) * 10) / 10)
+              }
             >
               −
             </button>
@@ -347,7 +356,9 @@ export function PerformPanel(): JSX.Element {
             <button
               className="secondary-button"
               title="Nudge BPM up (takes manual control)"
-              onClick={() => status && window.djCompanion.lighting.setBpm(Math.round((status.bpm + 1) * 10) / 10)}
+              onClick={() =>
+                status && window.djCompanion.lighting.setBpm(Math.round((status.bpm + 1) * 10) / 10)
+              }
             >
               +
             </button>
@@ -356,7 +367,7 @@ export function PerformPanel(): JSX.Element {
             className={`midi-indicator${midiDevices.length ? '' : ' none'}`}
             title={
               midiDevices.length
-                ? `${midiDevices.join(', ')} — click to re-scan MIDI`
+                ? `${midiDevices.join(', ')}: click to re-scan MIDI`
                 : 'No MIDI controller detected. Click to re-scan; if still none, unplug/replug the controller.'
             }
             onClick={async () => {
@@ -365,7 +376,7 @@ export function PerformPanel(): JSX.Element {
               if (n === 0) setMidiDevices([])
             }}
           >
-            {midiDevices.length ? `● MIDI: ${midiDevices[0]}` : '○ No MIDI — click to re-scan'}
+            {midiDevices.length ? `● MIDI: ${midiDevices[0]}` : '○ No MIDI: click to re-scan'}
           </button>
 
           <div className="bpm-audio">
@@ -385,7 +396,7 @@ export function PerformPanel(): JSX.Element {
                 {audioRunning ? 'Stop' : 'Listen'}
               </button>
             </div>
-            <div className="bpm-eq" title="Live input — bass / mid / high / volume">
+            <div className="bpm-eq" title="Live input: bass / mid / high / volume">
               {[levels.bass, levels.mid, levels.high, levels.rms].map((v, i) => (
                 <div key={i} className="bpm-eq-bar">
                   <div
@@ -412,7 +423,11 @@ export function PerformPanel(): JSX.Element {
         </div>
 
         <div className="stage-mini" title="Live stage preview - click to expand">
-          <StageVisualizer height={248} fitContent onBackgroundClick={() => setStageExpanded(true)} />
+          <StageVisualizer
+            height={248}
+            fitContent
+            onBackgroundClick={() => setStageExpanded(true)}
+          />
           <span className="stage-mini-hint">click to expand</span>
         </div>
 
@@ -473,7 +488,6 @@ export function PerformPanel(): JSX.Element {
           </div>
         </div>
       </div>
-
 
       <div className={`pad-grid cols-${padColumns(project.padCount)}`}>
         {project.padSceneIds.map((sceneId, index) => {
@@ -650,7 +664,9 @@ export function PerformPanel(): JSX.Element {
           min={-1}
           max={1}
           resetValue={0}
-          format={(v) => (Math.abs(v) < 0.02 ? 'center' : `${v > 0 ? 'R' : 'L'} ${Math.round(Math.abs(v) * 100)}`)}
+          format={(v) =>
+            Math.abs(v) < 0.02 ? 'center' : `${v > 0 ? 'R' : 'L'} ${Math.round(Math.abs(v) * 100)}`
+          }
           onChange={(v) => setOverrides({ panOffset: v })}
         />
         <Knob
@@ -659,7 +675,9 @@ export function PerformPanel(): JSX.Element {
           min={-1}
           max={1}
           resetValue={0}
-          format={(v) => (Math.abs(v) < 0.02 ? 'center' : `${v > 0 ? '↑' : '↓'} ${Math.round(Math.abs(v) * 100)}`)}
+          format={(v) =>
+            Math.abs(v) < 0.02 ? 'center' : `${v > 0 ? '↑' : '↓'} ${Math.round(Math.abs(v) * 100)}`
+          }
           onChange={(v) => setOverrides({ tiltOffset: v })}
         />
         <Knob

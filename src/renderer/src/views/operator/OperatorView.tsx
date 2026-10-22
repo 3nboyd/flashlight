@@ -120,7 +120,7 @@ export function OperatorView(): JSX.Element {
           onClick={() => bringBack('lighting')}
           title="Lighting is open in a pop-out window. Click to bring it back here."
         >
-          ⤢ Lighting popped out — bring back
+          ⤢ Lighting popped out: bring back
         </button>
       ) : (
         <button
@@ -163,7 +163,7 @@ export function OperatorView(): JSX.Element {
           onClick={() => bringBack('camera')}
           title="Camera is open in a pop-out window. Click to bring it back here."
         >
-          ⤢ Camera popped out — bring back
+          ⤢ Camera popped out: bring back
         </button>
       ) : (
         <button

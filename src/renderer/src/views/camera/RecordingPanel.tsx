@@ -45,7 +45,13 @@ function fmtElapsed(ms: number): string {
  * Captures with the same no-processing constraints as the recorder, so the
  * number reflects what actually gets recorded (no auto-gain masking it).
  */
-function AudioMeter({ deviceId, active }: { deviceId: string | null; active: boolean }): JSX.Element {
+function AudioMeter({
+  deviceId,
+  active
+}: {
+  deviceId: string | null
+  active: boolean
+}): JSX.Element {
   const barsRef = useRef<HTMLDivElement>(null)
   const fillRef = useRef<HTMLDivElement>(null)
   const valRef = useRef<HTMLSpanElement>(null)
@@ -164,7 +170,9 @@ export function RecordingPanel({
   })
   const [includeAudio, setIncludeAudio] = useState(() => localStorage.getItem(AUDIO_KEY) === '1')
   const [separate, setSeparate] = useState(() => localStorage.getItem(SEPARATE_KEY) === '1')
-  const [audioDevice, setAudioDevice] = useState<string | null>(() => localStorage.getItem(AUDIODEV_KEY))
+  const [audioDevice, setAudioDevice] = useState<string | null>(() =>
+    localStorage.getItem(AUDIODEV_KEY)
+  )
   const [audioInputs, setAudioInputs] = useState<MediaDeviceInfo[]>([])
 
   const [output, setOutput] = useState<OutputFormat>(
@@ -173,10 +181,16 @@ export function RecordingPanel({
   const [quality, setQuality] = useState<Quality>(
     () => (localStorage.getItem(QUALITY_KEY) as Quality) ?? 'balanced'
   )
-  const [maxHeight, setMaxHeight] = useState<number>(() => Number(localStorage.getItem(MAXH_KEY) ?? '720'))
+  const [maxHeight, setMaxHeight] = useState<number>(() =>
+    Number(localStorage.getItem(MAXH_KEY) ?? '720')
+  )
   const [fps, setFps] = useState<number>(() => Number(localStorage.getItem(FPS_KEY) ?? '30'))
-  const [audioDelay, setAudioDelay] = useState<number>(() => Number(localStorage.getItem(AUDIO_DELAY_KEY) ?? '0'))
-  const [showFps, setShowFps] = useState<boolean>(() => localStorage.getItem('djc.camera.showFps') !== '0')
+  const [audioDelay, setAudioDelay] = useState<number>(() =>
+    Number(localStorage.getItem(AUDIO_DELAY_KEY) ?? '0')
+  )
+  const [showFps, setShowFps] = useState<boolean>(
+    () => localStorage.getItem('djc.camera.showFps') !== '0'
+  )
 
   const [recording, setRecording] = useState(false)
   const [elapsed, setElapsed] = useState(0)
@@ -216,7 +230,9 @@ export function RecordingPanel({
     setError('')
     const canvas = getCanvas()
     if (!canvas) {
-      setError('No program to record. Enable a camera (the auto-director/selected camera is recorded).')
+      setError(
+        'No program to record. Enable a camera (the auto-director/selected camera is recorded).'
+      )
       return
     }
     if (!folder) {
@@ -269,7 +285,11 @@ export function RecordingPanel({
     setBusy('Converting…')
     try {
       const name = path.split('/').pop() ?? 'recording'
-      const out = await window.djCompanion.recording.convertFile(path, outputName(name, output), quality)
+      const out = await window.djCompanion.recording.convertFile(
+        path,
+        outputName(name, output),
+        quality
+      )
       setSaved((s) => (s.includes(out) ? s : [...s, out]))
     } catch (err) {
       setError(`Convert failed: ${(err as Error)?.message ?? err}`)
@@ -351,7 +371,10 @@ export function RecordingPanel({
         </button>
         <span className={`rec-timer${recording ? ' on' : ''}`}>{fmtElapsed(elapsed)}</span>
         {recording && (
-          <span className="rec-rate" title="Actual encoder output rate. Near your target bitrate = the encoder is keeping up.">
+          <span
+            className="rec-rate"
+            title="Actual encoder output rate. Near your target bitrate = the encoder is keeping up."
+          >
             {mbps.toFixed(1)} Mbps
           </span>
         )}
@@ -388,7 +411,7 @@ export function RecordingPanel({
             Folder: {folderLabel}
           </button>
           <p className="settings-hint" style={{ margin: 0 }}>
-            Streams straight to disk. Use MP4 (H.264, hardware) for long sets — the smoothest and
+            Streams straight to disk. Use MP4 (H.264, hardware) for long sets: the smoothest and
             lightest on the CPU. Higher resolution / fps look better but cost more CPU; watch the
             per-camera FPS monitor to make sure it holds.
           </p>
@@ -427,7 +450,11 @@ export function RecordingPanel({
           </label>
           <label className="cam-rec-field">
             <span>Capture</span>
-            <select value={formatMime} onChange={(e) => setFormat(e.target.value)} disabled={recording}>
+            <select
+              value={formatMime}
+              onChange={(e) => setFormat(e.target.value)}
+              disabled={recording}
+            >
               {formats.map((f: RecordFormat) => (
                 <option key={f.mimeType} value={f.mimeType}>
                   {f.label}
@@ -485,7 +512,10 @@ export function RecordingPanel({
               Separate audio + video files
             </label>
           )}
-          <label className="cam-rec-field" title="Delay the recorded audio to line it up with the cameras (for wireless/latency).">
+          <label
+            className="cam-rec-field"
+            title="Delay the recorded audio to line it up with the cameras (for wireless/latency)."
+          >
             <span>Audio delay</span>
             <input
               type="range"
@@ -531,15 +561,27 @@ export function RecordingPanel({
         <div className="cam-rec-saved">
           {saved.map((p) => (
             <div key={p} className="cam-rec-saved-row">
-              <button className="cam-rec-saved-link" onClick={() => window.djCompanion.recording.reveal(p)}>
+              <button
+                className="cam-rec-saved-link"
+                onClick={() => window.djCompanion.recording.reveal(p)}
+              >
                 Saved: {p.split('/').pop()}
               </button>
               {isWebm(p) && (
                 <>
-                  <button className="cam-rec-mini" disabled={!!busy} onClick={() => convertSaved(p)}>
+                  <button
+                    className="cam-rec-mini"
+                    disabled={!!busy}
+                    onClick={() => convertSaved(p)}
+                  >
                     → {output.toUpperCase()}
                   </button>
-                  <button className="cam-rec-mini" disabled={!!busy} title="Re-mux into a clean copy" onClick={() => repairSaved(p)}>
+                  <button
+                    className="cam-rec-mini"
+                    disabled={!!busy}
+                    title="Re-mux into a clean copy"
+                    onClick={() => repairSaved(p)}
+                  >
                     Fix
                   </button>
                 </>

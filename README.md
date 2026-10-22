@@ -13,24 +13,24 @@ one Electron application for macOS, Windows, and Linux.
 
 ## Highlights
 
-- **Live operator cockpit** — run lighting and cameras side by side, collapse either pane, or move
+- **Live operator cockpit**: run lighting and cameras side by side, collapse either pane, or move
   each one to a separate display.
-- **Beat-synced DMX** — output Art-Net, sACN/E1.31, or Enttec DMX USB Pro-compatible data at a
+- **Beat-synced DMX**: output Art-Net, sACN/E1.31, or Enttec DMX USB Pro-compatible data at a
   configurable frame rate.
-- **Three beat sources** — VirtualDJ OS2L is preferred, live audio analysis is the fallback, and
+- **Three beat sources**: VirtualDJ OS2L is preferred, live audio analysis is the fallback, and
   manual BPM/tap tempo is always available.
-- **Performance lighting** — scenes, animated effects, fixture groups, position-aware movement,
+- **Performance lighting**: scenes, animated effects, fixture groups, position-aware movement,
   performance pads, MIDI learn, Smart Mode, Autopilot, blackout, strobe, blinder, and emergency
   force-blackout.
-- **Rig authoring** — multiple stages, a live stage visualizer, built-in and custom fixtures,
+- **Rig authoring**: multiple stages, a live stage visualizer, built-in and custom fixtures,
   per-fixture limits, address-overlap checks, fixture identification, and Art-Net discovery.
-- **Multi-camera production** — simultaneous camera inputs, manual cuts, camera roles, per-camera
+- **Multi-camera production**: simultaneous camera inputs, manual cuts, camera roles, per-camera
   effects, MediaPipe pose/face tracking, a beta automatic director, collage view, and independent
   projector output.
-- **Long-form recording** — stream MediaRecorder chunks directly to disk, optionally capture
+- **Long-form recording**: stream MediaRecorder chunks directly to disk, optionally capture
   music-quality audio, compensate for camera/audio delays, record separate feeds, repair WebM
   files, and transcode to MP4 or MOV with bundled FFmpeg.
-- **Library utilities** — scan common audio formats and Serato MP3 cue tags, browse and reorganize
+- **Library utilities**: scan common audio formats and Serato MP3 cue tags, browse and reorganize
   files, keep configured Serato/VirtualDJ paths synchronized after moves, clean filenames, and
   restore automatic database backups.
 

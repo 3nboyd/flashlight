@@ -71,7 +71,10 @@ export function OutputDiagnostics(): JSX.Element {
       // Keep the renderer's project store in sync with what main just saved.
       if (res.ok && res.broadcast) {
         const bcast = res.broadcast
-        updateProject((p) => ({ ...p, output: { ...p.output, protocol: 'artnet', artnetHost: bcast } }))
+        updateProject((p) => ({
+          ...p,
+          output: { ...p.output, protocol: 'artnet', artnetHost: bcast }
+        }))
       }
     } catch (err) {
       setAutoResult({
@@ -115,13 +118,17 @@ export function OutputDiagnostics(): JSX.Element {
           {autoBusy ? 'Detecting…' : '⚡ Auto-detect & Connect'}
         </button>
         <p className="settings-hint" style={{ margin: '6px 0 0' }}>
-          Finds your lighting network adapter, sets the correct broadcast target, and locks output to
-          that adapter — works even if your node never answers a scan. Then press Start Output.
+          Finds your lighting network adapter, sets the correct broadcast target, and locks output
+          to that adapter: works even if your node never answers a scan. Then press Start Output.
         </p>
         {autoResult && (
           <p
             className="settings-hint"
-            style={{ margin: '6px 0 0', color: autoResult.ok ? '#4ade80' : '#fbbf24', fontWeight: 600 }}
+            style={{
+              margin: '6px 0 0',
+              color: autoResult.ok ? '#4ade80' : '#fbbf24',
+              fontWeight: 600
+            }}
           >
             {autoResult.message}
           </p>
@@ -199,7 +206,9 @@ export function OutputDiagnostics(): JSX.Element {
                 <li key={node.from} className="diag-node">
                   <span className="diag-dot ok" />
                   <div>
-                    <div className="diag-node-name">{node.shortName || node.longName || 'Art-Net node'}</div>
+                    <div className="diag-node-name">
+                      {node.shortName || node.longName || 'Art-Net node'}
+                    </div>
                     <div className="diag-node-meta">
                       <code>{node.ip}</code>
                       {node.from !== node.ip && <code>via {node.from}</code>}
@@ -232,7 +241,9 @@ export function OutputDiagnostics(): JSX.Element {
       <div className="diag-block">
         <div className="diag-label">Identify a fixture</div>
         {project.patches.length === 0 ? (
-          <p className="settings-hint">Patch a fixture first, then test the signal chain to it here.</p>
+          <p className="settings-hint">
+            Patch a fixture first, then test the signal chain to it here.
+          </p>
         ) : (
           <>
             <div className="diag-identify-grid">
@@ -244,14 +255,17 @@ export function OutputDiagnostics(): JSX.Element {
                   onClick={() => toggleIdentify(patch.id)}
                 >
                   {identifyId === patch.id ? '● ' : ''}
-                  {patch.label} <span className="diag-identify-addr">U{patch.universe}·{patch.address}</span>
+                  {patch.label}{' '}
+                  <span className="diag-identify-addr">
+                    U{patch.universe}·{patch.address}
+                  </span>
                 </button>
               ))}
             </div>
             <p className="settings-hint">
-              The selected fixture is driven full-on white (Start Output must be running). If it does
-              not light, the break is between the node and that fixture: DMX addressing, mode, or the
-              wireless link.
+              The selected fixture is driven full-on white (Start Output must be running). If it
+              does not light, the break is between the node and that fixture: DMX addressing, mode,
+              or the wireless link.
             </p>
           </>
         )}

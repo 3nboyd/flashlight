@@ -20,11 +20,15 @@ export interface RecordFormat {
  *  fragmented MP4 (one valid, concatenable file) just like WebM. VP8 is preferred
  *  over VP9 as a fallback because VP9 software encoding is the heaviest. */
 const VIDEO_CANDIDATES: RecordFormat[] = [
-  { label: 'MP4 (H.264, hardware) — recommended', mimeType: 'video/mp4;codecs=h264,aac', ext: 'mp4' },
+  {
+    label: 'MP4 (H.264, hardware): recommended',
+    mimeType: 'video/mp4;codecs=h264,aac',
+    ext: 'mp4'
+  },
   { label: 'MP4 (H.264)', mimeType: 'video/mp4;codecs=avc1', ext: 'mp4' },
   { label: 'MP4', mimeType: 'video/mp4', ext: 'mp4' },
-  { label: 'WebM (VP8) — lighter than VP9', mimeType: 'video/webm;codecs=vp8,opus', ext: 'webm' },
-  { label: 'WebM (VP9) — heavy CPU', mimeType: 'video/webm;codecs=vp9,opus', ext: 'webm' },
+  { label: 'WebM (VP8): lighter than VP9', mimeType: 'video/webm;codecs=vp8,opus', ext: 'webm' },
+  { label: 'WebM (VP9): heavy CPU', mimeType: 'video/webm;codecs=vp9,opus', ext: 'webm' },
   { label: 'WebM', mimeType: 'video/webm', ext: 'webm' }
 ]
 
@@ -158,7 +162,11 @@ export class Recorder {
     this.tracks = []
     this.byteSamples = []
 
-    const startOne = async (stream: MediaStream, mimeType: string, filename: string): Promise<void> => {
+    const startOne = async (
+      stream: MediaStream,
+      mimeType: string,
+      filename: string
+    ): Promise<void> => {
       const { id, path } = await window.djCompanion.recording.openStream(opts.folder, filename)
       // 256 kbps Opus is transparent for music; 8 Mbps H.264 is crisp at 720p
       // and easy on a hardware encoder.
@@ -188,7 +196,11 @@ export class Recorder {
     }
 
     if (opts.includeAudio && opts.separate && audioTracks.length > 0) {
-      await startOne(new MediaStream(videoStream.getVideoTracks()), opts.format.mimeType, `${base}.${opts.format.ext}`)
+      await startOne(
+        new MediaStream(videoStream.getVideoTracks()),
+        opts.format.mimeType,
+        `${base}.${opts.format.ext}`
+      )
       const af = pickAudioFormat()
       if (af) await startOne(new MediaStream(audioTracks), af.mimeType, `${base}-audio.${af.ext}`)
     } else {

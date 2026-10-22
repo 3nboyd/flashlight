@@ -1,11 +1,26 @@
 import { useCallback, useEffect, useMemo, useRef, useState, type JSX } from 'react'
 import { CameraCanvas, ZERO_FEAT, ZERO_AUDIO } from '../../camera/CameraCanvas'
-import { VISUALS, getVisual, defaultParams, type AudioReact, type VisualModule } from '../../camera/VisualEngine'
+import {
+  VISUALS,
+  getVisual,
+  defaultParams,
+  type AudioReact,
+  type VisualModule
+} from '../../camera/VisualEngine'
 import type { PoseFeatureState } from '../../camera/PoseFeatures'
 import type { FaceFrame } from '../../camera/FaceEngine'
 import { framingSignal } from '../../camera/framing'
-import { CameraDirector, holdBoundsFromAverage, type CameraSignal } from '@core/camera/CameraDirector'
-import { CAMERA_ROLES, DEFAULT_CAMERA_ROLE, defaultLookSwitch, type CameraRole } from '@core/camera/roles'
+import {
+  CameraDirector,
+  holdBoundsFromAverage,
+  type CameraSignal
+} from '@core/camera/CameraDirector'
+import {
+  CAMERA_ROLES,
+  DEFAULT_CAMERA_ROLE,
+  defaultLookSwitch,
+  type CameraRole
+} from '@core/camera/roles'
 import {
   loadDirectorSettings,
   saveDirectorSettings,
@@ -251,7 +266,11 @@ export function CameraView({ embedded = false }: { embedded?: boolean } = {}): J
   const [director, setDirector] = useState<DirectorSettings>(() => loadDirectorSettings())
   const [display, setDisplay] = useState<{ aspect: string; fit: 'fit' | 'fill' }>(() => {
     try {
-      return { aspect: '16:9', fit: 'fill', ...JSON.parse(localStorage.getItem(DISPLAY_KEY) ?? '{}') }
+      return {
+        aspect: '16:9',
+        fit: 'fill',
+        ...JSON.parse(localStorage.getItem(DISPLAY_KEY) ?? '{}')
+      }
     } catch {
       return { aspect: '16:9', fit: 'fill' }
     }
@@ -265,17 +284,19 @@ export function CameraView({ embedded = false }: { embedded?: boolean } = {}): J
   })
   // Recording resolution cap (0 = source), kept in sync with the RecordingPanel
   // via a same-window custom event; and the per-camera FPS monitor toggle.
-  const [recMaxHeight, setRecMaxHeight] = useState<number>(
-    () => Number(localStorage.getItem('djc.rec.maxHeight') ?? '720')
+  const [recMaxHeight, setRecMaxHeight] = useState<number>(() =>
+    Number(localStorage.getItem('djc.rec.maxHeight') ?? '720')
   )
   const [showFps, setShowFps] = useState<boolean>(
     () => localStorage.getItem('djc.camera.showFps') !== '0'
   )
   // Actual capture resolution/fps per enabled camera (reported by each tile).
-  const [resolutions, setResolutions] = useState<Record<string, { w: number; h: number; fps: number }>>({})
+  const [resolutions, setResolutions] = useState<
+    Record<string, { w: number; h: number; fps: number }>
+  >({})
   // Preferred capture height requested from the cameras (720 = safe default).
-  const [captureHeight, setCaptureHeight] = useState<number>(
-    () => Number(localStorage.getItem('djc.camera.captureHeight') ?? '720')
+  const [captureHeight, setCaptureHeight] = useState<number>(() =>
+    Number(localStorage.getItem('djc.camera.captureHeight') ?? '720')
   )
   // The FPS-monitor toggle + record resolution live in the RecordingPanel now;
   // it writes localStorage and fires this event so we re-read them here.
@@ -305,7 +326,9 @@ export function CameraView({ embedded = false }: { embedded?: boolean } = {}): J
   const [outCamEffect, setOutCamEffect] = useState<string>(
     () => localStorage.getItem(OUT_CAM_EFFECT_KEY) ?? 'camera'
   )
-  const [screenLook, setScreenLook] = useState<string>(() => localStorage.getItem(LOOK_KEY) ?? 'flat')
+  const [screenLook, setScreenLook] = useState<string>(
+    () => localStorage.getItem(LOOK_KEY) ?? 'flat'
+  )
   const [screenSource, setScreenSource] = useState<string>(
     () => localStorage.getItem(SOURCE_KEY) ?? 'auto'
   )
@@ -679,7 +702,10 @@ export function CameraView({ embedded = false }: { embedded?: boolean } = {}): J
     []
   )
   const setRole = useCallback((id: string, role: CameraRole) => {
-    setConfigs((prev) => ({ ...prev, [id]: { ...prev[id], role, effect: prev[id]?.effect ?? 'camera' } }))
+    setConfigs((prev) => ({
+      ...prev,
+      [id]: { ...prev[id], role, effect: prev[id]?.effect ?? 'camera' }
+    }))
   }, [])
   const setEffect = useCallback((id: string, effect: string) => {
     setConfigs((prev) => {
@@ -779,7 +805,11 @@ export function CameraView({ embedded = false }: { embedded?: boolean } = {}): J
           {learning ? 'Press a pad…' : note != null ? `Note ${note}` : 'Learn'}
         </button>
         {note != null && !learning && (
-          <button className="cam-midi-clear" onClick={() => clearCamMidi(action)} title="Clear binding">
+          <button
+            className="cam-midi-clear"
+            onClick={() => clearCamMidi(action)}
+            title="Clear binding"
+          >
             ✕
           </button>
         )}
@@ -790,7 +820,8 @@ export function CameraView({ embedded = false }: { embedded?: boolean } = {}): J
   const focusedEffect = focused ? getConfig(focused).effect : 'camera'
   const focusedOverlay = focused ? getConfig(focused).overlay : ''
   const activeVisual = getVisual(focusedEffect)
-  const tracksBody = activeVisual.needsPose || activeVisual.needsFace || showSkeleton || showFaceMesh
+  const tracksBody =
+    activeVisual.needsPose || activeVisual.needsFace || showSkeleton || showFaceMesh
   const activeParams = useMemo(
     () => ({ ...defaultParams(activeVisual), ...(fxParams[focusedEffect] ?? {}) }),
     [activeVisual, fxParams, focusedEffect]
@@ -860,329 +891,351 @@ export function CameraView({ embedded = false }: { embedded?: boolean } = {}): J
 
       <div className="camera-layout">
         {(!embedded || camGear) && (
-        <aside className={`camera-side${embedded ? ' camera-drawer' : ''}`}>
-          {embedded && (
-            <div className="camera-drawer-head">
-              <strong>Camera setup</strong>
-              <button className="cam-icon-btn" title="Close" onClick={() => setCamGear(false)}>
-                ✕
-              </button>
+          <aside className={`camera-side${embedded ? ' camera-drawer' : ''}`}>
+            {embedded && (
+              <div className="camera-drawer-head">
+                <strong>Camera setup</strong>
+                <button className="cam-icon-btn" title="Close" onClick={() => setCamGear(false)}>
+                  ✕
+                </button>
+              </div>
+            )}
+            <div className="cam-cameras-head">
+              <h3>Cameras</h3>
+              {enabled.length > 0 && (
+                <button
+                  className="cam-clear-btn"
+                  title="Turn off all cameras (start fresh, then add them one by one)"
+                  onClick={() => {
+                    setEnabled([])
+                    setProgramId(null)
+                    manualIdRef.current = null
+                  }}
+                >
+                  Remove all
+                </button>
+              )}
             </div>
-          )}
-          <div className="cam-cameras-head">
-            <h3>Cameras</h3>
-            {enabled.length > 0 && (
-              <button
-                className="cam-clear-btn"
-                title="Turn off all cameras (start fresh, then add them one by one)"
-                onClick={() => {
-                  setEnabled([])
-                  setProgramId(null)
-                  manualIdRef.current = null
+            <label
+              className="cam-out-row"
+              title="Resolution to ask each camera for. 1080p is sharper but heavier: watch the FPS monitor."
+            >
+              <span>Request quality</span>
+              <select
+                value={captureHeight}
+                onChange={(e) => {
+                  const v = Number(e.target.value)
+                  setCaptureHeight(v)
+                  localStorage.setItem('djc.camera.captureHeight', String(v))
                 }}
               >
-                Remove all
+                <option value={720}>720p (smoothest)</option>
+                <option value={1080}>1080p (if the camera supports it)</option>
+              </select>
+            </label>
+            {needsPermission ? (
+              <button className="primary-button" onClick={requestPermission}>
+                Allow camera access
               </button>
-            )}
-          </div>
-          <label className="cam-out-row" title="Resolution to ask each camera for. 1080p is sharper but heavier — watch the FPS monitor.">
-            <span>Request quality</span>
-            <select
-              value={captureHeight}
-              onChange={(e) => {
-                const v = Number(e.target.value)
-                setCaptureHeight(v)
-                localStorage.setItem('djc.camera.captureHeight', String(v))
-              }}
-            >
-              <option value={720}>720p (smoothest)</option>
-              <option value={1080}>1080p (if the camera supports it)</option>
-            </select>
-          </label>
-          {needsPermission ? (
-            <button className="primary-button" onClick={requestPermission}>
-              Allow camera access
-            </button>
-          ) : devices.length === 0 ? (
-            <p className="settings-hint">No cameras found. Connect one and it will appear here.</p>
-          ) : (
-            <div className="cam-device-list">
-              {devices.map((d, i) => {
-                const on = enabled.includes(d.deviceId)
-                const cfg = getConfig(d.deviceId)
-                return (
-                  <div key={d.deviceId} className={`cam-device${on ? ' on' : ''}`}>
-                    <label className="cam-device-head">
-                      <input type="checkbox" checked={on} onChange={() => toggle(d.deviceId)} />
-                      <span className="cam-device-name">{d.label || `Camera ${i + 1}`}</span>
-                    </label>
-                    {on && (
-                      <div className="cam-device-quality" title="This camera's actual capture resolution and frame rate">
-                        {resolutions[d.deviceId]
-                          ? `${resolutions[d.deviceId].w}×${resolutions[d.deviceId].h}${
-                              resolutions[d.deviceId].fps ? ` @ ${resolutions[d.deviceId].fps}fps` : ''
-                            } · ${qualityTier(resolutions[d.deviceId].h)}`
-                          : 'reading quality…'}
-                      </div>
-                    )}
-                    {on && (
-                      <div className="cam-device-cfg">
-                        <select
-                          className="cam-role-select"
-                          value={cfg.role}
-                          onChange={(e) => setRole(d.deviceId, e.target.value as CameraRole)}
-                          title="What this camera is pointed at (drives auto-switching)"
-                        >
-                          {CAMERA_ROLES.map((r) => (
-                            <option key={r.role} value={r.role}>
-                              {r.label}
-                            </option>
-                          ))}
-                        </select>
-                        <select
-                          className="cam-effect-select"
-                          value={cfg.effect}
-                          onChange={(e) => setEffect(d.deviceId, e.target.value)}
-                          title="Effect drawn on this camera (None = plain feed)"
-                        >
-                          <option value="camera">No effect</option>
-                          {VISUALS.filter((v) => v.id !== 'camera').map((v) => (
-                            <option key={v.id} value={v.id}>
-                              {v.name}
-                            </option>
-                          ))}
-                        </select>
-                        <label className="cam-delay" title="Hold this camera back (show an older frame) to line it up. Max 400ms.">
-                          <span>Delay</span>
-                          <input
-                            type="range"
-                            min={0}
-                            max={400}
-                            step={10}
-                            value={cfg.delayMs}
-                            onChange={(e) => setDelay(d.deviceId, Number(e.target.value))}
-                          />
-                          <span className="cam-delay-val">{cfg.delayMs} ms</span>
-                        </label>
-                        <label className="cam-delay" title="Push this camera forward: delays every OTHER camera + the audio to line up behind it (for a laggy wireless feed). Max 300ms.">
-                          <span>Push fwd</span>
-                          <input
-                            type="range"
-                            min={0}
-                            max={300}
-                            step={10}
-                            value={cfg.pushForwardMs}
-                            onChange={(e) => setPushForward(d.deviceId, Number(e.target.value))}
-                          />
-                          <span className="cam-delay-val">{cfg.pushForwardMs} ms</span>
-                        </label>
-                      </div>
-                    )}
-                  </div>
-                )
-              })}
-            </div>
-          )}
-          {status && <p className="settings-hint">{status}</p>}
-
-          <h3 style={{ marginTop: 8 }}>Auto-director</h3>
-          <label className="cam-out-row">
-            <span>Auto-switch recording</span>
-            <input type="checkbox" checked={auto} onChange={(e) => setAuto(e.target.checked)} />
-          </label>
-          <p className="settings-hint">
-            {auto
-              ? 'The director cuts the recording between cameras by role, framing, and the music. The laptop cam is only used when you turn to the decks.'
-              : 'Manual: click a camera tile to cut the recording to it.'}
-          </p>
-          {enabled.length > 0 && (
-            <div className="cam-midi">
-              {enabled.map((id) =>
-                midiRow(`Cut to ${devices.find((d) => d.deviceId === id)?.label || 'camera'}`, {
-                  kind: 'cut',
-                  deviceId: id
-                })
-              )}
-              {midiRow('Toggle auto-director', { kind: 'auto' })}
+            ) : devices.length === 0 ? (
               <p className="settings-hint">
-                Learn a pad for each. A pad-cut takes over from auto until you re-enable it.
+                No cameras found. Connect one and it will appear here.
               </p>
-            </div>
-          )}
-
-          <h3 style={{ marginTop: 8 }}>Output (background)</h3>
-          <div className="cam-out-btnrow">
-            <button className="cam-output-btn" onClick={openOutput}>
-              {outputCount > 0 ? 'Open another output' : 'Open projector output'}
-            </button>
-            {outputCount > 0 && (
-              <button className="cam-output-btn cam-output-close" onClick={closeOutputs}>
-                Close all ({outputCount})
-              </button>
+            ) : (
+              <div className="cam-device-list">
+                {devices.map((d, i) => {
+                  const on = enabled.includes(d.deviceId)
+                  const cfg = getConfig(d.deviceId)
+                  return (
+                    <div key={d.deviceId} className={`cam-device${on ? ' on' : ''}`}>
+                      <label className="cam-device-head">
+                        <input type="checkbox" checked={on} onChange={() => toggle(d.deviceId)} />
+                        <span className="cam-device-name">{d.label || `Camera ${i + 1}`}</span>
+                      </label>
+                      {on && (
+                        <div
+                          className="cam-device-quality"
+                          title="This camera's actual capture resolution and frame rate"
+                        >
+                          {resolutions[d.deviceId]
+                            ? `${resolutions[d.deviceId].w}×${resolutions[d.deviceId].h}${
+                                resolutions[d.deviceId].fps
+                                  ? ` @ ${resolutions[d.deviceId].fps}fps`
+                                  : ''
+                              } · ${qualityTier(resolutions[d.deviceId].h)}`
+                            : 'reading quality…'}
+                        </div>
+                      )}
+                      {on && (
+                        <div className="cam-device-cfg">
+                          <select
+                            className="cam-role-select"
+                            value={cfg.role}
+                            onChange={(e) => setRole(d.deviceId, e.target.value as CameraRole)}
+                            title="What this camera is pointed at (drives auto-switching)"
+                          >
+                            {CAMERA_ROLES.map((r) => (
+                              <option key={r.role} value={r.role}>
+                                {r.label}
+                              </option>
+                            ))}
+                          </select>
+                          <select
+                            className="cam-effect-select"
+                            value={cfg.effect}
+                            onChange={(e) => setEffect(d.deviceId, e.target.value)}
+                            title="Effect drawn on this camera (None = plain feed)"
+                          >
+                            <option value="camera">No effect</option>
+                            {VISUALS.filter((v) => v.id !== 'camera').map((v) => (
+                              <option key={v.id} value={v.id}>
+                                {v.name}
+                              </option>
+                            ))}
+                          </select>
+                          <label
+                            className="cam-delay"
+                            title="Hold this camera back (show an older frame) to line it up. Max 400ms."
+                          >
+                            <span>Delay</span>
+                            <input
+                              type="range"
+                              min={0}
+                              max={400}
+                              step={10}
+                              value={cfg.delayMs}
+                              onChange={(e) => setDelay(d.deviceId, Number(e.target.value))}
+                            />
+                            <span className="cam-delay-val">{cfg.delayMs} ms</span>
+                          </label>
+                          <label
+                            className="cam-delay"
+                            title="Push this camera forward: delays every OTHER camera + the audio to line up behind it (for a laggy wireless feed). Max 300ms."
+                          >
+                            <span>Push fwd</span>
+                            <input
+                              type="range"
+                              min={0}
+                              max={300}
+                              step={10}
+                              value={cfg.pushForwardMs}
+                              onChange={(e) => setPushForward(d.deviceId, Number(e.target.value))}
+                            />
+                            <span className="cam-delay-val">{cfg.pushForwardMs} ms</span>
+                          </label>
+                        </div>
+                      )}
+                    </div>
+                  )
+                })}
+              </div>
             )}
-          </div>
-          <p className="settings-hint">
-            Full-screen on a second display (projector / stage TV); open one per screen. This screen
-            bus is separate from what you record.
-          </p>
+            {status && <p className="settings-hint">{status}</p>}
 
-          <label className="cam-out-row cam-out-check" title="Keep effects on the projector/TV and the tiles, but record the clean camera">
-            <input
-              type="checkbox"
-              checked={effectsOnly}
-              onChange={(e) => setEffectsOnly(e.target.checked)}
-            />
-            <span>Effects only for projector (record clean camera)</span>
-          </label>
-
-          <label className="cam-out-row">
-            <span>Show</span>
-            <select value={outMode} onChange={(e) => putOut(MODE_KEY, e.target.value, setOutMode)}>
-              <option value="camera">Camera effect</option>
-              <option value="screen">Stage screen (lighting)</option>
-            </select>
-          </label>
-
-          {outMode === 'camera' && (
-            <>
-              <label className="cam-out-row">
-                <span>Camera</span>
-                <select
-                  value={outCamSource}
-                  onChange={(e) => putOut(OUT_CAM_SOURCE_KEY, e.target.value, setOutCamSource)}
-                  title="Which camera the projector shows (stays fixed, ignores auto-switching)"
-                >
-                  <option value="program">Follow program (auto)</option>
-                  {enabled.map((id) => (
-                    <option key={id} value={id}>
-                      {devices.find((d) => d.deviceId === id)?.label || 'Camera'}
-                    </option>
-                  ))}
-                </select>
-              </label>
-              <label className="cam-out-row">
-                <span>Effect</span>
-                <select
-                  value={outCamEffect}
-                  onChange={(e) => putOut(OUT_CAM_EFFECT_KEY, e.target.value, setOutCamEffect)}
-                  title="Effect shown on the projector only"
-                >
-                  <option value="camera">None (plain camera)</option>
-                  {VISUALS.filter((v) => v.id !== 'camera').map((v) => (
-                    <option key={v.id} value={v.id}>
-                      {v.name}
-                    </option>
-                  ))}
-                </select>
-              </label>
-              <p className="settings-hint">
-                This camera + effect show on the projector only. They do not change your camera
-                tiles or the recording.
-              </p>
-            </>
-          )}
-
-          {outMode === 'screen' && (
-            <>
-              <label className="cam-out-row">
-                <span>Look</span>
-                <select
-                  value={screenLook}
-                  onChange={(e) => putOut(LOOK_KEY, e.target.value, setScreenLook)}
-                >
-                  <option value="flat">Flat fill</option>
-                  <option value="radial">Radial / circular</option>
-                </select>
-              </label>
-              <label className="cam-out-row">
-                <span>Color from</span>
-                <select
-                  value={screenSource}
-                  onChange={(e) => putOut(SOURCE_KEY, e.target.value, setScreenSource)}
-                >
-                  <option value="auto">Whole rig (average)</option>
-                  {screens.map((s) => (
-                    <option key={s.patchId} value={s.patchId}>
-                      {s.label}
-                    </option>
-                  ))}
-                </select>
-              </label>
-              <label className="cam-out-row">
-                <span>Overlay FX</span>
-                <select
-                  value={overlay}
-                  onChange={(e) => putOut(OVERLAY_KEY, e.target.value, setOverlay)}
-                >
-                  <option value="none">None</option>
-                  {VISUALS.filter((v) => v.id !== 'camera').map((v) => (
-                    <option key={v.id} value={v.id}>
-                      {v.name}
-                    </option>
-                  ))}
-                </select>
-              </label>
-              {overlay !== 'none' && (
-                <label className="cam-out-row">
-                  <span>Overlay mix</span>
-                  <input
-                    type="range"
-                    min={0}
-                    max={1}
-                    step={0.05}
-                    value={overlayOp}
-                    onChange={(e) => {
-                      setOverlayOp(Number(e.target.value))
-                      localStorage.setItem(OVERLAY_OP_KEY, e.target.value)
-                    }}
-                  />
-                </label>
-              )}
-              {screens.length === 0 && (
-                <p className="settings-hint">
-                  Tip: patch a &quot;TV / LED Screen&quot; fixture in Lighting Setup to drive a
-                  specific screen; otherwise the whole-rig color is used.
-                </p>
-              )}
-            </>
-          )}
-
-          <h3 style={{ marginTop: 8 }}>Recording</h3>
-          <p className="settings-hint">
-            Records the live program (the auto-switched / selected camera), not the screen bus.
-          </p>
-          <RecordingPanel getCanvas={() => programCanvasRef.current} />
-
-          <h3 style={{ marginTop: 8 }}>Testing Purposes / Beta Features</h3>
-          <label className="cam-device-head">
-            <input
-              type="checkbox"
-              checked={showSkeleton}
-              onChange={(e) => setShowSkeleton(e.target.checked)}
-            />
-            <span>Skeleton + face dots overlay</span>
-          </label>
-          <label className="cam-device-head">
-            <input
-              type="checkbox"
-              checked={showFaceMesh}
-              onChange={(e) => setShowFaceMesh(e.target.checked)}
-            />
-            <span>Face mesh overlay</span>
-          </label>
-          <div className="cam-testing-meters">
-            <Meter label="Present" value={feat.present} />
-            <Meter label="Hands up" value={feat.handsUp} />
-            <Meter label="Arm spread" value={feat.armSpread} />
-            <Meter label="Motion" value={feat.motion} />
-            <Meter label="Jump" value={feat.jump} />
-          </div>
-          {!tracksBody && (
+            <h3 style={{ marginTop: 8 }}>Auto-director</h3>
+            <label className="cam-out-row">
+              <span>Auto-switch recording</span>
+              <input type="checkbox" checked={auto} onChange={(e) => setAuto(e.target.checked)} />
+            </label>
             <p className="settings-hint">
-              Turn on an overlay above (or pick Neon Stickman) to see these move.
+              {auto
+                ? 'The director cuts the recording between cameras by role, framing, and the music. The laptop cam is only used when you turn to the decks.'
+                : 'Manual: click a camera tile to cut the recording to it.'}
             </p>
-          )}
-        </aside>
+            {enabled.length > 0 && (
+              <div className="cam-midi">
+                {enabled.map((id) =>
+                  midiRow(`Cut to ${devices.find((d) => d.deviceId === id)?.label || 'camera'}`, {
+                    kind: 'cut',
+                    deviceId: id
+                  })
+                )}
+                {midiRow('Toggle auto-director', { kind: 'auto' })}
+                <p className="settings-hint">
+                  Learn a pad for each. A pad-cut takes over from auto until you re-enable it.
+                </p>
+              </div>
+            )}
+
+            <h3 style={{ marginTop: 8 }}>Output (background)</h3>
+            <div className="cam-out-btnrow">
+              <button className="cam-output-btn" onClick={openOutput}>
+                {outputCount > 0 ? 'Open another output' : 'Open projector output'}
+              </button>
+              {outputCount > 0 && (
+                <button className="cam-output-btn cam-output-close" onClick={closeOutputs}>
+                  Close all ({outputCount})
+                </button>
+              )}
+            </div>
+            <p className="settings-hint">
+              Full-screen on a second display (projector / stage TV); open one per screen. This
+              screen bus is separate from what you record.
+            </p>
+
+            <label
+              className="cam-out-row cam-out-check"
+              title="Keep effects on the projector/TV and the tiles, but record the clean camera"
+            >
+              <input
+                type="checkbox"
+                checked={effectsOnly}
+                onChange={(e) => setEffectsOnly(e.target.checked)}
+              />
+              <span>Effects only for projector (record clean camera)</span>
+            </label>
+
+            <label className="cam-out-row">
+              <span>Show</span>
+              <select
+                value={outMode}
+                onChange={(e) => putOut(MODE_KEY, e.target.value, setOutMode)}
+              >
+                <option value="camera">Camera effect</option>
+                <option value="screen">Stage screen (lighting)</option>
+              </select>
+            </label>
+
+            {outMode === 'camera' && (
+              <>
+                <label className="cam-out-row">
+                  <span>Camera</span>
+                  <select
+                    value={outCamSource}
+                    onChange={(e) => putOut(OUT_CAM_SOURCE_KEY, e.target.value, setOutCamSource)}
+                    title="Which camera the projector shows (stays fixed, ignores auto-switching)"
+                  >
+                    <option value="program">Follow program (auto)</option>
+                    {enabled.map((id) => (
+                      <option key={id} value={id}>
+                        {devices.find((d) => d.deviceId === id)?.label || 'Camera'}
+                      </option>
+                    ))}
+                  </select>
+                </label>
+                <label className="cam-out-row">
+                  <span>Effect</span>
+                  <select
+                    value={outCamEffect}
+                    onChange={(e) => putOut(OUT_CAM_EFFECT_KEY, e.target.value, setOutCamEffect)}
+                    title="Effect shown on the projector only"
+                  >
+                    <option value="camera">None (plain camera)</option>
+                    {VISUALS.filter((v) => v.id !== 'camera').map((v) => (
+                      <option key={v.id} value={v.id}>
+                        {v.name}
+                      </option>
+                    ))}
+                  </select>
+                </label>
+                <p className="settings-hint">
+                  This camera + effect show on the projector only. They do not change your camera
+                  tiles or the recording.
+                </p>
+              </>
+            )}
+
+            {outMode === 'screen' && (
+              <>
+                <label className="cam-out-row">
+                  <span>Look</span>
+                  <select
+                    value={screenLook}
+                    onChange={(e) => putOut(LOOK_KEY, e.target.value, setScreenLook)}
+                  >
+                    <option value="flat">Flat fill</option>
+                    <option value="radial">Radial / circular</option>
+                  </select>
+                </label>
+                <label className="cam-out-row">
+                  <span>Color from</span>
+                  <select
+                    value={screenSource}
+                    onChange={(e) => putOut(SOURCE_KEY, e.target.value, setScreenSource)}
+                  >
+                    <option value="auto">Whole rig (average)</option>
+                    {screens.map((s) => (
+                      <option key={s.patchId} value={s.patchId}>
+                        {s.label}
+                      </option>
+                    ))}
+                  </select>
+                </label>
+                <label className="cam-out-row">
+                  <span>Overlay FX</span>
+                  <select
+                    value={overlay}
+                    onChange={(e) => putOut(OVERLAY_KEY, e.target.value, setOverlay)}
+                  >
+                    <option value="none">None</option>
+                    {VISUALS.filter((v) => v.id !== 'camera').map((v) => (
+                      <option key={v.id} value={v.id}>
+                        {v.name}
+                      </option>
+                    ))}
+                  </select>
+                </label>
+                {overlay !== 'none' && (
+                  <label className="cam-out-row">
+                    <span>Overlay mix</span>
+                    <input
+                      type="range"
+                      min={0}
+                      max={1}
+                      step={0.05}
+                      value={overlayOp}
+                      onChange={(e) => {
+                        setOverlayOp(Number(e.target.value))
+                        localStorage.setItem(OVERLAY_OP_KEY, e.target.value)
+                      }}
+                    />
+                  </label>
+                )}
+                {screens.length === 0 && (
+                  <p className="settings-hint">
+                    Tip: patch a &quot;TV / LED Screen&quot; fixture in Lighting Setup to drive a
+                    specific screen; otherwise the whole-rig color is used.
+                  </p>
+                )}
+              </>
+            )}
+
+            <h3 style={{ marginTop: 8 }}>Recording</h3>
+            <p className="settings-hint">
+              Records the live program (the auto-switched / selected camera), not the screen bus.
+            </p>
+            <RecordingPanel getCanvas={() => programCanvasRef.current} />
+
+            <h3 style={{ marginTop: 8 }}>Testing Purposes / Beta Features</h3>
+            <label className="cam-device-head">
+              <input
+                type="checkbox"
+                checked={showSkeleton}
+                onChange={(e) => setShowSkeleton(e.target.checked)}
+              />
+              <span>Skeleton + face dots overlay</span>
+            </label>
+            <label className="cam-device-head">
+              <input
+                type="checkbox"
+                checked={showFaceMesh}
+                onChange={(e) => setShowFaceMesh(e.target.checked)}
+              />
+              <span>Face mesh overlay</span>
+            </label>
+            <div className="cam-testing-meters">
+              <Meter label="Present" value={feat.present} />
+              <Meter label="Hands up" value={feat.handsUp} />
+              <Meter label="Arm spread" value={feat.armSpread} />
+              <Meter label="Motion" value={feat.motion} />
+              <Meter label="Jump" value={feat.jump} />
+            </div>
+            {!tracksBody && (
+              <p className="settings-hint">
+                Turn on an overlay above (or pick Neon Stickman) to see these move.
+              </p>
+            )}
+          </aside>
         )}
 
         <div className="camera-main">
@@ -1229,8 +1282,7 @@ export function CameraView({ embedded = false }: { embedded?: boolean } = {}): J
                   const cfg = getConfig(id)
                   // On a beat drop, the program camera temporarily wears the
                   // chosen drop effect instead of its own.
-                  const effect =
-                    dropFx && programId === id && auto ? dropFx.effect : cfg.effect
+                  const effect = dropFx && programId === id && auto ? dropFx.effect : cfg.effect
                   const combineId = cfg.overlay && cfg.overlay !== effect ? cfg.overlay : ''
                   return (
                     <CameraTile
@@ -1245,7 +1297,10 @@ export function CameraView({ embedded = false }: { embedded?: boolean } = {}): J
                       }}
                       overlayParams={
                         combineId
-                          ? { ...defaultParams(getVisual(combineId)), ...(fxParams[combineId] ?? {}) }
+                          ? {
+                              ...defaultParams(getVisual(combineId)),
+                              ...(fxParams[combineId] ?? {})
+                            }
                           : {}
                       }
                       fit={display.fit}
@@ -1310,8 +1365,8 @@ export function CameraView({ embedded = false }: { embedded?: boolean } = {}): J
               {focused && (
                 <span className="cam-hud-hint">
                   {focusedOverlay
-                    ? ` — combined: ${getVisual(focusedEffect).name} ＋ ${getVisual(focusedOverlay).name} (shift+click to change)`
-                    : ' — shift+click a second effect to combine'}
+                    ? `: combined: ${getVisual(focusedEffect).name} ＋ ${getVisual(focusedOverlay).name} (shift+click to change)`
+                    : ': shift+click a second effect to combine'}
                 </span>
               )}
             </div>
