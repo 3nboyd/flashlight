@@ -3,13 +3,79 @@
 [![CI](https://github.com/3nboyd/flashlight/actions/workflows/ci.yml/badge.svg)](https://github.com/3nboyd/flashlight/actions/workflows/ci.yml)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
 
-Flashlight is an open-source desktop production toolkit for DJs. It combines live, beat-synced
-DMX lighting (digital control of stage fixtures), multi-camera visuals and recording, and music-library utilities in
-one Electron application for macOS, Windows, and Linux.
+Run your lights, visuals, and recordings from one desktop app. Flashlight combines
+beat-synced stage lighting, camera effects, and music-library tools for DJs on macOS,
+Windows, and Linux. It runs locally, with no account or hosted backend required.
+
+![Flashlight live cockpit with a demo lighting rig, performance pads, and Plasma visuals](docs/screenshots/live-cockpit.png)
+
+**One place to run the show:** trigger a lighting look, preview your stage, switch camera
+effects, and prepare a recording without leaving the Live screen.
+
+[See the screenshot tour](docs/SCREENSHOTS.md) · [Run it locally](#try-it) ·
+[Setup guide](docs/SETUP.md) · [Hardware guide](docs/LIGHTING.md)
 
 > [!IMPORTANT]
 > Flashlight is pre-1.0 software. Test DMX output with fixtures at safe intensity, and use copies
 > of valuable DJ libraries until you have verified the workflow with your own hardware and files.
+
+## What can I do with it?
+
+| I want to…                 | Start here                    | What it does                                                                                 |
+| -------------------------- | ----------------------------- | -------------------------------------------------------------------------------------------- |
+| Run lights during a set    | **Live**                      | Trigger scene pads, tap a tempo, adjust color and movement, or use Smart Mode and Autopilot. |
+| Build a lighting rig       | **Setup → Stages & Rig**      | Place fixtures on a stage preview, patch DMX addresses, and save different stage layouts.    |
+| Make my own lighting looks | **Setup → Scenes**            | Layer effects by fixture type or group, with a live preview while editing.                   |
+| Put visuals on a projector | **Live → Camera / Screen**    | Apply camera or generated effects and open a separate projector output.                      |
+| Record a set               | **Live → Recording settings** | Choose capture quality, optional audio, timing compensation, and conversion settings.        |
+| Organize music files       | **Music**                     | Scan track metadata, browse files, review filename changes, and manage database backups.     |
+
+## A look inside
+
+### Build the stage you actually use
+
+Place moving heads, washes, and pixel bars around a booth, speakers, and trusses.
+The patch table connects each fixture to its universe and DMX address.
+
+![Stage authoring with a twelve-fixture demo rig and DMX patch table](docs/screenshots/stage-rig.png)
+
+### Create lighting looks with a live preview
+
+Select a fixture group, pick an effect, and see the result beside the controls.
+Scenes can combine multiple layers for different parts of the rig.
+
+![Scene editor showing fixture targeting, lighting effects, and a live stage preview](docs/screenshots/scene-editor.png)
+
+### Give the screen its own look
+
+Use camera treatments or generated visuals such as Plasma, Starfield, and Neon Grid.
+The projector screen bus can use a different effect from the recording.
+
+![Neon Grid generated visual in the expanded camera and screen pane](docs/screenshots/visual-effects.png)
+
+The [full screenshot tour](docs/SCREENSHOTS.md) also shows scene browsing,
+fixture limits, recording settings, and the music-library scanner. These are captures of
+the running app using an example rig, a synthetic camera source, and generated demo audio.
+They do not demonstrate physical DMX output or a completed recording.
+
+## Try it
+
+You currently run Flashlight from source; this repository has no published installer release.
+Install Node.js 22.12+ and npm 11, then:
+
+```bash
+git clone https://github.com/3nboyd/flashlight.git
+cd flashlight
+npm ci
+npm run dev
+```
+
+1. Open **Setup → Stages & Rig** to build your rig and **Fixtures** to patch your lights.
+2. Open **Live** and select a scene pad to preview a look. Use a manual or tapped tempo to get started.
+3. For physical lights, configure your interface in **Settings → DMX Output**, then start output from **Live**.
+4. For visuals, open **Camera setup** in the camera pane, enable an input, and choose an effect.
+
+See [Installation and first run](docs/SETUP.md) for audio, cameras, and hardware setup.
 
 ## Highlights
 
